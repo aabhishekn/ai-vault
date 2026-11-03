@@ -196,7 +196,7 @@ To run the database integration tests alongside the unit tests (requires local P
 RUN_INTEGRATION_TESTS=1 python -m unittest discover -s tests -v
 ```
 
-Integration tests create and delete their own document records and temporary files. Without the environment flag, these twenty-six tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
+Integration tests create and delete their own document records and temporary files. Without the environment flag, these twenty-eight tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
 
 ## Automatic queueing and queue failures
 
@@ -351,3 +351,23 @@ Generation uses `ANSWER_MODEL` (default `gpt-4.1-mini`), structured output, at m
 No database transaction stays open during the provider call. If two requests generate concurrently, the first stored summary is preserved and returned to both; both requests may incur provider usage. Generation failures do not clear an existing summary or change document status. Provider/configuration failures return 503. There is no forced-regeneration endpoint yet.
 
 A live check generated a summary for the embedded case study, verified it in PostgreSQL, and confirmed identical results from GET and a repeated POST. Automated tests use a mocked provider and cover persistence, caching, unavailable text, input/output limits, failure handling, and concurrent-save behavior.
+
+## Document statistics
+
+`GET /stats/documents` (the **statistics** section in Swagger) returns:
+
+- `total_documents` and a `by_status` count for each supported status, including zeros.
+- `total_storage_bytes`: sum of the recorded original PDF upload sizes.
+- `documents_with_summary`: documents with a stored non-NULL summary.
+- `total_extracted_pages`: number of stored extracted page entries, including blank pages.
+- `total_chunks` and `chunks_with_embeddings`: stored chunk rows and rows with non-NULL vectors.
+
+```bash
+curl http://localhost:8000/stats/documents
+```
+
+All values come from one PostgreSQL SELECT so they share a statement snapshot. Separate scalar chunk subqueries avoid multiplying document counts or byte totals when a document has several chunks. An empty dataset returns zeros, and database failures return a generic 503. This endpoint makes no Redis or AI requests and requires no migration.
+
+Storage bytes are metadata totals, not a filesystem scan or the total disk space used by PostgreSQL, vectors, extracted text, Redis, or orphan files. Page/chunk/vector totals include retained content on failed documents and are not counts of searchable content. The status counts describe current document state rather than historical job attempts; processing duration metrics are a separate upcoming step.
+
+The live local check returned 3 documents, 388,410 recorded PDF bytes, 8 extracted pages, 6 chunks, 6 vectors, and 1 summary. Statistics tests use temporary PostgreSQL tables to test empty and populated datasets without deleting or modifying user documents.
