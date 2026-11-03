@@ -4,7 +4,7 @@ A document management application for uploading documents, generating AI insight
 
 ## Project status
 
-Step 1: repository initialized. Application code and setup instructions will be added incrementally.
+Minimal FastAPI backend with a health endpoint.
 
 ## Planned stack
 
@@ -20,3 +20,17 @@ Step 1: repository initialized. Application code and setup instructions will be 
 Build and verify one small feature at a time, starting with a health endpoint, then database access, uploads, background processing, and document chat.
 
 Keep credentials in local environment files. Never commit API keys or uploaded documents.
+
+## Run the backend
+
+Requires Python 3.12. From the repository root:
+
+```bash
+cd backend
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m uvicorn main:app --reload
+```
+
+Visit http://localhost:8000/health for the liveness response and http://localhost:8000/docs for interactive API documentation. The health endpoint checks only that the API is running. Stop the server with Ctrl+C.
