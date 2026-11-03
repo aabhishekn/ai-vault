@@ -236,13 +236,13 @@ Downgrading this migration deletes the chunk table and its contents while preser
 
 `embeddings.generate_embeddings(texts)` sends a list of text strings to OpenAI and returns an `EmbeddingBatch` containing `vectors` in the original input order, the returned model name, and the input token count. It uses `text-embedding-3-small` with 1,536 dimensions. See the [official OpenAI embeddings guide](https://developers.openai.com/api/docs/guides/embeddings).
 
-For future live use, set `OPENAI_API_KEY` in the repository root `.env` (ignored by Git). No key is needed to start the API, extract PDFs, create chunks, or run the mocked embedding tests. This step does not retrieve or validate the supplied assignment key.
+For future live use, set `OPENAI_API_KEY` in the repository root `.env` (ignored by Git). No key is needed to start the API, extract PDFs, create chunks, or run the mocked embedding tests. The supplied assignment key is configured only in the ignored local `.env`; repository clones must supply their own key.
 
 The helper accepts up to 64 texts per request, rejects blank inputs, and returns an empty batch without an API request for empty input. It checks response positions, vector dimensions, and finite values before returning. Requests have a 30-second SDK timeout and up to two SDK retries. Provider errors propagate to the caller for handling by the later pipeline integration.
 
 These limits count texts, not tokens; input token limits are still enforced by the provider. The caller will need to split larger batches and handle texts exceeding the model token limit. Word-based chunks do not guarantee a token bound. Importing the module makes no API request; calling the helper with nonempty text does send that text to the provider and may incur charges.
 
-The worker can call this helper and store vectors when explicitly enabled. All embedding tests mock the SDK: `python -m unittest discover -s tests -v` makes no OpenAI requests. A live embedding request remains to be verified in a later step.
+The worker can call this helper and store vectors when explicitly enabled. All embedding tests mock the SDK: `python -m unittest discover -s tests -v` makes no OpenAI requests. A separate live SDK smoke check succeeded with `text-embedding-3-small`: one short synthetic input, 1,536 dimensions, and 5 input tokens. This verifies API access; a full live document-processing run remains to be verified.
 
 ## Vector storage with pgvector
 
@@ -263,7 +263,7 @@ OPENAI_API_KEY=your_key_here
 ENABLE_EMBEDDINGS=true
 ```
 
-Restart the worker after changing configuration. Do not commit `.env`. Enabled processing sends chunk text to OpenAI and can incur charges. The supplied assignment key has not been configured or verified in this step; testing uses mocks only.
+Restart the worker after changing configuration. Do not commit `.env`. Enabled processing sends chunk text to OpenAI and can incur charges. The supplied assignment key was configured locally and verified with one small live embedding request. Automatic embedding generation remains disabled locally until the next end-to-end check. Automated tests still use mocks only.
 
 The worker commits extracted pages and chunks first, keeping status `processing`. It then requests embeddings in batches of at most 64 chunks, outside database transactions. After all batches succeed, it writes all vectors with their model names and sets `embedded` in a single transaction. A provider or vector-save failure marks the document `failed`; extracted text remains saved and no partial vector updates are committed. Missing credentials with embeddings enabled also fail processing.
 
