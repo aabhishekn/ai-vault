@@ -205,3 +205,17 @@ Integration tests create and delete their own document records and temporary fil
 If Redis does not confirm enqueueing, the API returns HTTP 503 with `detail.message` and `detail.document_id`. The file and database record are preserved. The job may have been accepted before the connection failed, so check the returned document ID before retrying. If it remains `queued` after checking the worker, run `python enqueue_document.py DOCUMENT_ID` instead of uploading another copy. Duplicate execution is guarded by the worker's database claim.
 
 PostgreSQL and Redis do not share a transaction: an API crash after the database commit but before enqueueing can leave a saved document waiting without a job. The manual command is the current recovery path; a transactional outbox can close this gap later.
+
+## Preview text chunks
+
+From `backend/` with `.venv` active:
+
+```bash
+python chunking.py "/absolute/path/to/document.pdf"
+```
+
+`chunk_pages(pages)` splits extracted pages into windows of at most 200 whitespace-separated words, with 40 words of overlap between adjacent chunks on the same page. These are word counts, not model token counts. Both sizes are configurable in Python. Overlap retains some context around window boundaries. Each chunk contains a zero-based `chunk_index`, the original one-based `page_number`, and `text`.
+
+Chunks never cross pages. Blank pages produce no chunks, while subsequent chunks retain their original page numbers. Whitespace is collapsed to single spaces; words and punctuation are otherwise preserved. This simple first version can split sentences and does not reconstruct table structure. A final window that already reaches the end of a page does not produce redundant trailing windows.
+
+This step adds a local helper and preview command only. The worker still saves extracted pages; chunk persistence and search integration come next. No embeddings or AI requests are made.
