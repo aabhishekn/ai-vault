@@ -2,13 +2,16 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile
+from redis.exceptions import RedisError
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from database import engine
+from jobs import extract_document
 from models import Document
 from schemas import DocumentListResponse, DocumentResponse
+from task_queue import document_queue
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 STORAGE_DIR = Path(__file__).resolve().parent.parent / "storage" / "documents"
@@ -56,6 +59,16 @@ def upload_document(file: UploadFile) -> DocumentResponse:
             response = DocumentResponse.model_validate(document)
             session.commit()
             committed = True
+        # Commit first: a running worker must be able to see the document row.
+        try:
+            document_queue.enqueue(extract_document, str(document_id), result_ttl=3600)
+        except RedisError:
+            # Redis may have accepted the job before the connection failed.
+            # Preserve the saved document and avoid overwriting worker progress.
+            raise HTTPException(503, detail={
+                "message": "Document saved, but queue confirmation failed. Check this document before retrying processing.",
+                "document_id": str(document_id),
+            }) from None
         return response
     except SQLAlchemyError:
         raise HTTPException(503, "Unable to save document metadata") from None

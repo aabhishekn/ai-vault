@@ -80,7 +80,7 @@ Uploads return HTTP 201 with a document ID, original filename, type, byte size, 
 
 This first version accepts `.pdf` files with a `%PDF-` header, limited to 10 MiB. This is a basic signature check, not full PDF parsing. The processing worker will validate readability later. Empty files return 400, unsupported types/headers return 415, and oversized files return 413. Files are removed if saving their database record fails. A process crash between saving the file and committing metadata can still leave an orphan file; reconciliation can be added later.
 
-`queued` currently means awaiting processing. No background jobs or AI calls are triggered yet.
+`queued` means awaiting background extraction. A successful upload automatically queues an RQ job after the file and metadata are saved. Start `python worker.py` from `backend/` (with `.venv` active) to process jobs. No AI calls are triggered yet.
 
 Run upload validation and failure-cleanup tests from `backend/`:
 
@@ -117,7 +117,7 @@ docker compose up -d --wait redis
 docker compose exec -T redis redis-cli ping
 ```
 
-The response should be `PONG`. Redis is bound to `127.0.0.1:6379` for local development. RQ uses Redis to store waiting jobs and worker state. PostgreSQL remains the source of document metadata. Uploads are not connected to the queue yet.
+The response should be `PONG`. Redis is bound to `127.0.0.1:6379` for local development. RQ uses Redis to store waiting jobs and worker state. PostgreSQL remains the source of document metadata. Uploads automatically submit extraction jobs to the `documents` queue.
 
 Redis uses append-only persistence in the `redis_data` volume and `noeviction` to avoid silently evicting queue data. The default append-only fsync policy can lose roughly the last second of writes on a crash; this is development persistence, not an exactly-once job guarantee.
 
@@ -170,7 +170,7 @@ The command prints the page count, extracted character count, and a short text p
 
 `extract_pdf(Path(...))` returns a list of `ExtractedPage` objects, each containing `page_number` and `text`. Page numbers start at 1; blank pages remain in the list so later citations refer to the original PDF pages. Encrypted PDFs, unreadable PDFs, and PDFs with no readable text are rejected. A document with both text and blank/image pages keeps the empty pages; images are not transcribed.
 
-This uses [pypdf text extraction](https://pypdf.readthedocs.io/en/stable/user/extract-text.html), not OCR. Complex layouts may have imperfect reading order, and scanned image-only documents need a future OCR step. Parsing currently runs only when this helper is called; upload and RQ integration come next. The current helper has no page-count or decompressed-memory limit; the 10 MiB upload limit does not bound parsing memory.
+This uses [pypdf text extraction](https://pypdf.readthedocs.io/en/stable/user/extract-text.html), not OCR. Complex layouts may have imperfect reading order, and scanned image-only documents need a future OCR step. The upload worker also calls this helper to extract stored PDFs. The current helper has no page-count or decompressed-memory limit; the 10 MiB upload limit does not bound parsing memory.
 
 Run extraction and upload tests with `python -m unittest discover -s tests -v`.
 
@@ -184,11 +184,11 @@ python enqueue_document.py YOUR_DOCUMENT_UUID
 python worker.py --burst
 ```
 
-Use a document ID returned by `POST /documents`. The first command after migration enqueues extraction in Redis; the worker then reads the stored PDF and writes its pages to PostgreSQL. Alternatively, leave `python worker.py` running in another terminal. Check `GET /documents/{document_id}` for the resulting status.
+New uploads are queued automatically. For older uploads or recovery, use a document ID returned by `POST /documents`. The manual enqueue command submits extraction in Redis; the worker then reads the stored PDF and writes its pages to PostgreSQL. Alternatively, leave `python worker.py` running in another terminal. Check `GET /documents/{document_id}` for the resulting status.
 
 The extraction lifecycle is `queued → processing → extracted`. Invalid or unreadable documents become `failed`; the worker stores an error message and raises the error so RQ also records the failed job. A failed document can be queued again with the same command. `extracted` means text is available; `ready` is reserved for the later AI pipeline.
 
-The `extracted_pages` JSONB column stores objects with `page_number` and `text`, including blank pages. This internal content is not returned by the metadata endpoints. A conditional database update claims each document before reading it, so duplicate jobs skip documents already processing or extracted. Unexpected worker termination can leave a document in `processing`; automatic recovery and retries are not implemented yet. Uploads still require this manual enqueue command in this step.
+The `extracted_pages` JSONB column stores objects with `page_number` and `text`, including blank pages. This internal content is not returned by the metadata endpoints. A conditional database update claims each document before reading it, so duplicate jobs skip documents already processing or extracted. Unexpected worker termination can leave a document in `processing`; automatic recovery and retries are not implemented yet. Keep the worker running for new uploads to process automatically.
 
 To run the database integration tests alongside the unit tests (requires local PostgreSQL and migrations):
 
@@ -196,4 +196,12 @@ To run the database integration tests alongside the unit tests (requires local P
 RUN_INTEGRATION_TESTS=1 python -m unittest discover -s tests -v
 ```
 
-Integration tests create and delete their own document records and temporary files. Without the environment flag, these two tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
+Integration tests create and delete their own document records and temporary files. Without the environment flag, these four tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
+
+## Automatic queueing and queue failures
+
+`POST /documents` saves the file, commits metadata in PostgreSQL, then enqueues extraction in Redis. The worker can therefore see the document as soon as it receives the job. HTTP 201 returns the initial `queued` metadata; poll `GET /documents/{document_id}` to see `processing`, `extracted`, or `failed`. With no worker running, jobs wait in Redis.
+
+If Redis does not confirm enqueueing, the API returns HTTP 503 with `detail.message` and `detail.document_id`. The file and database record are preserved. The job may have been accepted before the connection failed, so check the returned document ID before retrying. If it remains `queued` after checking the worker, run `python enqueue_document.py DOCUMENT_ID` instead of uploading another copy. Duplicate execution is guarded by the worker's database claim.
+
+PostgreSQL and Redis do not share a transaction: an API crash after the database commit but before enqueueing can leave a saved document waiting without a job. The manual command is the current recovery path; a transactional outbox can close this gap later.
