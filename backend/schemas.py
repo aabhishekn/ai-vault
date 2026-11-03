@@ -84,3 +84,8 @@ class ConversationHistoryResponse(ConversationResponse):
     total: int
     limit: int
     offset: int
+
+
+class SummaryResponse(BaseModel):
+    document_id: UUID
+    summary: str

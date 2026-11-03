@@ -196,7 +196,7 @@ To run the database integration tests alongside the unit tests (requires local P
 RUN_INTEGRATION_TESTS=1 python -m unittest discover -s tests -v
 ```
 
-Integration tests create and delete their own document records and temporary files. Without the environment flag, these twenty-one tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
+Integration tests create and delete their own document records and temporary files. Without the environment flag, these twenty-six tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
 
 ## Automatic queueing and queue failures
 
@@ -334,3 +334,20 @@ History is provided as untrusted context to resolve references, not as factual e
 No database transaction is held open during AI requests. An optimistic version check detects simultaneous messages based on the same history; one request succeeds and a conflicting request returns 409 without appending a stale answer. The conflicting request may already have incurred provider usage. Fetch history before retrying; request-ID deduplication is not implemented yet. Database persistence errors return 503, and provider/answer validation errors preserve the existing safe error behavior.
 
 A live two-turn conversation verified that a follow-up referring to “those” used the previous turn and returned a page 3 citation. Both completed turns were fetched from PostgreSQL through the history route. Automated tests mock provider calls and cover persistence, context limits, failure cleanup, concurrent-update conflicts, and cascading deletion. Downgrading the conversation migration deletes conversation history while preserving document records.
+
+## Generate and read a saved summary
+
+Use the **summaries** section in Swagger:
+
+- `POST /documents/{document_id}/summary` generates a short summary of the extracted text and stores it in the existing `documents.summary` column. If a summary already exists, it returns that value without another provider request.
+- `GET /documents/{document_id}/summary` reads the saved summary without making an AI request. A missing document or a summary not yet generated returns 404.
+
+Both routes return `document_id` and `summary`. Summary generation requires extracted pages and status `extracted`, `embedded`, or `ready`; unavailable text returns 409. This feature does not change document processing status or automatically run on upload. No new migration is needed because the initial document table already included the summary column.
+
+The generator uses the complete extracted text, normalizes whitespace, and retains page labels in the prompt. It rejects input exceeding 60,000 characters with 413 instead of silently truncating it. Larger documents will need a later multi-stage summarization strategy. The model is instructed to summarize only the supplied text, treat embedded instructions as untrusted data, and write one concise paragraph covering the document's purpose and key information. Outputs must be completed, nonblank, and no longer than 4,000 characters; invalid/incomplete/refused responses return 502.
+
+Generation uses `ANSWER_MODEL` (default `gpt-4.1-mini`), structured output, at most 800 output tokens, a 30-second SDK timeout, up to two SDK retries, and `store=False`. It sends document text to OpenAI and may incur charges. The saved summary is plain text without citations or persisted generation-usage metadata. Factual accuracy still requires evaluation; generation is not proof that every statement is supported.
+
+No database transaction stays open during the provider call. If two requests generate concurrently, the first stored summary is preserved and returned to both; both requests may incur provider usage. Generation failures do not clear an existing summary or change document status. Provider/configuration failures return 503. There is no forced-regeneration endpoint yet.
+
+A live check generated a summary for the embedded case study, verified it in PostgreSQL, and confirmed identical results from GET and a repeated POST. Automated tests use a mocked provider and cover persistence, caching, unavailable text, input/output limits, failure handling, and concurrent-save behavior.
