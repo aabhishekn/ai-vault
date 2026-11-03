@@ -87,3 +87,13 @@ Run upload validation and failure-cleanup tests from `backend/`:
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+## Retrieve a document
+
+Use the ID returned by upload to fetch its metadata:
+
+```bash
+curl http://localhost:8000/documents/YOUR_DOCUMENT_UUID
+```
+
+`GET /documents/{document_id}` returns HTTP 200 with the same metadata fields as upload. An unknown UUID returns 404; an invalid UUID returns FastAPI's 422 validation response. Database errors return a generic 503. This endpoint retrieves metadata and processing status; it does not return the PDF bytes.

@@ -1,5 +1,5 @@
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, UploadFile
 from sqlalchemy.exc import SQLAlchemyError
@@ -63,3 +63,15 @@ def upload_document(file: UploadFile) -> DocumentResponse:
     finally:
         if created and not committed:
             destination.unlink(missing_ok=True)
+
+
+@router.get("/{document_id}", response_model=DocumentResponse)
+def get_document(document_id: UUID) -> DocumentResponse:
+    try:
+        with Session(engine) as session:
+            document = session.get(Document, document_id)
+            if document is None:
+                raise HTTPException(404, "Document not found")
+            return DocumentResponse.model_validate(document)
+    except SQLAlchemyError:
+        raise HTTPException(503, "Unable to retrieve document metadata") from None
