@@ -13,3 +13,10 @@ class DocumentResponse(BaseModel):
     size_bytes: int
     status: str
     created_at: datetime
+
+
+class DocumentListResponse(BaseModel):
+    items: list[DocumentResponse]
+    total: int
+    limit: int
+    offset: int

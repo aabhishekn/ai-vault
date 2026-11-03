@@ -1,13 +1,14 @@
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Query, UploadFile
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from database import engine
 from models import Document
-from schemas import DocumentResponse
+from schemas import DocumentListResponse, DocumentResponse
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 STORAGE_DIR = Path(__file__).resolve().parent.parent / "storage" / "documents"
@@ -75,3 +76,25 @@ def get_document(document_id: UUID) -> DocumentResponse:
             return DocumentResponse.model_validate(document)
     except SQLAlchemyError:
         raise HTTPException(503, "Unable to retrieve document metadata") from None
+
+
+@router.get("", response_model=DocumentListResponse)
+def list_documents(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> DocumentListResponse:
+    try:
+        with Session(engine) as session:
+            total = session.scalar(select(func.count()).select_from(Document))
+            documents = session.scalars(
+                select(Document)
+                .order_by(Document.created_at.desc(), Document.id.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
+            return DocumentListResponse(
+                items=[DocumentResponse.model_validate(doc) for doc in documents],
+                total=total, limit=limit, offset=offset,
+            )
+    except SQLAlchemyError:
+        raise HTTPException(503, "Unable to list documents") from None

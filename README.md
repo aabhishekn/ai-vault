@@ -97,3 +97,13 @@ curl http://localhost:8000/documents/YOUR_DOCUMENT_UUID
 ```
 
 `GET /documents/{document_id}` returns HTTP 200 with the same metadata fields as upload. An unknown UUID returns 404; an invalid UUID returns FastAPI's 422 validation response. Database errors return a generic 503. This endpoint retrieves metadata and processing status; it does not return the PDF bytes.
+
+## List documents
+
+`GET /documents?limit=20&offset=0` returns `items`, `total`, `limit`, and `offset`. Results are ordered newest first, with UUID as a deterministic tie-breaker. `limit` defaults to 20 (allowed range 1–100); `offset` defaults to 0 and must be nonnegative. Invalid query values return 422. An offset beyond the last row returns an empty `items` list while preserving the total count. Database errors return a generic 503.
+
+```bash
+curl 'http://localhost:8000/documents?limit=10&offset=0'
+```
+
+This is offset pagination: the next page uses `offset + limit`. Concurrent uploads can shift page boundaries; cursor pagination can be introduced if needed at scale.
