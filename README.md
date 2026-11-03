@@ -291,6 +291,27 @@ You can also use the **search** section at `http://localhost:8000/docs`. The que
 
 The endpoint checks document readiness before making an API call, embeds the question once, then compares it with compatible vectors from the selected document. The query and stored chunks must use the same model. No database transaction remains open during the provider call. Missing documents return 404, unavailable/incompatible embeddings return 409, and invalid inputs return 422. Database or provider availability problems return generic 503 responses; an invalid embedding response returns 502.
 
-Search makes a paid embedding request for the question; it does not re-embed the document or generate an answer. It returns up to `top_k` nearest chunks even if the question is unrelated—there is no relevance threshold yet. Retrieval quality, answer grounding, and abstention still need evaluation when answer generation is added. Similarity queries currently use exact vector scans rather than an approximate index.
+Search makes a paid embedding request for the question; it does not re-embed the document or generate an answer. It returns up to `top_k` nearest chunks even if the question is unrelated—there is no relevance threshold yet. Retrieval quality, answer grounding, and abstention need ongoing evaluation as the answer endpoint is expanded. Similarity queries currently use exact vector scans rather than an approximate index.
 
 A live check against the embedded case study returned HTTP 200 and ranked a relevant page 3 chunk first for the example question. All automated search tests use synthetic vectors and mocked question embeddings; tests cover document/model filtering, ranking, limits, readiness, and safe errors.
+
+## Ask a document with source citations
+
+`POST /documents/{document_id}/ask` accepts the same request as search:
+
+```json
+{
+  "question": "Which libraries are recommended for document chat and embeddings?",
+  "top_k": 3
+}
+```
+
+Use an embedded document ID in the **answers** section of Swagger at `http://localhost:8000/docs`. The endpoint embeds the question, retrieves relevant chunks, and sends those chunks to an answer model. It returns `answer`, `insufficient_evidence`, `citations`, the actual answer model name, and generation input/output token usage. Each citation has a `source_number` matching an inline label such as `[1]`, plus a stored chunk ID, original page number, and source text.
+
+Answer generation defaults to `gpt-4.1-mini`; set `ANSWER_MODEL` in the root `.env` and restart the API to override it with a compatible model available to the supplied key. It uses the [OpenAI Responses API with structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs), a maximum of 800 output tokens, a 30-second SDK timeout, up to two SDK retries, and `store=False`. This setting is not a claim of zero provider retention. Each question incurs a query-embedding request and an answer-generation request. Returned usage covers generation only, excluding query embedding and retries; it is not a durable billing record.
+
+The model is instructed to use only provided sources, treat document text and questions as untrusted data rather than instructions, and decline when sources do not support an answer. The server validates that inline citation numbers match the declared source list and refer to retrieved chunks; citation IDs, pages, and text are filled from retrieval rather than generated metadata. Invalid, incomplete, or refused structured output returns a generic 502. Provider/configuration failures return 503. Search readiness/validation errors retain their existing status codes.
+
+When the model reports insufficient evidence, the server returns a fixed explanatory answer with no citations. These checks validate citation references, not whether every claim is entailed by its source. Prompt injection resistance, retrieval coverage, and unsupported-claim detection still require broader evaluation. In particular, retrieval may omit relevant information elsewhere in the document.
+
+A live question about recommended document-chat and embedding libraries returned a citation to page 3. A live question about an exact company revenue figure absent from the document returned insufficient evidence without citations. Automated tests use mocked provider output and verify citation mapping, invalid citation rejection, incomplete responses, abstention, and safe API errors. This endpoint is stateless: it does not store chat messages or support follow-up context yet, and it does not change document processing status.

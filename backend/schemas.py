@@ -41,3 +41,21 @@ class SearchResponse(BaseModel):
     document_id: UUID
     question: str
     matches: list[SearchMatch]
+
+
+class AnswerCitation(BaseModel):
+    source_number: int
+    chunk_id: UUID
+    page_number: int
+    text: str
+
+
+class AnswerResponse(BaseModel):
+    document_id: UUID
+    question: str
+    answer: str
+    insufficient_evidence: bool
+    citations: list[AnswerCitation]
+    model: str | None
+    input_tokens: int
+    output_tokens: int
