@@ -107,3 +107,18 @@ curl 'http://localhost:8000/documents?limit=10&offset=0'
 ```
 
 This is offset pagination: the next page uses `offset + limit`. Concurrent uploads can shift page boundaries; cursor pagination can be introduced if needed at scale.
+
+## Local Redis
+
+Start Redis from the repository root:
+
+```bash
+docker compose up -d --wait redis
+docker compose exec -T redis redis-cli ping
+```
+
+The response should be `PONG`. Redis is bound to `127.0.0.1:6379` for local development. The upcoming RQ integration will use Redis to store waiting jobs and worker state. PostgreSQL remains the source of document metadata. No jobs are queued yet.
+
+Redis uses append-only persistence in the `redis_data` volume and `noeviction` to avoid silently evicting queue data. The default append-only fsync policy can lose roughly the last second of writes on a crash; this is development persistence, not an exactly-once job guarantee.
+
+To start both supporting services, use `docker compose up -d --wait`. To stop them, use `docker compose stop`. Avoid `docker compose down -v` unless you intend to delete both database and Redis data.
