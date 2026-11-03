@@ -56,3 +56,27 @@ class DocumentChunk(Base):
     text: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list[float] | None] = mapped_column(VECTOR(1536))
     embedding_model: Mapped[str | None] = mapped_column(String(100))
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    __table_args__ = (CheckConstraint("turn_count >= 0", name="ck_conversations_turn_count"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    document_id: Mapped[UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), index=True)
+    turn_count: Mapped[int] = mapped_column(server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ConversationTurn(Base):
+    __tablename__ = "conversation_turns"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "turn_number", name="uq_conversation_turns_position"),
+        CheckConstraint("turn_number > 0", name="ck_conversation_turns_number"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    conversation_id: Mapped[UUID] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"))
+    turn_number: Mapped[int]
+    response: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -196,7 +196,7 @@ To run the database integration tests alongside the unit tests (requires local P
 RUN_INTEGRATION_TESTS=1 python -m unittest discover -s tests -v
 ```
 
-Integration tests create and delete their own document records and temporary files. Without the environment flag, these sixteen tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
+Integration tests create and delete their own document records and temporary files. Without the environment flag, these twenty-one tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
 
 ## Automatic queueing and queue failures
 
@@ -314,4 +314,23 @@ The model is instructed to use only provided sources, treat document text and qu
 
 When the model reports insufficient evidence, the server returns a fixed explanatory answer with no citations. These checks validate citation references, not whether every claim is entailed by its source. Prompt injection resistance, retrieval coverage, and unsupported-claim detection still require broader evaluation. In particular, retrieval may omit relevant information elsewhere in the document.
 
-A live question about recommended document-chat and embedding libraries returned a citation to page 3. A live question about an exact company revenue figure absent from the document returned insufficient evidence without citations. Automated tests use mocked provider output and verify citation mapping, invalid citation rejection, incomplete responses, abstention, and safe API errors. This endpoint is stateless: it does not store chat messages or support follow-up context yet, and it does not change document processing status.
+A live question about recommended document-chat and embedding libraries returned a citation to page 3. A live question about an exact company revenue figure absent from the document returned insufficient evidence without citations. Automated tests use mocked provider output and verify citation mapping, invalid citation rejection, incomplete responses, abstention, and safe API errors. The `/ask` endpoint remains stateless and does not change document processing status. Use the conversation endpoints below for persisted follow-up context.
+
+## Saved document conversations
+
+Apply the latest migration from `backend/` with `python -m alembic upgrade head`, then restart the API. Use these routes in the **conversations** section of Swagger:
+
+1. `POST /documents/{document_id}/conversations` creates an empty conversation for a searchable document (HTTP 201); save its returned `id`.
+2. `POST /conversations/{conversation_id}/messages` sends a question with `{"question":"Which libraries are recommended?","top_k":3}` and returns a saved turn (HTTP 201).
+3. Send a follow-up to the same messages endpoint, such as `{"question":"Which of those are for document chat?"}`.
+4. `GET /conversations/{conversation_id}?limit=20&offset=0` retrieves persisted turns in order, with `total`, `limit`, and `offset`. Limit allows 1–100; offset must be nonnegative.
+
+A conversation belongs to one document. A turn stores the complete question/answer response, including citation snapshots, model name, and generation token usage. Question and answer are stored as one paired turn; unsuccessful generation does not leave a partial user message. PostgreSQL saves each turn and updates its conversation count in the same transaction. Deleting a document cascades through its conversations and turns.
+
+For each follow-up, the server loads the latest three turns, in chronological order, clipping each historical question to 1,000 characters and answer to 2,000. All turns remain stored, but only this bounded context is sent to the answer model. Retrieval combines the current question with up to 800 characters of the latest prior question and 500 of its answer, capped at 2,000 characters with the current question first. This simple approach avoids an extra model request for question rewriting; complex follow-ups or references to older turns may require a better rewrite or memory strategy later.
+
+History is provided as untrusted context to resolve references, not as factual evidence. New answers must cite currently retrieved document chunks; prior answers and their citation labels cannot supply evidence. Each message still makes query-embedding and generation requests, and the bounded history increases generation input usage.
+
+No database transaction is held open during AI requests. An optimistic version check detects simultaneous messages based on the same history; one request succeeds and a conflicting request returns 409 without appending a stale answer. The conflicting request may already have incurred provider usage. Fetch history before retrying; request-ID deduplication is not implemented yet. Database persistence errors return 503, and provider/answer validation errors preserve the existing safe error behavior.
+
+A live two-turn conversation verified that a follow-up referring to “those” used the previous turn and returned a page 3 citation. Both completed turns were fetched from PostgreSQL through the history route. Automated tests mock provider calls and cover persistence, context limits, failure cleanup, concurrent-update conflicts, and cascading deletion. Downgrading the conversation migration deletes conversation history while preserving document records.

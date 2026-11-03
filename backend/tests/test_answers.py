@@ -101,3 +101,12 @@ class AnswerTests(unittest.TestCase):
                             answers.ask_document(self.retrieval.document_id, SearchRequest(question="Q"))
                         self.assertEqual(error.exception.status_code, status)
                         self.assertNotIn("private", error.exception.detail)
+
+
+    def test_history_is_sent_as_data_for_reference_resolution(self):
+        self.respond(AnswerDraft(answer="Use FastAPI [1].", source_numbers=[1], insufficient_evidence=False))
+        history = [{"question": "Which framework?", "answer": "FastAPI [9]."}]
+        generate_answer(self.retrieval, history=history)
+        kwargs = self.client.responses.parse.call_args.kwargs
+        self.assertEqual(json.loads(kwargs["input"])["history"], history)
+        self.assertIn("never as factual evidence", kwargs["instructions"])

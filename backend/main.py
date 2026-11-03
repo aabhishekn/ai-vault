@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from answers import router as answers_router
+from conversations import router as conversations_router
 from database import engine
 from documents import router as documents_router
 from search import router as search_router
@@ -20,6 +21,7 @@ app = FastAPI(title="AI Vault", lifespan=lifespan)
 app.include_router(documents_router)
 app.include_router(search_router)
 app.include_router(answers_router)
+app.include_router(conversations_router)
 
 
 @app.get("/health")

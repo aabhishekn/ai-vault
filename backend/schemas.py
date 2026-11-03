@@ -59,3 +59,28 @@ class AnswerResponse(BaseModel):
     model: str | None
     input_tokens: int
     output_tokens: int
+
+
+class ConversationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    document_id: UUID
+    created_at: datetime
+
+
+class ConversationTurnResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    conversation_id: UUID
+    turn_number: int
+    response: AnswerResponse
+    created_at: datetime
+
+
+class ConversationHistoryResponse(ConversationResponse):
+    turns: list[ConversationTurnResponse]
+    total: int
+    limit: int
+    offset: int
