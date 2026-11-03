@@ -121,3 +121,14 @@ class ProcessingMetricsResponse(BaseModel):
     average_failure_duration_ms: float | None
     max_duration_ms: int | None
     observed_embedding_input_tokens: int
+
+
+class DocumentInsight(BaseModel):
+    text: str
+    page_number: int
+    evidence: str
+
+
+class InsightsResponse(BaseModel):
+    document_id: UUID
+    insights: list[DocumentInsight]

@@ -196,7 +196,7 @@ To run the database integration tests alongside the unit tests (requires local P
 RUN_INTEGRATION_TESTS=1 python -m unittest discover -s tests -v
 ```
 
-Integration tests create and delete their own document records and temporary files. Without the environment flag, these thirty-one tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
+Integration tests create and delete their own document records and temporary files. Without the environment flag, these thirty-five tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
 
 ## Automatic queueing and queue failures
 
@@ -392,3 +392,20 @@ Durations use Python's monotonic performance clock from the start of the handler
 Metrics begin with this migration and worker update; earlier jobs are not backfilled. A force-killed worker or unavailable database can leave an attempt marked `processing`, just as it can leave the document processing state unfinished. Automatic reconciliation is not implemented. Observed token usage is not an invoice: it omits unknown provider usage, failed request/retry charges, and other API features; active attempts are not updated incrementally. Deleting a document cascades to its attempts, so aggregates describe retained history. Downgrading removes attempt history without deleting documents.
 
 This metrics endpoint performs one aggregate PostgreSQL query and makes no AI requests. Tests verify successful and failed runs, retry history, duplicate skips, observed batch usage, empty aggregates, duration calculations, completion constraints, and safe database errors.
+
+## Generate and read key insights
+
+Apply the latest migration with `python -m alembic upgrade head` from `backend/`, then restart the API. Use the **insights** section in Swagger:
+
+- `POST /documents/{document_id}/insights` generates and saves key takeaways. A previously saved result is returned without another AI request.
+- `GET /documents/{document_id}/insights` reads the saved takeaways without an AI request; missing documents or ungenerated insights return 404.
+
+Each result contains `document_id` and an `insights` list. An insight contains `text`, its original `page_number`, and an `evidence` excerpt. Results are stored in the document's nullable JSONB `insights` column. Generation requires extracted text and status `extracted`, `embedded`, or `ready`; otherwise it returns 409. This endpoint does not run automatically on upload or change document status.
+
+The server normalizes extracted whitespace and creates numbered source excerpts of at most 240 characters, splitting at spaces when possible and retaining original page numbers. Blank pages produce no excerpts. The model proposes short insights and selects a supporting excerpt ID; it does not generate the quote or page metadata. The server rejects invalid IDs, empty/oversized insight text, incomplete responses, or result counts outside 1–6, then copies the source excerpt and page directly into the response. The prompt requests 3–5 distinct takeaways when supported.
+
+The serialized full excerpt input is limited to 60,000 characters, including source metadata. Larger inputs return 413 without an API call or silent truncation; long-document insight extraction remains a future extension. Requests use `ANSWER_MODEL` (default `gpt-4.1-mini`), structured output, at most 1,200 output tokens, a 30-second SDK timeout, up to two SDK retries, and `store=False`. Generation sends text to OpenAI and may incur charges. Repeated reads are cached; simultaneous first-generation requests can both incur usage, but the first saved result is preserved. Usage metadata is not persisted for this feature yet.
+
+Source IDs ensure excerpts and page references are real; they do not prove that the insight's entire claim is entailed by that excerpt. Factual entailment, extraction boundaries, and prompt-injection resistance need ongoing evaluation. Generation errors preserve stored document state and return safe 502/503 responses. No database transaction remains open during the AI request.
+
+A live check generated five insights for the case study, verified that every excerpt occurs on its referenced page, and confirmed cached GET and POST results. Automated tests cover source-ID mapping, text coverage across excerpt windows, invalid output, limits, caching, failure cleanup, and concurrent-save behavior. Downgrading removes stored insights while preserving documents, summaries, chunks, and chat history.
