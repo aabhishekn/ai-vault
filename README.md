@@ -4,7 +4,7 @@ A document management application for uploading documents, generating AI insight
 
 ## Project status
 
-Minimal FastAPI backend with a health endpoint and local PostgreSQL via Docker Compose. Database integration with FastAPI is next.
+Minimal FastAPI backend with a health endpoint and local PostgreSQL via Docker Compose. FastAPI connects to PostgreSQL through SQLAlchemy and Psycopg.
 
 ## Planned stack
 
@@ -48,4 +48,6 @@ PostgreSQL is available at `127.0.0.1:5433`, with database/user `ai_vault`. The 
 
 `postgres_data` is a named volume that retains database files across container restarts. Use `docker compose stop db` to stop it. `docker compose down` also retains the volume; adding `-v` deletes stored database data.
 
-This step runs the database independently; FastAPI is not connected yet.
+After starting the database, run the backend and visit `http://localhost:8000/health/db`. A successful `SELECT 1` returns `{"status":"ok","database":"connected"}`. Database connection failures return HTTP 503 with a generic error. `/health` remains an API liveness check.
+
+The backend loads the root `.env` independently of the current working directory. Optional `POSTGRES_HOST` and `POSTGRES_PORT` default to `127.0.0.1` and `5433`. Environment variables take precedence. The SQLAlchemy engine manages a connection pool, checks connections before reuse, and disposes the pool at shutdown. No application tables are created yet.
