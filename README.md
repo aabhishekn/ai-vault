@@ -157,3 +157,19 @@ PY
 The completed job returns `Hello, Abhishek! Your background worker is running.` Its result expires after one hour. This demo does not process documents, change document statuses, or call an AI API.
 
 `task_queue.py` shares the Redis connection and queue between producers and workers. Set `REDIS_URL` in the root `.env` to override the local default. Jobs use JSON serialization on both sides. The worker uses RQ's `SpawnWorker`, which avoids unsafe forking on macOS; see the [RQ worker documentation](https://python-rq.org/docs/workers/#spawnworker). Restart the worker after changing its code.
+
+## Extract PDF text locally
+
+From `backend/` with `.venv` active:
+
+```bash
+python pdf_extraction.py "/absolute/path/to/document.pdf"
+```
+
+The command prints the page count, extracted character count, and a short text preview per page. It reads the existing file without saving extracted text or changing any document records. No API key or network request is involved.
+
+`extract_pdf(Path(...))` returns a list of `ExtractedPage` objects, each containing `page_number` and `text`. Page numbers start at 1; blank pages remain in the list so later citations refer to the original PDF pages. Encrypted PDFs, unreadable PDFs, and PDFs with no readable text are rejected. A document with both text and blank/image pages keeps the empty pages; images are not transcribed.
+
+This uses [pypdf text extraction](https://pypdf.readthedocs.io/en/stable/user/extract-text.html), not OCR. Complex layouts may have imperfect reading order, and scanned image-only documents need a future OCR step. Parsing currently runs only when this helper is called; upload and RQ integration come next. The current helper has no page-count or decompressed-memory limit; the 10 MiB upload limit does not bound parsing memory.
+
+Run extraction and upload tests with `python -m unittest discover -s tests -v`.
