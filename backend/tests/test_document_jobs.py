@@ -5,13 +5,15 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import jobs
 from database import engine
-from models import Document
+from models import Document, DocumentChunk
 from pdf_extraction import ExtractedPage, PDFExtractionError
+from chunking import TextChunk
 
 
 @unittest.skipUnless(os.getenv("RUN_INTEGRATION_TESTS") == "1", "Requires migrated local PostgreSQL")
@@ -53,10 +55,16 @@ class DocumentJobTests(unittest.TestCase):
             extractor.assert_called_once()
         self.assertEqual(result["status"], "extracted")
         self.assertEqual(result["page_count"], 2)
+        self.assertEqual(result["chunk_count"], 1)
         self.assertTrue(duplicate["skipped"])
         with Session(engine) as session:
             doc = session.get(Document, self.identifier)
             self.assertEqual(doc.status, "extracted")
+            chunks = session.scalars(select(DocumentChunk).where(
+                DocumentChunk.document_id == self.identifier
+            ).order_by(DocumentChunk.chunk_index)).all()
+            self.assertEqual([(chunk.chunk_index, chunk.page_number, chunk.text) for chunk in chunks],
+                             [(0, 1, "First page")])
             self.assertEqual(doc.extracted_pages, [
                 {"page_number": 1, "text": "First page"},
                 {"page_number": 2, "text": ""},
@@ -75,3 +83,34 @@ class DocumentJobTests(unittest.TestCase):
             doc = session.get(Document, self.identifier)
             self.assertEqual(doc.status, "extracted")
             self.assertIsNone(doc.error_message)
+
+
+    def test_chunk_failure_rolls_back_pages_and_preserves_previous_chunks(self):
+        with Session(engine) as session:
+            session.add(DocumentChunk(document_id=self.identifier, chunk_index=0,
+                                      page_number=1, text="Previous chunk"))
+            session.commit()
+        with patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "Replacement")]):
+            with patch.object(jobs, "chunk_pages", return_value=[TextChunk(0, 1, "")]):
+                with self.assertRaises(IntegrityError):
+                    jobs.extract_document(str(self.identifier))
+        with Session(engine) as session:
+            doc = session.get(Document, self.identifier)
+            self.assertEqual(doc.status, "failed")
+            self.assertIsNone(doc.extracted_pages)
+            chunks = session.scalars(select(DocumentChunk).where(
+                DocumentChunk.document_id == self.identifier
+            )).all()
+            self.assertEqual([chunk.text for chunk in chunks], ["Previous chunk"])
+        with patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "Replacement")]):
+            jobs.extract_document(str(self.identifier))
+        with Session(engine) as session:
+            chunks = session.scalars(select(DocumentChunk).where(
+                DocumentChunk.document_id == self.identifier
+            )).all()
+            self.assertEqual([chunk.text for chunk in chunks], ["Replacement"])
+            session.execute(delete(Document).where(Document.id == self.identifier))
+            session.commit()
+            self.assertEqual(session.scalars(select(DocumentChunk).where(
+                DocumentChunk.document_id == self.identifier
+            )).all(), [])

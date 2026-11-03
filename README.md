@@ -196,7 +196,7 @@ To run the database integration tests alongside the unit tests (requires local P
 RUN_INTEGRATION_TESTS=1 python -m unittest discover -s tests -v
 ```
 
-Integration tests create and delete their own document records and temporary files. Without the environment flag, these four tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
+Integration tests create and delete their own document records and temporary files. Without the environment flag, these five tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
 
 ## Automatic queueing and queue failures
 
@@ -218,4 +218,16 @@ python chunking.py "/absolute/path/to/document.pdf"
 
 Chunks never cross pages. Blank pages produce no chunks, while subsequent chunks retain their original page numbers. Whitespace is collapsed to single spaces; words and punctuation are otherwise preserved. This simple first version can split sentences and does not reconstruct table structure. A final window that already reaches the end of a page does not produce redundant trailing windows.
 
-This step adds a local helper and preview command only. The worker still saves extracted pages; chunk persistence and search integration come next. No embeddings or AI requests are made.
+The worker calls this helper and saves chunks alongside extracted pages. The preview command only prints chunks; it does not save them. No embeddings or AI requests are made.
+
+## Stored document chunks
+
+Apply the latest migration from `backend/` using `python -m alembic upgrade head`, then restart the worker. New uploads now extract pages, split them into chunks, and save both before reaching `extracted`.
+
+`document_chunks` stores a UUID ID, document ID, zero-based chunk index, one-based page number, and chunk text. A foreign key links each chunk to its document and deletes associated chunks when the document is deleted. A unique constraint prevents duplicate positions within a document; its index also supports retrieving chunks for a document. Queries must explicitly order by `chunk_index` to reconstruct the original sequence.
+
+The worker replaces any previous chunks on a retry. The replacement, extracted pages, and final status commit in the same PostgreSQL transaction. If saving fails, that transaction rolls back and the worker separately records `failed`. Previously saved content survives a failed replacement. Search will need to check document status before using stored chunks.
+
+Documents already marked `extracted` before this migration are preserved without backfilling chunks. A fresh upload exercises the full pipeline; automatic backfill and a reprocessing endpoint are not implemented yet. The metadata API still returns the same fields. Embeddings and search are the next stage; this change makes no AI API calls.
+
+Downgrading this migration deletes the chunk table and its contents while preserving document records and extracted pages.
