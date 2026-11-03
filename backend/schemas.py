@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DocumentResponse(BaseModel):
@@ -20,3 +20,24 @@ class DocumentListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class SearchRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    question: str = Field(min_length=1, max_length=2000)
+    top_k: int = Field(default=3, ge=1, le=10)
+
+
+class SearchMatch(BaseModel):
+    chunk_id: UUID
+    chunk_index: int
+    page_number: int
+    text: str
+    cosine_distance: float
+
+
+class SearchResponse(BaseModel):
+    document_id: UUID
+    question: str
+    matches: list[SearchMatch]

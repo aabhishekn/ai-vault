@@ -6,6 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from database import engine
 from documents import router as documents_router
+from search import router as search_router
 
 
 @asynccontextmanager
@@ -16,6 +17,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AI Vault", lifespan=lifespan)
 app.include_router(documents_router)
+app.include_router(search_router)
 
 
 @app.get("/health")
