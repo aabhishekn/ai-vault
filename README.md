@@ -231,3 +231,15 @@ The worker replaces any previous chunks on a retry. The replacement, extracted p
 Documents already marked `extracted` before this migration are preserved without backfilling chunks. A fresh upload exercises the full pipeline; automatic backfill and a reprocessing endpoint are not implemented yet. The metadata API still returns the same fields. Embeddings and search are the next stage; this change makes no AI API calls.
 
 Downgrading this migration deletes the chunk table and its contents while preserving document records and extracted pages.
+
+## Embedding client (not connected to uploads yet)
+
+`embeddings.generate_embeddings(texts)` sends a list of text strings to OpenAI and returns an `EmbeddingBatch` containing `vectors` in the original input order, the returned model name, and the input token count. It uses `text-embedding-3-small` with 1,536 dimensions. See the [official OpenAI embeddings guide](https://developers.openai.com/api/docs/guides/embeddings).
+
+For future live use, set `OPENAI_API_KEY` in the repository root `.env` (ignored by Git). No key is needed to start the API, extract PDFs, create chunks, or run the mocked embedding tests. This step does not retrieve or validate the supplied assignment key.
+
+The helper accepts up to 64 texts per request, rejects blank inputs, and returns an empty batch without an API request for empty input. It checks response positions, vector dimensions, and finite values before returning. Requests have a 30-second SDK timeout and up to two SDK retries. Provider errors propagate to the caller for handling by the later pipeline integration.
+
+These limits count texts, not tokens; input token limits are still enforced by the provider. The caller will need to split larger batches and handle texts exceeding the model token limit. Word-based chunks do not guarantee a token bound. Importing the module makes no API request; calling the helper with nonempty text does send that text to the provider and may incur charges.
+
+The helper is not yet connected to workers, and vectors are not yet stored. All embedding tests mock the SDK: `python -m unittest discover -s tests -v` makes no OpenAI requests. A live embedding request remains to be verified in a later step.
