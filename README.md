@@ -242,7 +242,7 @@ The helper accepts up to 64 texts per request, rejects blank inputs, and returns
 
 These limits count texts, not tokens; input token limits are still enforced by the provider. The caller will need to split larger batches and handle texts exceeding the model token limit. Word-based chunks do not guarantee a token bound. Importing the module makes no API request; calling the helper with nonempty text does send that text to the provider and may incur charges.
 
-The worker can call this helper and store vectors when explicitly enabled. All embedding tests mock the SDK: `python -m unittest discover -s tests -v` makes no OpenAI requests. A separate live SDK smoke check succeeded with `text-embedding-3-small`: one short synthetic input, 1,536 dimensions, and 5 input tokens. This verifies API access; a full live document-processing run remains to be verified.
+The worker can call this helper and store vectors when explicitly enabled. All embedding tests mock the SDK: `python -m unittest discover -s tests -v` makes no OpenAI requests. A separate live SDK smoke check succeeded with `text-embedding-3-small`: one short synthetic input, 1,536 dimensions, and 5 input tokens. A subsequent live upload also verified the full worker pipeline: 4 extracted pages, 6 chunks, and 6 saved vectors, with 1,240 input tokens reported by the completed job.
 
 ## Vector storage with pgvector
 
@@ -263,10 +263,16 @@ OPENAI_API_KEY=your_key_here
 ENABLE_EMBEDDINGS=true
 ```
 
-Restart the worker after changing configuration. Do not commit `.env`. Enabled processing sends chunk text to OpenAI and can incur charges. The supplied assignment key was configured locally and verified with one small live embedding request. Automatic embedding generation remains disabled locally until the next end-to-end check. Automated tests still use mocks only.
+Restart the worker after changing configuration. Do not commit `.env`. Enabled processing sends chunk text to OpenAI and can incur charges. The supplied assignment key was configured locally and verified with one small live embedding request. Automatic embedding generation is now enabled in the local `.env` after a successful end-to-end check; `.env.example` continues to default to `false` for fresh clones. Automated tests still use mocks only.
 
 The worker commits extracted pages and chunks first, keeping status `processing`. It then requests embeddings in batches of at most 64 chunks, outside database transactions. After all batches succeed, it writes all vectors with their model names and sets `embedded` in a single transaction. A provider or vector-save failure marks the document `failed`; extracted text remains saved and no partial vector updates are committed. Missing credentials with embeddings enabled also fail processing.
 
 `embedded` means vectors are stored; it does not mean a summary or chat answer exists. `ready` remains reserved for the later complete pipeline. The RQ result includes `embedding_input_tokens` from successful batches; this is temporary job-result data, not a durable billing ledger, and does not account for all failed requests or retries.
 
 A manual retry of a failed document re-extracts and replaces its chunks, then repeats embedding requests if enabled. Successful provider batches can therefore be charged again after a later failure. Existing `extracted` documents are not automatically reprocessed or embedded; the current path for testing the new pipeline is a fresh upload. Worker termination/timeouts still need automatic recovery in a later step.
+
+## Live pipeline verification
+
+One upload of the four-page case study completed through the HTTP upload endpoint, Redis queue, RQ worker, OpenAI embedding API, and PostgreSQL. Verification checked the API status `embedded`, all six chunk vectors having 1,536 dimensions, the model `text-embedding-3-small`, and preserved source page numbers `[1, 2, 2, 3, 3, 4]`. The completed job reported 1,240 embedding input tokens. The local document and vectors were retained for the upcoming search step.
+
+This live check used the supplied key from the ignored local `.env`; no credential or uploaded PDF is committed. Local `ENABLE_EMBEDDINGS=true` means new uploads send chunk text to OpenAI. Set it to `false` and restart the worker to return to extraction-only processing. Automated tests continue to use mocked provider responses and synthetic vectors.
