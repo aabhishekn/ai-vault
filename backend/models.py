@@ -16,7 +16,7 @@ class Document(Base):
     __table_args__ = (
         CheckConstraint("size_bytes > 0", name="ck_documents_positive_size"),
         CheckConstraint(
-            "status IN ('queued', 'processing', 'extracted', 'ready', 'failed')",
+            "status IN ('queued', 'processing', 'extracted', 'embedded', 'ready', 'failed')",
             name="ck_documents_status",
         ),
     )

@@ -1,3 +1,4 @@
+import os
 from dataclasses import asdict
 from pathlib import Path
 from uuid import UUID
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from chunking import chunk_pages
 from database import engine
+from embeddings import MAX_BATCH_SIZE, generate_embeddings
 from models import Document, DocumentChunk
 from pdf_extraction import PDFExtractionError, extract_pdf
 
@@ -19,7 +21,7 @@ def greet(name: str) -> str:
 
 
 def extract_document(document_id: str) -> dict:
-    """Claim a waiting document, extract its pages, and persist pages and chunks."""
+    """Extract a waiting document and optionally generate and store its embeddings."""
     identifier = UUID(document_id)
     with Session(engine) as session:
         # Only one worker can claim this document, even if it is queued twice.
@@ -42,6 +44,7 @@ def extract_document(document_id: str) -> dict:
             raise PDFExtractionError("Invalid document storage path.")
         pages = extract_pdf(path)
         chunks = chunk_pages(pages)
+        embeddings_enabled = os.getenv("ENABLE_EMBEDDINGS", "false").lower() == "true"
         with Session(engine) as session:
             # Replace old chunks on retries; pages, chunks and status commit together.
             session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == identifier))
@@ -51,14 +54,44 @@ def extract_document(document_id: str) -> dict:
             session.execute(
                 update(Document).where(Document.id == identifier).values(
                     extracted_pages=[asdict(page) for page in pages],
-                    status="extracted", error_message=None,
+                    status="processing" if embeddings_enabled else "extracted", error_message=None,
                 )
             )
             session.commit()
-        return {"document_id": document_id, "status": "extracted",
-                "page_count": len(pages), "chunk_count": len(chunks)}
+        status = "extracted"
+        input_tokens = 0
+        if embeddings_enabled:
+            # Provider requests happen outside database transactions. Save all vectors
+            # together only after every batch succeeds; extracted text survives failure.
+            vectors = []
+            models = []
+            for start in range(0, len(chunks), MAX_BATCH_SIZE):
+                batch = generate_embeddings([
+                    chunk.text for chunk in chunks[start:start + MAX_BATCH_SIZE]
+                ])
+                vectors.extend(batch.vectors)
+                models.extend([batch.model] * len(batch.vectors))
+                input_tokens += batch.input_tokens
+            if len(vectors) != len(chunks):
+                raise ValueError("Embedding count does not match document chunks")
+            with Session(engine) as session:
+                for chunk, vector, model in zip(chunks, vectors, models, strict=True):
+                    session.execute(
+                        update(DocumentChunk).where(
+                            DocumentChunk.document_id == identifier,
+                            DocumentChunk.chunk_index == chunk.chunk_index,
+                        ).values(embedding=vector, embedding_model=model)
+                    )
+                session.execute(update(Document).where(Document.id == identifier).values(
+                    status="embedded", error_message=None,
+                ))
+                session.commit()
+            status = "embedded"
+        return {"document_id": document_id, "status": status,
+                "page_count": len(pages), "chunk_count": len(chunks),
+                "embedding_input_tokens": input_tokens}
     except Exception as error:
-        message = str(error) if isinstance(error, PDFExtractionError) else "Document text extraction failed."
+        message = str(error) if isinstance(error, PDFExtractionError) else "Document processing failed."
         with Session(engine) as session:
             session.execute(
                 update(Document).where(Document.id == identifier).values(

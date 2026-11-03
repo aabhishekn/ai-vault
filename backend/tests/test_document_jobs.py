@@ -6,7 +6,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from sqlalchemy import delete, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
 import jobs
@@ -14,11 +14,15 @@ from database import engine
 from models import Document, DocumentChunk
 from pdf_extraction import ExtractedPage, PDFExtractionError
 from chunking import TextChunk
+from embeddings import EmbeddingBatch, EMBEDDING_MODEL
 
 
 @unittest.skipUnless(os.getenv("RUN_INTEGRATION_TESTS") == "1", "Requires migrated local PostgreSQL")
 class DocumentJobTests(unittest.TestCase):
     def setUp(self):
+        self.embedding_flag = patch.dict(os.environ, {"ENABLE_EMBEDDINGS": "false"})
+        self.embedding_flag.start()
+        self.addCleanup(self.embedding_flag.stop)
         self.directory = tempfile.TemporaryDirectory()
         self.root = Path(self.directory.name).resolve()
         self.path = self.root / "storage" / "documents" / "test.pdf"
@@ -114,3 +118,70 @@ class DocumentJobTests(unittest.TestCase):
             self.assertEqual(session.scalars(select(DocumentChunk).where(
                 DocumentChunk.document_id == self.identifier
             )).all(), [])
+
+
+    def test_enabled_embeddings_batch_and_persist_in_chunk_order(self):
+        chunks = [TextChunk(index, 1, f"Chunk {index}") for index in range(65)]
+
+        def embed(texts):
+            with Session(engine) as session:
+                self.assertEqual(session.get(Document, self.identifier).status, "processing")
+            return EmbeddingBatch(
+                [[float(text.split()[-1]) + 1] + [0.0] * 1535 for text in texts],
+                EMBEDDING_MODEL, len(texts) * 3,
+            )
+
+        with patch.dict(os.environ, {"ENABLE_EMBEDDINGS": "true"}):
+            with patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "Text")]):
+                with patch.object(jobs, "chunk_pages", return_value=chunks):
+                    with patch.object(jobs, "generate_embeddings", side_effect=embed) as provider:
+                        result = jobs.extract_document(str(self.identifier))
+        self.assertEqual([len(call.args[0]) for call in provider.call_args_list], [64, 1])
+        self.assertEqual(result["status"], "embedded")
+        self.assertEqual(result["embedding_input_tokens"], 195)
+        with Session(engine) as session:
+            self.assertEqual(session.get(Document, self.identifier).status, "embedded")
+            saved = session.scalars(select(DocumentChunk).where(
+                DocumentChunk.document_id == self.identifier
+            ).order_by(DocumentChunk.chunk_index)).all()
+            self.assertEqual([float(chunk.embedding[0]) for chunk in saved], list(range(1, 66)))
+            self.assertTrue(all(chunk.embedding_model == EMBEDDING_MODEL for chunk in saved))
+
+    def test_provider_failure_preserves_text_without_partial_embeddings(self):
+        chunks = [TextChunk(index, 1, f"Chunk {index}") for index in range(65)]
+        first_batch = EmbeddingBatch([[1.0] + [0.0] * 1535 for _ in range(64)], EMBEDDING_MODEL, 64)
+        with patch.dict(os.environ, {"ENABLE_EMBEDDINGS": "true"}):
+            with patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "Saved text")]):
+                with patch.object(jobs, "chunk_pages", return_value=chunks):
+                    with patch.object(jobs, "generate_embeddings", side_effect=[first_batch, TimeoutError("secret provider details")]):
+                        with self.assertRaises(TimeoutError):
+                            jobs.extract_document(str(self.identifier))
+        with Session(engine) as session:
+            doc = session.get(Document, self.identifier)
+            self.assertEqual(doc.status, "failed")
+            self.assertEqual(doc.error_message, "Document processing failed.")
+            self.assertEqual(doc.extracted_pages, [{"page_number": 1, "text": "Saved text"}])
+            saved = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == self.identifier)).all()
+            self.assertEqual(len(saved), 65)
+            self.assertTrue(all(chunk.embedding is None for chunk in saved))
+
+    def test_disabled_embeddings_make_no_provider_calls(self):
+        with patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "Text")]):
+            with patch.object(jobs, "generate_embeddings") as provider:
+                result = jobs.extract_document(str(self.identifier))
+        provider.assert_not_called()
+        self.assertEqual(result["status"], "extracted")
+
+
+    def test_vector_save_failure_rolls_back_all_vectors(self):
+        batch = EmbeddingBatch([[1.0] + [0.0] * 1535, [1.0, 0.0]], EMBEDDING_MODEL, 2)
+        with patch.dict(os.environ, {"ENABLE_EMBEDDINGS": "true"}):
+            with patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "First"), ExtractedPage(2, "Second")]):
+                with patch.object(jobs, "generate_embeddings", return_value=batch):
+                    with self.assertRaises(StatementError):
+                        jobs.extract_document(str(self.identifier))
+        with Session(engine) as session:
+            self.assertEqual(session.get(Document, self.identifier).status, "failed")
+            saved = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == self.identifier)).all()
+            self.assertEqual(len(saved), 2)
+            self.assertTrue(all(chunk.embedding is None and chunk.embedding_model is None for chunk in saved))
