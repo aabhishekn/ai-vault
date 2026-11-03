@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 import jobs
 from database import engine
-from models import Document, DocumentChunk
+from models import Document, DocumentChunk, ProcessingAttempt
 from pdf_extraction import ExtractedPage, PDFExtractionError
 from chunking import TextChunk
 from embeddings import EmbeddingBatch, EMBEDDING_MODEL
@@ -64,6 +64,12 @@ class DocumentJobTests(unittest.TestCase):
         with Session(engine) as session:
             doc = session.get(Document, self.identifier)
             self.assertEqual(doc.status, "extracted")
+            attempts = session.scalars(select(ProcessingAttempt).where(ProcessingAttempt.document_id == self.identifier)).all()
+            self.assertEqual(len(attempts), 1)  # duplicate execution was skipped
+            self.assertEqual(attempts[0].status, "succeeded")
+            self.assertIsNotNone(attempts[0].finished_at)
+            self.assertGreaterEqual(attempts[0].duration_ms, 0)
+            self.assertEqual(str(attempts[0].id), result["processing_attempt_id"])
             chunks = session.scalars(select(DocumentChunk).where(
                 DocumentChunk.document_id == self.identifier
             ).order_by(DocumentChunk.chunk_index)).all()
@@ -87,6 +93,10 @@ class DocumentJobTests(unittest.TestCase):
             doc = session.get(Document, self.identifier)
             self.assertEqual(doc.status, "extracted")
             self.assertIsNone(doc.error_message)
+            attempts = session.scalars(select(ProcessingAttempt).where(ProcessingAttempt.document_id == self.identifier)).all()
+            self.assertEqual(len(attempts), 2)
+            self.assertEqual({attempt.status for attempt in attempts}, {"failed", "succeeded"})
+            self.assertTrue(all(attempt.duration_ms >= 0 for attempt in attempts))
 
 
     def test_chunk_failure_rolls_back_pages_and_preserves_previous_chunks(self):
@@ -141,6 +151,9 @@ class DocumentJobTests(unittest.TestCase):
         self.assertEqual(result["embedding_input_tokens"], 195)
         with Session(engine) as session:
             self.assertEqual(session.get(Document, self.identifier).status, "embedded")
+            attempt = session.scalar(select(ProcessingAttempt).where(ProcessingAttempt.document_id == self.identifier))
+            self.assertEqual(attempt.status, "succeeded")
+            self.assertEqual(attempt.embedding_input_tokens, 195)
             saved = session.scalars(select(DocumentChunk).where(
                 DocumentChunk.document_id == self.identifier
             ).order_by(DocumentChunk.chunk_index)).all()
@@ -160,6 +173,10 @@ class DocumentJobTests(unittest.TestCase):
             doc = session.get(Document, self.identifier)
             self.assertEqual(doc.status, "failed")
             self.assertEqual(doc.error_message, "Document processing failed.")
+            attempt = session.scalar(select(ProcessingAttempt).where(ProcessingAttempt.document_id == self.identifier))
+            self.assertEqual(attempt.status, "failed")
+            self.assertEqual(attempt.embedding_input_tokens, 64)
+            self.assertEqual(attempt.error_message, "Document processing failed.")
             self.assertEqual(doc.extracted_pages, [{"page_number": 1, "text": "Saved text"}])
             saved = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == self.identifier)).all()
             self.assertEqual(len(saved), 65)

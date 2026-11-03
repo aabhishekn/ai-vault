@@ -108,3 +108,16 @@ class DocumentStatisticsResponse(BaseModel):
     total_chunks: int
     chunks_with_embeddings: int
     by_status: DocumentStatusCounts
+
+
+class ProcessingMetricsResponse(BaseModel):
+    total_attempts: int
+    processing: int
+    succeeded: int
+    failed: int
+    success_rate: float | None
+    average_duration_ms: float | None
+    average_success_duration_ms: float | None
+    average_failure_duration_ms: float | None
+    max_duration_ms: int | None
+    observed_embedding_input_tokens: int

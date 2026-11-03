@@ -196,7 +196,7 @@ To run the database integration tests alongside the unit tests (requires local P
 RUN_INTEGRATION_TESTS=1 python -m unittest discover -s tests -v
 ```
 
-Integration tests create and delete their own document records and temporary files. Without the environment flag, these twenty-eight tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
+Integration tests create and delete their own document records and temporary files. Without the environment flag, these thirty-one tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
 
 ## Automatic queueing and queue failures
 
@@ -267,7 +267,7 @@ Restart the worker after changing configuration. Do not commit `.env`. Enabled p
 
 The worker commits extracted pages and chunks first, keeping status `processing`. It then requests embeddings in batches of at most 64 chunks, outside database transactions. After all batches succeed, it writes all vectors with their model names and sets `embedded` in a single transaction. A provider or vector-save failure marks the document `failed`; extracted text remains saved and no partial vector updates are committed. Missing credentials with embeddings enabled also fail processing.
 
-`embedded` means vectors are stored; it does not mean a summary or chat answer exists. `ready` remains reserved for the later complete pipeline. The RQ result includes `embedding_input_tokens` from successful batches; this is temporary job-result data, not a durable billing ledger, and does not account for all failed requests or retries.
+`embedded` means vectors are stored; it does not mean a summary or chat answer exists. `ready` remains reserved for the later complete pipeline. The RQ result includes `embedding_input_tokens` from successful batches; this is temporary job-result data. New processing attempts also persist observed token usage as described below; neither is a complete billing ledger or accounts for all failed requests and SDK retries.
 
 A manual retry of a failed document re-extracts and replaces its chunks, then repeats embedding requests if enabled. Successful provider batches can therefore be charged again after a later failure. Existing `extracted` documents are not automatically reprocessed or embedded; the current path for testing the new pipeline is a fresh upload. Worker termination/timeouts still need automatic recovery in a later step.
 
@@ -368,6 +368,27 @@ curl http://localhost:8000/stats/documents
 
 All values come from one PostgreSQL SELECT so they share a statement snapshot. Separate scalar chunk subqueries avoid multiplying document counts or byte totals when a document has several chunks. An empty dataset returns zeros, and database failures return a generic 503. This endpoint makes no Redis or AI requests and requires no migration.
 
-Storage bytes are metadata totals, not a filesystem scan or the total disk space used by PostgreSQL, vectors, extracted text, Redis, or orphan files. Page/chunk/vector totals include retained content on failed documents and are not counts of searchable content. The status counts describe current document state rather than historical job attempts; processing duration metrics are a separate upcoming step.
+Storage bytes are metadata totals, not a filesystem scan or the total disk space used by PostgreSQL, vectors, extracted text, Redis, or orphan files. Page/chunk/vector totals include retained content on failed documents and are not counts of searchable content. The status counts describe current document state rather than historical job attempts; processing duration metrics are available from the endpoint below.
 
 The live local check returned 3 documents, 388,410 recorded PDF bytes, 8 extracted pages, 6 chunks, 6 vectors, and 1 summary. Statistics tests use temporary PostgreSQL tables to test empty and populated datasets without deleting or modifying user documents.
+
+## Processing attempt metrics
+
+Apply migrations with `python -m alembic upgrade head` from `backend/`, then restart the API and worker. `GET /metrics/processing` aggregates retained processing attempts:
+
+- `total_attempts`, `processing`, `succeeded`, and `failed`.
+- `success_rate`: succeeded divided by completed attempts, from 0 to 1; null when none have completed.
+- `average_duration_ms`, averages for success/failure separately, and `max_duration_ms`; null when no matching duration exists.
+- `observed_embedding_input_tokens`: sum of usage returned by successful embedding batches and persisted when attempts finish, including batches preceding a later failure.
+
+```bash
+curl http://localhost:8000/metrics/processing
+```
+
+The worker creates a `processing_attempts` row in the transaction that claims a queued/failed document. Duplicate jobs that skip processing do not create attempts. Each retry gets a separate row, so one document can have both failed and successful attempts. Successful completion and final document state commit together; ordinary failures record a safe error and failed outcome together. Completion constraints require a nonnegative duration and finish timestamp for terminal outcomes. The RQ result includes the attempt UUID for tracing.
+
+Durations use Python's monotonic performance clock from the start of the handler through its completion-record update, rounded to milliseconds. They exclude time waiting in Redis and do not measure upload, search, chat, summary generation, or the final database commit acknowledgment. A successful extraction-only job counts as succeeded, as does successful processing with embeddings. The live extraction-only check recorded one succeeded attempt at 129 ms with zero embedding tokens; this is a functional check, not a performance benchmark.
+
+Metrics begin with this migration and worker update; earlier jobs are not backfilled. A force-killed worker or unavailable database can leave an attempt marked `processing`, just as it can leave the document processing state unfinished. Automatic reconciliation is not implemented. Observed token usage is not an invoice: it omits unknown provider usage, failed request/retry charges, and other API features; active attempts are not updated incrementally. Deleting a document cascades to its attempts, so aggregates describe retained history. Downgrading removes attempt history without deleting documents.
+
+This metrics endpoint performs one aggregate PostgreSQL query and makes no AI requests. Tests verify successful and failed runs, retry history, duplicate skips, observed batch usage, empty aggregates, duration calculations, completion constraints, and safe database errors.

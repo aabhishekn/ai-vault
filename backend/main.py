@@ -9,6 +9,7 @@ from conversations import router as conversations_router
 from database import engine
 from documents import router as documents_router
 from document_stats import router as document_stats_router
+from processing_metrics import router as processing_metrics_router
 from search import router as search_router
 from summaries import router as summaries_router
 
@@ -26,6 +27,7 @@ app.include_router(answers_router)
 app.include_router(conversations_router)
 app.include_router(summaries_router)
 app.include_router(document_stats_router)
+app.include_router(processing_metrics_router)
 
 
 @app.get("/health")

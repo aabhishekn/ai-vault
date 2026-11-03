@@ -80,3 +80,25 @@ class ConversationTurn(Base):
     turn_number: Mapped[int]
     response: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ProcessingAttempt(Base):
+    __tablename__ = "processing_attempts"
+    __table_args__ = (
+        CheckConstraint("status IN ('processing', 'succeeded', 'failed')", name="ck_processing_attempts_status"),
+        CheckConstraint("embedding_input_tokens >= 0", name="ck_processing_attempts_tokens"),
+        CheckConstraint(
+            "(status = 'processing' AND finished_at IS NULL AND duration_ms IS NULL) OR "
+            "(status IN ('succeeded', 'failed') AND finished_at IS NOT NULL AND duration_ms IS NOT NULL AND duration_ms >= 0)",
+            name="ck_processing_attempts_completion",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    document_id: Mapped[UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(20), server_default="processing")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_ms: Mapped[int | None]
+    embedding_input_tokens: Mapped[int] = mapped_column(server_default="0")
+    error_message: Mapped[str | None] = mapped_column(Text)
