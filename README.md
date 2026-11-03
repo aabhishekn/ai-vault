@@ -196,7 +196,7 @@ To run the database integration tests alongside the unit tests (requires local P
 RUN_INTEGRATION_TESTS=1 python -m unittest discover -s tests -v
 ```
 
-Integration tests create and delete their own document records and temporary files. Without the environment flag, these five tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
+Integration tests create and delete their own document records and temporary files. Without the environment flag, these eight tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
 
 ## Automatic queueing and queue failures
 
@@ -243,3 +243,13 @@ The helper accepts up to 64 texts per request, rejects blank inputs, and returns
 These limits count texts, not tokens; input token limits are still enforced by the provider. The caller will need to split larger batches and handle texts exceeding the model token limit. Word-based chunks do not guarantee a token bound. Importing the module makes no API request; calling the helper with nonempty text does send that text to the provider and may incur charges.
 
 The helper is not yet connected to workers, and vectors are not yet stored. All embedding tests mock the SDK: `python -m unittest discover -s tests -v` makes no OpenAI requests. A live embedding request remains to be verified in a later step.
+
+## Vector storage with pgvector
+
+The latest migration enables the PostgreSQL `vector` extension and adds nullable `embedding vector(1536)` and `embedding_model` columns to `document_chunks`. Apply it from `backend/` with `python -m alembic upgrade head`. The existing Docker image already includes the extension binaries; enabling the extension installs its SQL types and operators in this database. The migration needs a database role permitted to create the extension; the local Compose database owner has that access.
+
+A chunk without an embedding has both new columns set to NULL, so existing documents and the extraction worker continue to work. When storing a vector, its model name must be stored with it. PostgreSQL enforces 1,536 dimensions, and a check constraint enforces the vector/model pair. Future search must use the same embedding model and dimensions for document chunks and query text.
+
+The Python `pgvector` package provides SQLAlchemy's `VECTOR` type and distance operations. The integration tests verify round-trip storage, cosine-distance ordering, dimension enforcement, and vector/model consistency using synthetic vectors. These tests roll back their fixture transactions and make no AI calls. See the [official pgvector Python integration](https://github.com/pgvector/pgvector-python#sqlalchemy).
+
+No approximate vector index is added yet; initial similarity queries can use exact scans for this small local dataset. The worker is not yet generating embeddings, and this migration does not backfill vectors. Downgrading removes the two columns and their check constraint, preserving chunk text and leaving the shared vector extension installed.
