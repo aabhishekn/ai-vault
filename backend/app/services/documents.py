@@ -27,6 +27,7 @@ from app.schemas.documents import (
     DocumentVersionsResponse,
 )
 from app.tasks.documents import extract_document
+from app.tasks.events import publish_status
 from app.tasks.queue import document_queue
 
 
@@ -119,6 +120,7 @@ def _save_upload(
             committed = True
         try:
             document_queue.enqueue(extract_document, str(document_id), result_ttl=3600)
+            publish_status(document_id, "queued")
         except RedisError:
             raise DependencyUnavailableError(
                 {

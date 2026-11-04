@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { ComparisonDialog } from './ComparisonDialog'
 import { MAX_COMPARED } from './comparison'
@@ -8,6 +8,7 @@ import { DocumentUpload } from './DocumentUpload'
 import { MultiDocumentChat } from './MultiDocumentChat'
 import type { VaultDocument } from './types'
 import { useDocuments } from './useDocuments'
+import { useLiveUpdates } from './useLiveUpdates'
 
 const MAX_CHOSEN = 10
 
@@ -18,6 +19,34 @@ export function DocumentWorkspace() {
   const [chosen, setChosen] = useState<Map<string, string>>(new Map())
   const [asking, setAsking] = useState(false)
   const [comparing, setComparing] = useState(false)
+  // Change counters for the open document, so its details reload when it changes.
+  const [pushed, setPushed] = useState({ id: '', revision: 0, content: 0 })
+  const selected = useRef(selectedId)
+  useEffect(() => {
+    selected.current = selectedId
+  }, [selectedId])
+  const connected = useLiveUpdates((changed) => {
+    documents.refreshQuietly()
+    const open = selected.current
+    if (!open) return
+    if (changed === null || changed.ids.has(open))
+      setPushed((previous) => {
+        const base =
+          previous.id === open
+            ? previous
+            : { id: open, revision: 0, content: 0 }
+        return {
+          id: open,
+          revision: base.revision + 1,
+          content:
+            changed === null || changed.content.has(open)
+              ? base.content + 1
+              : base.content,
+        }
+      })
+  })
+  const live =
+    pushed.id === selectedId ? pushed : { id: '', revision: 0, content: 0 }
 
   function choose(document: VaultDocument) {
     setChosen((previous) => {
@@ -61,6 +90,7 @@ export function DocumentWorkspace() {
         onSelect={setSelectedId}
         chosen={chosen}
         onChoose={choose}
+        live={connected}
       />
       {selectedId && (
         <DocumentDetails
@@ -68,6 +98,8 @@ export function DocumentWorkspace() {
           id={selectedId}
           onClose={() => setSelectedId(null)}
           onOpen={setSelectedId}
+          liveRevision={live.revision}
+          contentRevision={live.content}
           onVersionAdded={(newId) => {
             documents.goToPage(0)
             setSelectedId(newId)

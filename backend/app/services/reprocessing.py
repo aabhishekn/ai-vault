@@ -22,6 +22,7 @@ from app.db.models import Document, ProcessingAttempt
 from app.db.queries import get_document_or_raise
 from app.schemas.documents import DocumentResponse
 from app.tasks.documents import extract_document
+from app.tasks.events import publish_status
 from app.tasks.queue import document_queue
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,7 @@ def _requeue(session: Session, *conditions) -> list[UUID]:
 
 def _enqueue(document_id: UUID) -> None:
     document_queue.enqueue(extract_document, str(document_id), result_ttl=3600)
+    publish_status(document_id, "queued")
 
 
 def reprocess_document(document_id: UUID) -> DocumentResponse:

@@ -6,6 +6,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     String,
     Text,
     UniqueConstraint,
@@ -33,6 +34,8 @@ class Document(Base):
             "status IN ('queued', 'processing', 'extracted', 'embedded', 'ready', 'failed')",
             name="ck_documents_status",
         ),
+        # Serves `tags @> '["x"]'` filters (see the category and tags migration).
+        Index("ix_documents_tags", "tags", postgresql_using="gin"),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     filename: Mapped[str] = mapped_column(String(255))

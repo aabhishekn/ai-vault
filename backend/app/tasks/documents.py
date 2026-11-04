@@ -22,6 +22,7 @@ from app.processing.pdf_extraction import ExtractedPage, PDFExtractionError, ext
 from app.services.classification import create_classification
 from app.services.insights import create_insights
 from app.services.summaries import create_summary
+from app.tasks.events import publish_content_ready, publish_status
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,8 @@ def _claim_document(context: ProcessingContext) -> tuple[str | None, str]:
             return None, document.status
         session.add(ProcessingAttempt(id=context.attempt_id, document_id=context.document_id))
         session.commit()
-        return storage_path, "processing"
+    publish_status(context.document_id, "processing")
+    return storage_path, "processing"
 
 
 def _finish_attempt(
@@ -118,6 +120,8 @@ def _save_extracted_content(
         if not continue_with_embeddings:
             _finish_attempt(session, context, "succeeded")
         session.commit()
+    if not continue_with_embeddings:
+        publish_status(context.document_id, "extracted")
 
 
 def _embed_chunks(context: ProcessingContext, chunks: list[TextChunk]) -> list[ChunkEmbedding]:
@@ -155,6 +159,7 @@ def _save_embeddings(context: ProcessingContext, embeddings: list[ChunkEmbedding
         )
         _finish_attempt(session, context, "succeeded")
         session.commit()
+    publish_status(context.document_id, "embedded")
 
 
 def _record_failure(context: ProcessingContext, error: Exception) -> None:
@@ -167,6 +172,7 @@ def _record_failure(context: ProcessingContext, error: Exception) -> None:
         )
         _finish_attempt(session, context, "failed", message)
         session.commit()
+    publish_status(context.document_id, "failed")
 
 
 def _generate_content(document_id: UUID) -> dict[str, str]:
@@ -253,6 +259,7 @@ def extract_document(document_id: str) -> dict:
     # Reached only on success: the attempt is already recorded, so nothing below can fail it.
     if should_embed and auto_generate_content_enabled():
         result["generated"] = _generate_content(UUID(document_id))
+        publish_content_ready(document_id)
         logger.info(
             "auto_generation_finished",
             extra={"document_id": document_id, **result["generated"]},

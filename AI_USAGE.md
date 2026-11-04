@@ -15,7 +15,7 @@ I did not use Cursor or Copilot. I am an experienced full-stack engineer but new
 ## How I worked
 
 - **Small verified steps.** Roughly 45 commits over two days, each one a single capability: build, verify, commit, push. The assistant explained the concept first, then built it, then showed it working.
-- **Verification before moving on.** Each step was checked with tests and usually a live call. Today that is 130 backend tests (including database integration tests against PostgreSQL), 174 frontend tests, ruff, Alembic drift check, and GitHub Actions. Tests mock the paid provider; live calls were deliberate single requests.
+- **Verification before moving on.** Each step was checked with tests and usually a live call. Today that is 256 backend tests (including database integration tests against PostgreSQL), 272 frontend tests, ruff, Alembic drift check, and GitHub Actions. Tests mock the paid provider; live calls were deliberate single requests.
 - **Review passes.** I stopped feature work twice to review the whole codebase for structure and edge cases (once with Codex, once with Claude Code) before adding more.
 - **I made the product decisions**: the stack, Docker for services, Tailwind over plain CSS, using LlamaIndex for ingestion and retrieval while keeping our own database table and OpenAI calls (I first planned to keep the whole pipeline hand-built, then adopted LlamaIndex because the assignment highly recommends a RAG framework), and the priority order (upload, background processing, retrieval, cited answers, follow-ups, metrics, only then UI and extras).
 
@@ -60,6 +60,19 @@ Why it is written this way:
 **Summaries:** one 4 to 6 sentence paragraph covering purpose, requirements and constraints, using only the supplied text, with the same untrusted-data rule.
 
 **Insights:** the model sees numbered source excerpts and returns, for each takeaway, a short text and an `evidence_id`. The server attaches the real quote and page number for that ID and rejects unknown IDs, so every insight points to genuine evidence.
+
+## Bonus features and how they were built
+
+Claude Code built these one at a time, each with tests, a live check against the real database and OpenAI, a local commit, and only then the next one. I chose the features and the design constraints; the notes below are what mattered in each.
+
+- **Summary customization**: length, tone and focus options. The focus text is passed as data next to the document, not inside the instructions, and the variants are cached in Redis rather than saved, so the document keeps one canonical summary.
+- **Categories and tags**: generated from the saved summary and insights (a small request) instead of the full text. The category is validated against a fixed list, tags are normalised by the server, and the step is best effort so it can never fail a document.
+- **Version tracking**: every version is a full document of its own, linked by a group id, so older chats and citations always point at the exact file they were asked about. Re-uploading identical bytes is rejected by hash.
+- **Multi-document chat**: one vector query over several documents. Citations carry the document name, taken from the stored chunks, never from the model.
+- **Comparative analysis**: retrieval runs per document so a long document cannot crowd out a short one; the model refers to documents by number and the server maps numbers back to names and rejects impossible drafts.
+- **Real-time updates**: the worker and API are separate processes, so status changes travel through a Redis channel to a WebSocket. Events are hints to refetch, because they are not stored or replayed.
+
+One thing it got wrong: it created the tags index in a migration but left it out of the ORM model, which the Alembic drift check caught before pushing.
 
 ## Where the AI was wrong, and what I changed
 

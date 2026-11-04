@@ -50,8 +50,12 @@ export function useResource<T>(
     setRequest({ key, state: { status: 'loading' } })
     setRevision((previous) => previous + 1)
   }
+  // Fetch again without clearing what is shown (used when the server pushes a change).
+  function refreshQuietly() {
+    setRevision((previous) => previous + 1)
+  }
   // Never display a previous key's data while its replacement request starts.
   const state: ResourceState<T> =
     request.key === key ? request.state : { status: 'loading' }
-  return { state, refresh }
+  return { state, refresh, refreshQuietly }
 }

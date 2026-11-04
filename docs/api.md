@@ -517,3 +517,21 @@ Request: `{"document_ids": [...], "focus": "payment terms"}`. `focus` is optiona
 The model sees, for each document, its saved summary and insights plus the four passages closest to the focus (or to a general "purpose, requirements, terms" query), retrieved **per document** so a long document cannot crowd out a short one. This keeps the request small whatever the document sizes.
 
 Response: `documents` (id, filename, version), `focus`, `overview`, `similarities` and `differences`. Each difference has a `topic` and one `position` per document (`document_id`, `filename`, `statement`; "Not addressed" when a document is silent). The model refers to documents by number; the server maps the numbers back to ids and filenames and rejects drafts with unknown or repeated numbers, fewer than two positions, empty text or more than eight points. `cached: true` means the result came from Redis: results are kept for 7 days under a hash of the model, the sorted document ids and the focus, so listing the same documents in a different order is still a hit.
+
+## Real-time updates (WebSocket)
+
+`WS /ws/events` pushes document changes to the browser as they happen, so the list and the open document update without refreshing.
+
+Messages are JSON text frames:
+
+| Message | Meaning |
+| --- | --- |
+| `{"type": "ready"}` | Sent once the subscription is active. |
+| `{"type": "document.status", "document_id": "...", "status": "processing"}` | A document moved to `queued`, `processing`, `extracted`, `embedded` or `failed`. |
+| `{"type": "document.content", "document_id": "..."}` | The automatic summary, insights and tags finished (or were skipped), so they can be fetched. |
+
+How it works: the worker is a separate process from the API, so it cannot talk to browsers directly. Whenever it (or an upload or reprocess request) changes a status, it publishes the event on the Redis channel `vault:events`. Each WebSocket connection subscribes to that channel in the API process and forwards what it receives. Publishing is best effort and never fails the work it reports.
+
+Events are not stored or replayed. The frontend therefore treats an event as a hint to refetch, not as the new state, and refetches everything after a reconnect (retrying after 1 s, doubling up to 15 s). If Redis is down the socket closes with code 1013 and the UI keeps working with manual refresh. Connect to `/api/ws/events` through the Vite dev proxy (`ws: true`) or directly at `ws://127.0.0.1:8000/ws/events`.
+
+Uvicorn needs the `websockets` package for WebSocket support; it is pinned in `requirements.txt`.

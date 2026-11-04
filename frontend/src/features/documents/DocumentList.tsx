@@ -14,8 +14,11 @@ export function DocumentList({
   onSelect,
   chosen,
   onChoose,
+  live = false,
 }: ReturnType<typeof useDocuments> & {
   onSelect: (id: string) => void
+  // True while the server is pushing status changes.
+  live?: boolean
   chosen?: Map<string, string>
   onChoose?: (document: VaultDocument) => void
 }) {
@@ -32,6 +35,14 @@ export function DocumentList({
       <div className="flex items-center justify-between gap-4 border-b border-rule px-[26px] py-[22px] max-[600px]:p-[18px]">
         <div className="flex items-center gap-2.5 [&_h2]:text-sm [&_h2]:font-semibold">
           <h2 id="documents-heading">All documents</h2>
+          {live && (
+            <span
+              className="rounded-[7px] bg-[#e4ead9] px-1.5 py-0.5 text-[10px] font-semibold text-[#3e4a37]"
+              title="Status changes appear here as they happen"
+            >
+              ● Live
+            </span>
+          )}
           {page && (
             <span
               className="grid h-6 min-w-6 place-items-center rounded-[7px] bg-[#f0f1e9] px-[7px] text-[11px] text-[#58634f]"

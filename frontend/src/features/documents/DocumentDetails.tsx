@@ -15,14 +15,25 @@ export function DocumentDetails({
   onClose,
   onOpen,
   onVersionAdded,
+  liveRevision = 0,
+  contentRevision = 0,
 }: {
   id: string
   onClose: () => void
   onOpen: (id: string) => void
   onVersionAdded: (id: string) => void
+  // Bumped when the server reports this document changed / its content was generated.
+  liveRevision?: number
+  contentRevision?: number
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const { state, refresh } = useDocument(id)
+  const { state, refresh, refreshQuietly } = useDocument(id)
+  const lastRevision = useRef(liveRevision)
+  useEffect(() => {
+    if (lastRevision.current === liveRevision) return
+    lastRevision.current = liveRevision
+    refreshQuietly()
+  }, [liveRevision, refreshQuietly])
 
   useEffect(() => {
     const element = dialog.current
@@ -86,7 +97,7 @@ export function DocumentDetails({
               {DOCUMENT_STATUS_DESCRIPTIONS[state.data.status]}
             </p>
             <DocumentTags
-              key={id}
+              key={`${id}:${contentRevision}`}
               id={id}
               status={state.data.status}
               category={state.data.category}
@@ -121,8 +132,16 @@ export function DocumentDetails({
               id={id}
               documentStatus={state.data.status}
             />
-            <DocumentSummary id={id} documentStatus={state.data.status} />
-            <DocumentInsights id={id} documentStatus={state.data.status} />
+            <DocumentSummary
+              key={contentRevision}
+              id={id}
+              documentStatus={state.data.status}
+            />
+            <DocumentInsights
+              key={contentRevision}
+              id={id}
+              documentStatus={state.data.status}
+            />
             <DocumentVersions
               key={id}
               id={id}

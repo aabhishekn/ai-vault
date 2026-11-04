@@ -63,6 +63,11 @@ export function useDocuments() {
     setQuery((previous) => ({ ...previous, revision: previous.revision + 1 }))
   }
 
+  // Reload the current page without a loading state, for server-pushed changes.
+  function refreshQuietly() {
+    setQuery((previous) => ({ ...previous, revision: previous.revision + 1 }))
+  }
+
   function goToPage(offset: number) {
     setState({ status: 'loading' })
     setQuery((previous) => ({ ...previous, offset }))
@@ -74,5 +79,12 @@ export function useDocuments() {
     setQuery((previous) => ({ ...previous, offset: 0, filter }))
   }
 
-  return { state, refresh, goToPage, filter: query.filter, setFilter }
+  return {
+    state,
+    refresh,
+    refreshQuietly,
+    goToPage,
+    filter: query.filter,
+    setFilter,
+  }
 }
