@@ -4,6 +4,7 @@ import { formatFileSize, formatUploadDate } from '../../lib/format'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
 import { DocumentSummary } from './DocumentSummary'
 import { DocumentInsights } from './DocumentInsights'
+import { DocumentQuestion } from './DocumentQuestion'
 import { DOCUMENT_STATUS_DESCRIPTIONS } from './status'
 import { useDocument } from './useDocument'
 
@@ -102,6 +103,11 @@ export function DocumentDetails({
                 <dd className="font-mono text-xs">{state.data.id}</dd>
               </div>
             </dl>
+            <DocumentQuestion
+              key={id}
+              id={id}
+              documentStatus={state.data.status}
+            />
             <DocumentSummary id={id} documentStatus={state.data.status} />
             <DocumentInsights id={id} documentStatus={state.data.status} />
           </>

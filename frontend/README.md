@@ -45,10 +45,22 @@ The insights API validates the selected document ID, nonempty insight/evidence t
 
 `POST /documents/{id}/insights` uses the existing backend generation and cache. Opening details and refreshing insights use GET only. Eligibility matches summary generation: extracted, embedded, or ready. The shared lifecycle blocks duplicate submissions and refresh while generating, applies a two-minute browser timeout, and cancels pending requests when details close or the document changes. After failure, **Check saved insights** must finish before another generation can be attempted. The server may still save a result after browser cancellation; requests from other tabs are not deduplicated by this frontend guard.
 
+## Ask a document
+
+**Ask this document** supports independent questions for `embedded` and `ready` documents. Other statuses show why questions are unavailable. The form validates trimmed, nonempty questions up to 2,000 characters and sends `POST /documents/{id}/ask` as JSON with `top_k: 3`. No request runs on mount. Questions use the configured AI provider for retrieval and answer generation; the form explains text sharing and possible charges.
+
+Answers show the submitted question, plain-text response, and expandable sources labelled with the same citation numbers and page numbers used in the answer. Citation text is the backend's retrieved passage. The client checks the returned document ID, echoed question, citation fields, uniqueness, and correspondence between answer labels and source numbers before displaying a result. Insufficient evidence has its own state and no invented source links.
+
+The hook prevents duplicate submissions, times out after two minutes, and cancels browser requests when details close or change documents. Failures are not retried automatically; submitting again starts a new request and may incur charges. The server may finish work after browser cancellation. Each question is independent, and the answer is not stored by this endpoint; saved multi-turn conversations are a separate future step. Draft edits do not relabel an existing answer, and closing or refreshing details clears the question UI.
+
 ## Structure
 
 - `src/app/`: application layout.
 - `src/features/documents/DocumentWorkspace.tsx`: composes upload, list, and details; owns list state and selected document ID.
+- `src/features/documents/answers.ts`: question eligibility/validation, JSON requests, and answer/citation validation.
+- `src/features/documents/useDocumentAnswer.ts`: explicit submission, request guard, cancellation, and timeout.
+- `src/features/documents/DocumentQuestion.tsx`: question form, cost explanation, loading/error feedback, and focus.
+- `src/features/documents/AnswerResult.tsx`: submitted question, answer, and expandable source passages.
 - `src/features/documents/summary.ts`: validated read/generation requests, processing-status eligibility, and safe API errors.
 - `src/features/documents/useDocumentSummary.ts`: summary lifecycle configuration through the shared generated-content hook.
 - `src/features/documents/DocumentSummary.tsx`: summary, empty state, and retry UI.

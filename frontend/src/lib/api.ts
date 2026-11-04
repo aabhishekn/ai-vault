@@ -7,15 +7,25 @@ export class ApiError extends Error {
   }
 }
 
+type PostOptions = { method: 'POST' } & (
+  | { body?: FormData; json?: never }
+  | { json: Record<string, unknown>; body?: never }
+)
+
 export async function requestJson(
   path: `/${string}`,
   signal: AbortSignal,
-  options: { method: 'POST'; body?: FormData } | undefined = undefined,
+  options: PostOptions | undefined = undefined,
 ): Promise<unknown> {
+  const { json, ...requestOptions } = options ?? {}
   const response = await fetch(`/api${path}`, {
-    ...options,
+    ...requestOptions,
+    ...(json === undefined ? {} : { body: JSON.stringify(json) }),
     signal,
-    headers: { Accept: 'application/json' },
+    headers: {
+      Accept: 'application/json',
+      ...(json === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
   })
   if (!response.ok) {
     throw new ApiError(

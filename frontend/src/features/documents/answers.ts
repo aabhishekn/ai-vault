@@ -1,0 +1,140 @@
+import { ApiError, requestJson } from '../../lib/api'
+import type { DocumentStatus } from './types'
+
+export type AnswerCitation = {
+  source_number: number
+  chunk_id: string
+  page_number: number
+  text: string
+}
+export type DocumentAnswer = {
+  document_id: string
+  question: string
+  answer: string
+  insufficient_evidence: boolean
+  citations: AnswerCitation[]
+}
+
+export const MAX_QUESTION_LENGTH = 2000
+
+export function validateQuestion(question: string): string | null {
+  if (!question.trim()) return 'Enter a question about this document.'
+  if (question.trim().length > MAX_QUESTION_LENGTH)
+    return 'Keep your question within 2,000 characters.'
+  return null
+}
+
+export function canAskDocument(status: DocumentStatus): boolean {
+  return status === 'embedded' || status === 'ready'
+}
+
+function isCitation(value: unknown): value is AnswerCitation {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'source_number' in value &&
+    Number.isSafeInteger(value.source_number) &&
+    Number(value.source_number) > 0 &&
+    'page_number' in value &&
+    Number.isSafeInteger(value.page_number) &&
+    Number(value.page_number) > 0 &&
+    'chunk_id' in value &&
+    typeof value.chunk_id === 'string' &&
+    Boolean(value.chunk_id.trim()) &&
+    'text' in value &&
+    typeof value.text === 'string' &&
+    Boolean(value.text.trim())
+  )
+}
+
+function parseAnswer(
+  data: unknown,
+  id: string,
+  question: string,
+): DocumentAnswer {
+  const invalid = () =>
+    new ApiError(
+      'The document service returned an invalid answer or citations. Please try again.',
+    )
+  if (
+    typeof data !== 'object' ||
+    data === null ||
+    !('document_id' in data) ||
+    data.document_id !== id ||
+    !('question' in data) ||
+    data.question !== question ||
+    !('answer' in data) ||
+    typeof data.answer !== 'string' ||
+    !data.answer.trim() ||
+    !('insufficient_evidence' in data) ||
+    typeof data.insufficient_evidence !== 'boolean' ||
+    !('citations' in data) ||
+    !Array.isArray(data.citations) ||
+    !data.citations.every(isCitation)
+  )
+    throw invalid()
+
+  const labels = new Set(
+    data.citations.map((citation) => citation.source_number),
+  )
+  const inlineLabels = new Set(
+    [...data.answer.matchAll(/\[(\d+)\]/g)].map((match) => Number(match[1])),
+  )
+  if (labels.size !== data.citations.length) throw invalid()
+  if (data.insufficient_evidence) {
+    if (labels.size || inlineLabels.size) throw invalid()
+  } else if (
+    !labels.size ||
+    labels.size !== inlineLabels.size ||
+    [...inlineLabels].some((label) => !labels.has(label))
+  ) {
+    throw invalid()
+  }
+  return {
+    document_id: id,
+    question,
+    answer: data.answer,
+    insufficient_evidence: data.insufficient_evidence,
+    citations: data.citations,
+  }
+}
+
+export async function askDocument(
+  id: string,
+  question: string,
+  signal: AbortSignal,
+): Promise<DocumentAnswer> {
+  const validationError = validateQuestion(question)
+  if (validationError) throw new ApiError(validationError)
+  const normalized = question.trim()
+  try {
+    const data = await requestJson(
+      `/documents/${encodeURIComponent(id)}/ask`,
+      signal,
+      {
+        method: 'POST',
+        json: { question: normalized, top_k: 3 },
+      },
+    )
+    return parseAnswer(data, id, normalized)
+  } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      if (error.status === 404)
+        throw new ApiError(
+          'This document could not be found. Close this view and refresh the document list.',
+        )
+      if (error.status === 409)
+        throw new ApiError(
+          'This document is not ready for questions. Refresh document details and wait until it is search ready.',
+        )
+      if (error.status === 422)
+        throw new ApiError(
+          'The question was not accepted. Enter a question within 2,000 characters.',
+        )
+      if (error.status === undefined) throw error
+    }
+    throw new ApiError(
+      'We couldn’t complete your answer. Check your connection and try again when the document service is available.',
+    )
+  }
+}

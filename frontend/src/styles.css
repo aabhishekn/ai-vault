@@ -46,6 +46,7 @@
   button:focus-visible,
   a:focus-visible,
   input:focus-visible,
+  textarea:focus-visible,
   summary:focus-visible,
   [tabindex='-1']:focus-visible {
     outline: 3px solid var(--color-focus);
