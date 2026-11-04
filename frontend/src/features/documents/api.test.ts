@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../lib/api'
-import { listDocuments, parseDocumentPage } from './api'
+import { getDocument, listDocuments, parseDocumentPage } from './api'
 import { DOCUMENT_STATUSES } from './types'
 
 const document = {
@@ -88,6 +88,73 @@ describe('document API contract', () => {
         offset: 0,
         signal: new AbortController().signal,
       }),
+    ).rejects.toThrow('document service is unavailable')
+  })
+})
+
+describe('document details API', () => {
+  it('fetches the selected document and forwards its cancellation signal', async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json(document))
+    vi.stubGlobal('fetch', fetch)
+    const signal = new AbortController().signal
+    await expect(getDocument(document.id, signal)).resolves.toEqual(document)
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      `/api/documents/${document.id}`,
+      {
+        signal,
+        headers: { Accept: 'application/json' },
+      },
+    )
+  })
+  it('encodes the identifier as a single path segment', async () => {
+    const id = 'unexpected/id?value'
+    const fetch = vi.fn().mockResolvedValue(Response.json({ ...document, id }))
+    vi.stubGlobal('fetch', fetch)
+    await getDocument(id, new AbortController().signal)
+    expect(fetch.mock.calls[0]?.[0]).toBe(
+      '/api/documents/unexpected%2Fid%3Fvalue',
+    )
+  })
+  it.each([
+    null,
+    { ...document, id: 'different-document' },
+    { ...document, status: 'unknown' },
+  ])(
+    'rejects malformed or mismatched details instead of showing the wrong document',
+    async (data) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(data)))
+      await expect(
+        getDocument(document.id, new AbortController().signal),
+      ).rejects.toThrow('unexpected details')
+    },
+  )
+  it('explains when the selected document no longer exists', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json({ detail: 'internal lookup' }, { status: 404 }),
+        ),
+    )
+    await expect(
+      getDocument(document.id, new AbortController().signal),
+    ).rejects.toThrow('could not be found')
+  })
+  it('keeps server internals out of a details failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            { detail: 'private database internals' },
+            { status: 503 },
+          ),
+        ),
+    )
+    await expect(
+      getDocument(document.id, new AbortController().signal),
     ).rejects.toThrow('document service is unavailable')
   })
 })

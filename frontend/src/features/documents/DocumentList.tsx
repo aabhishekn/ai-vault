@@ -7,7 +7,8 @@ export function DocumentList({
   state,
   refresh,
   goToPage,
-}: ReturnType<typeof useDocuments>) {
+  onSelect,
+}: ReturnType<typeof useDocuments> & { onSelect: (id: string) => void }) {
   const loading = state.status === 'loading'
   const page = state.status === 'success' ? state.page : null
 
@@ -80,7 +81,11 @@ export function DocumentList({
         <>
           <ul className="document-rows" aria-label="Uploaded documents">
             {page.items.map((document) => (
-              <DocumentRow key={document.id} document={document} />
+              <DocumentRow
+                key={document.id}
+                document={document}
+                onSelect={onSelect}
+              />
             ))}
           </ul>
           <div className="document-list-footer">

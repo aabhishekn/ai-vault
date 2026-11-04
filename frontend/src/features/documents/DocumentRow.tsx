@@ -2,7 +2,13 @@ import { formatFileSize, formatUploadDate } from '../../lib/format'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
 import type { VaultDocument } from './types'
 
-export function DocumentRow({ document }: { document: VaultDocument }) {
+export function DocumentRow({
+  document,
+  onSelect,
+}: {
+  document: VaultDocument
+  onSelect: (id: string) => void
+}) {
   return (
     <li className="document-row">
       <span className="document-file-icon" aria-hidden="true">
@@ -17,7 +23,19 @@ export function DocumentRow({ document }: { document: VaultDocument }) {
         </svg>
       </span>
       <div className="document-description">
-        <h3>{document.filename}</h3>
+        <h3>
+          <button
+            type="button"
+            className="document-open"
+            aria-haspopup="dialog"
+            onClick={(event) => {
+              event.currentTarget.focus()
+              onSelect(document.id)
+            }}
+          >
+            {document.filename}
+          </button>
+        </h3>
         <p>
           <span>{formatFileSize(document.size_bytes)}</span>
           <span aria-hidden="true">·</span>

@@ -77,3 +77,26 @@ export async function listDocuments({
   }
   return page
 }
+
+export async function getDocument(
+  id: string,
+  signal: AbortSignal,
+): Promise<VaultDocument> {
+  try {
+    const data = await getJson(`/documents/${encodeURIComponent(id)}`, signal)
+    if (!isDocument(data) || data.id !== id) {
+      throw new ApiError(
+        'The document service returned unexpected details. Please try again.',
+      )
+    }
+    return data
+  } catch (error: unknown) {
+    if (error instanceof ApiError && error.status === 404) {
+      throw new ApiError(
+        'This document could not be found. Close this view and refresh your document list.',
+        404,
+      )
+    }
+    throw error
+  }
+}

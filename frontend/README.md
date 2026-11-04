@@ -17,10 +17,18 @@ Choose a PDF, then select **Upload PDF**. The form checks the extension, nonempt
 
 The file input and submit button are disabled during upload. Uploads time out after 60 seconds and are cancelled on unmount; cancelling the browser request does not undo a server save. Failed or unconfirmed requests are never retried automatically. If the connection or queue fails after a save, feedback asks you to refresh the list before uploading again. The backend currently has no upload idempotency mechanism.
 
+## Document details
+
+Select a document filename to open its details dialog. It fetches fresh metadata from `GET /documents/{id}`, validates that the returned ID matches the selected document, and shows status, size, type, upload time, and ID. **Refresh details** checks for processing updates without an AI call. Close or press Escape to return to the same list and page. The modal contains keyboard focus and restores it to the selected filename on close.
+
+Loading, missing documents, invalid responses, and connection failures have dedicated feedback. Details requests time out after ten seconds and are cancelled when the dialog closes. Selection is local UI state; reloading the page closes the dialog. PDF preview and AI actions are separate future steps.
+
 ## Structure
 
 - `src/app/`: application layout.
-- `src/features/documents/DocumentWorkspace.tsx`: composes upload and list and owns their shared list state.
+- `src/features/documents/DocumentWorkspace.tsx`: composes upload, list, and details; owns list state and selected document ID.
+- `src/features/documents/useDocument.ts`: selected-document request lifecycle and refresh.
+- `src/features/documents/DocumentDetails.tsx`: metadata dialog and focus lifecycle.
 - `src/features/documents/upload.ts`: upload validation and multipart API request.
 - `src/features/documents/useUploadDocument.ts`: upload lifecycle, timeout, duplicate-submit guard, and cancellation.
 - `src/features/documents/DocumentUpload.tsx`: accessible file picker, form, and feedback.
