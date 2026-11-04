@@ -1,9 +1,14 @@
-import { formatFileSize, formatUploadDate } from '../../lib/format'
+import {
+  documentTitle,
+  formatFileSize,
+  formatUploadDate,
+} from '../../lib/format'
 import { canAskDocument } from './answers'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
 import { TagChips } from './TagChips'
 
 export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
+  const title = documentTitle(document.filename)
   // An upload still on its way: shown at once, but there is nothing to open yet.
   const pending = document.pending === true
   return (
@@ -25,21 +30,22 @@ export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
           <path d="M14 3v5h5M8 13h8m-8 4h5" />
         </svg>
       </span>
-      <div className="[&_h3]:mb-[7px] [&_h3]:text-[13px] [&_h3]:leading-normal [&_h3]:font-[550] [&_h3]:wrap-anywhere [&_p]:flex [&_p]:flex-wrap [&_p]:gap-1.5 [&_p]:text-[11px] [&_p]:leading-[1.6] [&_p]:text-muted max-[600px]:[&_p]:text-[10px]">
+      <div className="[&_h3]:mb-[7px] [&_h3]:text-[15px] [&_h3]:leading-snug [&_h3]:font-semibold [&_h3]:tracking-[-0.1px] [&_h3]:wrap-anywhere [&_p]:flex [&_p]:flex-wrap [&_p]:gap-1.5 [&_p]:text-[11px] [&_p]:leading-[1.6] [&_p]:text-muted max-[600px]:[&_p]:text-[10px]">
         <h3>
           {pending ? (
-            document.filename
+            title
           ) : (
             <button
               type="button"
-              className="cursor-pointer border-0 bg-transparent p-0 text-left wrap-anywhere text-inherit underline decoration-[#d6d2c4] underline-offset-4 [font:inherit] hover:text-earth hover:decoration-current"
+              className="cursor-pointer border-0 bg-transparent p-0 text-left wrap-anywhere text-inherit underline-offset-4 [font:inherit] hover:text-earth hover:underline hover:decoration-current"
               aria-haspopup="dialog"
+              title={document.filename}
               onClick={(event) => {
                 event.currentTarget.focus()
                 onSelect(document.id)
               }}
             >
-              {document.filename}
+              {title}
             </button>
           )}
           {(document.version_number ?? 1) > 1 && (
@@ -73,7 +79,7 @@ export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
               className="size-[18px] cursor-pointer"
               checked={chosen}
               onChange={() => onChoose(document)}
-              aria-label={`Select for comparison or multi-document questions: ${document.filename}`}
+              aria-label={`Select for comparison or multi-document questions: ${title}`}
             />
             Select
           </label>

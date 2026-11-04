@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { ApiError } from '../../lib/api'
+import { documentTitle } from '../../lib/format'
 import { compareDocuments, MAX_COMPARISON_FOCUS } from './comparison'
 
 const TIMEOUT_MS = 120_000
@@ -150,7 +151,7 @@ export function ComparisonDialog({ documents, onClose }) {
                         {difference.positions.map((position) => (
                           <div key={position.document_id}>
                             <dt className="text-[11px] font-semibold text-muted">
-                              {position.filename}
+                              {documentTitle(position.filename)}
                             </dt>
                             <dd>{position.statement}</dd>
                           </div>

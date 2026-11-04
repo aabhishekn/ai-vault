@@ -8,6 +8,7 @@ import { DocumentList } from './DocumentList'
 import { DocumentUpload } from './DocumentUpload'
 import { MultiDocumentChat } from './MultiDocumentChat'
 
+import { documentTitle } from '../../lib/format'
 import { useDocuments } from './useDocuments'
 import { useOptimisticDocuments } from './useOptimisticDocuments'
 import { useQueueHealth } from '../health/useQueueHealth'
@@ -66,7 +67,8 @@ export function DocumentWorkspace() {
     setChosen((previous) => {
       const next = new Map(previous)
       if (next.has(document.id)) next.delete(document.id)
-      else if (next.size < MAX_CHOSEN) next.set(document.id, document.filename)
+      else if (next.size < MAX_CHOSEN)
+        next.set(document.id, documentTitle(document.filename))
       return next
     })
   }

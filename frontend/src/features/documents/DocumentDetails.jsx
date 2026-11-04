@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { Button } from '../../components/Button'
-import { formatFileSize, formatUploadDate } from '../../lib/format'
+import {
+  documentTitle,
+  formatFileSize,
+  formatUploadDate,
+} from '../../lib/format'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
 import { DocumentTags } from './DocumentTags'
 import { DocumentActions } from './DocumentActions'
@@ -40,7 +44,7 @@ export function DocumentDetails({
 
   async function reprocess() {
     const { filename, status: current } = state.data
-    mergeData(await onReprocess(id, current, filename))
+    mergeData(await onReprocess(id, current, documentTitle(filename)))
     refreshQuietly()
   }
 
@@ -98,8 +102,8 @@ export function DocumentDetails({
         )}
         {state.status === 'success' && (
           <>
-            <h3 className="mb-[18px] text-lg leading-normal font-bold wrap-anywhere">
-              {state.data.filename}
+            <h3 className="mb-[18px] font-serif text-[22px] leading-snug font-normal tracking-[-0.3px] wrap-anywhere">
+              {documentTitle(state.data.filename)}
             </h3>
             <DocumentStatusBadge status={status} />
             <p className="my-[1em] text-[13px] leading-[1.8] text-muted">
@@ -130,6 +134,10 @@ export function DocumentDetails({
                 File details
               </summary>
               <dl className="mt-5 grid grid-cols-2 gap-[22px] max-[600px]:grid-cols-1 [&_dd]:leading-[1.6] [&_dd]:wrap-anywhere [&_dt]:mb-2 [&_dt]:text-[11px] [&_dt]:text-muted">
+                <div className="col-span-full">
+                  <dt>File name</dt>
+                  <dd className="text-[13px]">{state.data.filename}</dd>
+                </div>
                 <div>
                   <dt>File size</dt>
                   <dd className="text-[13px]">
@@ -163,7 +171,7 @@ export function DocumentDetails({
             <DocumentActions
               key={`actions:${id}`}
               status={status}
-              onDelete={() => onDelete(id, state.data.filename)}
+              onDelete={() => onDelete(id, documentTitle(state.data.filename))}
               onReprocess={reprocess}
             />
           </>

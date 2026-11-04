@@ -1,7 +1,11 @@
 import { useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { useResource } from '../../hooks/useResource'
-import { formatFileSize, formatUploadDate } from '../../lib/format'
+import {
+  documentTitle,
+  formatFileSize,
+  formatUploadDate,
+} from '../../lib/format'
 import { ApiError } from '../../lib/api'
 import { uploadNewVersion, validateUpload } from './upload'
 import { getVersions } from './versions'
@@ -68,7 +72,8 @@ export function DocumentVersions({ id, onOpen, onVersionAdded }) {
             >
               <span className="min-w-0 wrap-anywhere">
                 <strong>v{version.version_number}</strong>
-                {version.is_latest ? ' · latest' : ''} · {version.filename}
+                {version.is_latest ? ' · latest' : ''} ·{' '}
+                {documentTitle(version.filename)}
                 <span className="block text-[11px] text-muted">
                   {formatFileSize(version.size_bytes)} ·{' '}
                   {formatUploadDate(version.created_at)} · {version.status}

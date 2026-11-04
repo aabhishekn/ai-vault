@@ -10,6 +10,19 @@ export function formatUploadDate(value) {
   return uploadedDate.format(new Date(value))
 }
 
+// A readable title for a file name: no extension, spaces instead of underscores. Operating
+// systems swap ":" for "_" in file names, so an underscore before a space reads back as a colon.
+export function documentTitle(filename) {
+  const title = filename
+    .replace(/\.pdf$/i, '')
+    .replace(/_\s+/g, ': ')
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/[:\s]+$/, '')
+    .trim()
+  return title || filename
+}
+
 export function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`

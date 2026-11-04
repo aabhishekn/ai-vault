@@ -19,7 +19,7 @@ The file input and submit button are disabled during upload. Uploads time out af
 
 ## Document details
 
-Select a document filename to open its details dialog. It fetches fresh metadata from `GET /documents/{id}`, validates that the returned ID matches the selected document, and shows status, size, type, upload time, and ID. **Refresh details** checks for processing updates without an AI call. Close or press Escape to return to the same list and page. The modal contains keyboard focus and restores it to the selected filename on close.
+Documents are listed by a readable title: the file name without `.pdf`, with underscores turned into spaces (and `_ ` back into a colon, which operating systems substitute in file names). The exact file name is the tooltip on the title and the **File name** line under **File details**. Select a document title to open its details dialog. It fetches fresh metadata from `GET /documents/{id}`, validates that the returned ID matches the selected document, and shows status, size, type, upload time, and ID. **Refresh details** checks for processing updates without an AI call. Close or press Escape to return to the same list and page. The modal contains keyboard focus and restores it to the selected filename on close.
 
 Loading, missing documents, invalid responses, and connection failures have dedicated feedback. Details requests time out after ten seconds and are cancelled when the dialog closes. Selection is local UI state; reloading the page closes the dialog. PDF preview is a separate future step.
 

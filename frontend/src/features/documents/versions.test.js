@@ -139,7 +139,7 @@ describe('versions panel', () => {
     render(
       createElement(DocumentVersions, { id: 'doc-2', onOpen, onVersionAdded }),
     )
-    expect(await screen.findByText(/report-v1\.pdf/)).toBeTruthy()
+    expect(await screen.findByText(/report-v1/)).toBeTruthy()
     expect(screen.getByText('Viewing')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Open v1' }))
     expect(onOpen).toHaveBeenCalledWith('doc-1')
@@ -168,7 +168,7 @@ describe('versions panel', () => {
         onVersionAdded: vi.fn(),
       }),
     )
-    await screen.findByText(/report-v1\.pdf/)
+    await screen.findByText(/report-v1/)
     fireEvent.change(screen.getByLabelText('Upload a new version'), {
       target: { files: [pdf()] },
     })

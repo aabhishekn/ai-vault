@@ -1,3 +1,5 @@
+import { documentTitle } from '../../lib/format'
+
 export function AnswerResult({ result }) {
   return (
     <div className="mt-5 wrap-anywhere">
@@ -20,8 +22,10 @@ export function AnswerResult({ result }) {
                 <details className="rounded-[10px] border border-evidence-border bg-[#f7f5ee] p-4">
                   <summary className="cursor-pointer py-1.5 text-xs font-semibold text-earth">
                     [{citation.source_number}]
-                    {citation.filename ? ` · ${citation.filename}` : ''} · Page{' '}
-                    {citation.page_number}
+                    {citation.filename
+                      ? ` · ${documentTitle(citation.filename)}`
+                      : ''}{' '}
+                    · Page {citation.page_number}
                   </summary>
                   <blockquote className="mt-3 border-l-2 border-[#ddd9ca] pl-3 text-xs leading-[1.8] whitespace-pre-wrap text-muted">
                     {citation.text}

@@ -73,7 +73,7 @@ describe('document workspace selection hint', () => {
   it('stays out of the way with a single selectable document', async () => {
     serve([documentNamed('a'), documentNamed('b', 'queued')])
     render(createElement(DocumentWorkspace))
-    await screen.findByText('a.pdf')
+    await screen.findByText('a')
     expect(screen.queryByText(hint)).toBeNull()
   })
 })
@@ -101,14 +101,14 @@ describe('background worker notice', () => {
   it('stays quiet when a worker is running', async () => {
     serve([documentNamed('a')])
     render(createElement(DocumentWorkspace))
-    await screen.findByText('a.pdf')
+    await screen.findByText('a')
     expect(screen.queryByText(notice)).toBeNull()
   })
 
   it('never warns when the check itself fails', async () => {
     serve([documentNamed('a')], null)
     render(createElement(DocumentWorkspace))
-    await screen.findByText('a.pdf')
+    await screen.findByText('a')
     expect(screen.queryByText(notice)).toBeNull()
   })
 })
@@ -193,7 +193,7 @@ describe('optimistic changes', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     serveVault([documentNamed('a')], {})
     render(createElement(DocumentWorkspace))
-    await openDocument('a.pdf')
+    await openDocument('a')
     expect(
       error.mock.calls.filter(([message]) => /same key/.test(String(message))),
     ).toEqual([])
@@ -205,7 +205,7 @@ describe('optimistic changes', () => {
       const gate = deferred()
       const fetch = serveVault(items, { onDelete: () => gate.promise })
       render(createElement(DocumentWorkspace))
-      await openDocument('a.pdf')
+      await openDocument('a')
 
       fireEvent.click(screen.getByRole('button', { name: /Delete document/ }))
       fireEvent.click(
@@ -213,9 +213,9 @@ describe('optimistic changes', () => {
       )
 
       // The server has not answered, yet the row and the dialog are gone.
-      expect(screen.queryByRole('button', { name: 'a.pdf' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'a' })).toBeNull()
       expect(screen.queryByText('Document details')).toBeNull()
-      expect(screen.getByRole('button', { name: 'b.pdf' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'b' })).toBeTruthy()
       expect(screen.getByLabelText('1 documents')).toBeTruthy()
 
       items.shift()
@@ -229,7 +229,7 @@ describe('optimistic changes', () => {
       await waitFor(() =>
         expect(screen.queryByText(/was not deleted/)).toBeNull(),
       )
-      expect(screen.queryByRole('button', { name: 'a.pdf' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'a' })).toBeNull()
     })
 
     it('brings the row back and says why when the server refuses', async () => {
@@ -238,19 +238,19 @@ describe('optimistic changes', () => {
         onDelete: () => gate.promise,
       })
       render(createElement(DocumentWorkspace))
-      await openDocument('a.pdf')
+      await openDocument('a')
       fireEvent.click(screen.getByRole('button', { name: /Delete document/ }))
       fireEvent.click(
         screen.getByRole('button', { name: 'Delete permanently' }),
       )
-      expect(screen.queryByRole('button', { name: 'a.pdf' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'a' })).toBeNull()
 
       gate.resolve(refusal(409))
 
       expect((await screen.findByText(/was not deleted/)).textContent).toMatch(
-        /“a\.pdf” was not deleted\. This document is still being processed/,
+        /“a” was not deleted\. This document is still being processed/,
       )
-      expect(screen.getByRole('button', { name: 'a.pdf' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'a' })).toBeTruthy()
       expect(screen.getByLabelText('2 documents')).toBeTruthy()
 
       fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
@@ -266,7 +266,7 @@ describe('optimistic changes', () => {
       const gate = deferred()
       serveVault(items, { onReprocess: () => gate.promise })
       render(createElement(DocumentWorkspace))
-      await openDocument('a.pdf')
+      await openDocument('a')
       expect(screen.getAllByText('Failed')).toHaveLength(2)
 
       fireEvent.click(screen.getByRole('button', { name: 'Process again' }))
@@ -290,7 +290,7 @@ describe('optimistic changes', () => {
       const gate = deferred()
       serveVault([failed()], { onReprocess: () => gate.promise })
       render(createElement(DocumentWorkspace))
-      await openDocument('a.pdf')
+      await openDocument('a')
       fireEvent.click(screen.getByRole('button', { name: 'Process again' }))
       expect(screen.getAllByText('Queued')).toHaveLength(2)
 
@@ -306,14 +306,14 @@ describe('optimistic changes', () => {
       const gate = deferred()
       serveVault([failed()], { onReprocess: () => gate.promise })
       render(createElement(DocumentWorkspace))
-      await openDocument('a.pdf')
+      await openDocument('a')
       fireEvent.click(screen.getByRole('button', { name: 'Process again' }))
       fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
       gate.resolve(refusal(503))
 
       expect((await screen.findByText(/was not queued/)).textContent).toMatch(
-        /“a\.pdf” was not queued\. The processing queue is unavailable/,
+        /“a” was not queued\. The processing queue is unavailable/,
       )
       expect(screen.getByText('Failed')).toBeTruthy()
     })
@@ -337,14 +337,14 @@ describe('optimistic changes', () => {
       const gate = deferred()
       serveVault([documentNamed('a')], { onUpload: () => gate.promise })
       render(createElement(DocumentWorkspace))
-      await screen.findByText('a.pdf')
+      await screen.findByText('a')
 
       choosePdf()
 
-      const row = (await screen.findByText('New.pdf')).closest('li')
+      const row = (await screen.findByText('New')).closest('li')
       expect(row.textContent).toMatch(/Uploading/)
       expect(row.getAttribute('aria-busy')).toBe('true')
-      expect(screen.queryByRole('button', { name: 'New.pdf' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'New' })).toBeNull()
       expect(screen.getAllByRole('listitem')[0]).toBe(row)
       expect(screen.getByLabelText('2 documents')).toBeTruthy()
       gate.resolve(refusal(500))
@@ -356,17 +356,15 @@ describe('optimistic changes', () => {
       const gate = deferred()
       serveVault(items, { onUpload: () => gate.promise })
       render(createElement(DocumentWorkspace))
-      await screen.findByText('a.pdf')
+      await screen.findByText('a')
       choosePdf()
-      await screen.findByText('New.pdf')
+      await screen.findByText('New')
 
-      const saved = { ...documentNamed('new', 'queued'), filename: 'New.pdf' }
+      const saved = { ...documentNamed('new', 'queued'), filename: 'New' }
       items.unshift(saved)
       gate.resolve(Response.json(saved, { status: 201 }))
 
-      expect(
-        await screen.findByRole('button', { name: 'New.pdf' }),
-      ).toBeTruthy()
+      expect(await screen.findByRole('button', { name: 'New' })).toBeTruthy()
       expect(screen.queryByText('Uploading')).toBeNull()
       expect(screen.queryByText('Gathering your documents…')).toBeNull()
       expect(screen.getAllByRole('listitem')).toHaveLength(2)
@@ -377,14 +375,14 @@ describe('optimistic changes', () => {
       const gate = deferred()
       serveVault([documentNamed('a')], { onUpload: () => gate.promise })
       render(createElement(DocumentWorkspace))
-      await screen.findByText('a.pdf')
+      await screen.findByText('a')
       choosePdf()
-      await screen.findByText('New.pdf')
+      await screen.findByText('New')
 
       gate.resolve(refusal(413))
 
       expect(await screen.findByText(/10 MB or smaller/)).toBeTruthy()
-      await waitFor(() => expect(screen.queryByText('New.pdf')).toBeNull())
+      await waitFor(() => expect(screen.queryByText('New')).toBeNull())
       expect(screen.getAllByRole('listitem')).toHaveLength(1)
       expect(screen.getByLabelText('1 documents')).toBeTruthy()
     })
