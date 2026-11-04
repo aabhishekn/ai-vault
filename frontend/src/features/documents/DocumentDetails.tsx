@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Button } from '../../components/Button'
 import { formatFileSize, formatUploadDate } from '../../lib/format'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
+import { DocumentSummary } from './DocumentSummary'
 import { DOCUMENT_STATUS_DESCRIPTIONS } from './status'
 import { useDocument } from './useDocument'
 import './DocumentDetails.css'
@@ -81,6 +82,7 @@ export function DocumentDetails({
                 <dd>{state.document.id}</dd>
               </div>
             </dl>
+            <DocumentSummary id={id} />
           </>
         )}
         <div className="details-footer">
