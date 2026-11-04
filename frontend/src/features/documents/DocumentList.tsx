@@ -2,6 +2,7 @@ import { Button } from '../../components/Button'
 import { DocumentFilters } from './DocumentFilters'
 import { DocumentRow } from './DocumentRow'
 import { useTagsOverview } from './useTagsOverview'
+import type { VaultDocument } from './types'
 import type { useDocuments } from './useDocuments'
 
 export function DocumentList({
@@ -11,7 +12,13 @@ export function DocumentList({
   filter,
   setFilter,
   onSelect,
-}: ReturnType<typeof useDocuments> & { onSelect: (id: string) => void }) {
+  chosen,
+  onChoose,
+}: ReturnType<typeof useDocuments> & {
+  onSelect: (id: string) => void
+  chosen?: Map<string, string>
+  onChoose?: (document: VaultDocument) => void
+}) {
   const loading = state.status === 'loading'
   const page = state.status === 'success' ? state.page : null
   const overview = useTagsOverview(page)
@@ -113,6 +120,8 @@ export function DocumentList({
                 key={document.id}
                 document={document}
                 onSelect={onSelect}
+                chosen={chosen?.has(document.id)}
+                onChoose={onChoose}
               />
             ))}
           </ul>

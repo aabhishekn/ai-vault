@@ -2,13 +2,17 @@ import { ApiError } from '../../lib/api'
 import type { DocumentStatus } from './types'
 
 export type AnswerCitation = {
+  // Named when the answer draws on several documents.
+  document_id?: string | null
+  filename?: string | null
   source_number: number
   chunk_id: string
   page_number: number
   text: string
 }
 export type DocumentAnswer = {
-  document_id: string
+  // null for an answer drawn from several documents
+  document_id: string | null
   question: string
   answer: string
   insufficient_evidence: boolean
@@ -35,6 +39,9 @@ function isCitation(value: unknown): value is AnswerCitation {
     'source_number' in value &&
     Number.isSafeInteger(value.source_number) &&
     Number(value.source_number) > 0 &&
+    (!('filename' in value) ||
+      value.filename == null ||
+      typeof value.filename === 'string') &&
     'page_number' in value &&
     Number.isSafeInteger(value.page_number) &&
     Number(value.page_number) > 0 &&
@@ -49,7 +56,7 @@ function isCitation(value: unknown): value is AnswerCitation {
 
 export function parseAnswer(
   data: unknown,
-  id: string,
+  id: string | null,
   question: string,
 ): DocumentAnswer {
   const invalid = () =>

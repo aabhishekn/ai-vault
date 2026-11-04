@@ -23,6 +23,8 @@ Give a concise answer. Write the citation labels inside the answer text itself: 
 sentence that states a fact with the label of its supporting source, for example
 "FastAPI is recommended [1]. PostgreSQL stores the data [2]." An answer with no [n]
 label in its text is invalid.
+When sources come from several documents, each names its "document"; say which document
+a fact comes from when it matters, and note when documents disagree.
 Use only supplied source numbers. Do not invent citations, page numbers, or facts.
 source_numbers must list exactly the unique source labels cited in the answer.
 If sources do not support an answer, set insufficient_evidence=true,
@@ -64,6 +66,7 @@ def _result(
 def _request_input(retrieval: SearchResponse, history: list[dict[str, str]] | None) -> str:
     sources = [
         {"source_number": number, "text": match.text}
+        | ({"document": match.filename} if match.filename else {})
         for number, match in enumerate(retrieval.matches, start=1)
     ]
     return json.dumps(
@@ -102,6 +105,8 @@ def _finish(retrieval: SearchResponse, response, started: float) -> AnswerRespon
         raise CitationError("Answer contains missing or invalid citations")
     citations = [
         AnswerCitation(
+            document_id=retrieval.matches[number - 1].document_id,
+            filename=retrieval.matches[number - 1].filename,
             source_number=number,
             chunk_id=retrieval.matches[number - 1].chunk_id,
             page_number=retrieval.matches[number - 1].page_number,

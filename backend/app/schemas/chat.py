@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SearchRequest(BaseModel):
@@ -11,6 +11,9 @@ class SearchRequest(BaseModel):
 
 
 class SearchMatch(BaseModel):
+    # Set when searching several documents, so each passage can name where it came from.
+    document_id: UUID | None = None
+    filename: str | None = None
     chunk_id: UUID
     chunk_index: int
     page_number: int
@@ -19,12 +22,14 @@ class SearchMatch(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    document_id: UUID
+    document_id: UUID | None  # None when the search spanned several documents
     question: str
     matches: list[SearchMatch]
 
 
 class AnswerCitation(BaseModel):
+    document_id: UUID | None = None
+    filename: str | None = None
     source_number: int
     chunk_id: UUID
     page_number: int
@@ -32,7 +37,7 @@ class AnswerCitation(BaseModel):
 
 
 class AnswerResponse(BaseModel):
-    document_id: UUID
+    document_id: UUID | None  # None for an answer drawn from several documents
     question: str
     answer: str
     insufficient_evidence: bool
@@ -45,7 +50,8 @@ class AnswerResponse(BaseModel):
 class ConversationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    document_id: UUID
+    document_id: UUID | None  # None for a multi-document conversation
+    document_ids: list[UUID]
     created_at: datetime
 
 
@@ -74,3 +80,15 @@ class ConversationHistoryResponse(ConversationResponse):
     total: int
     limit: int
     offset: int
+
+
+class MultiConversationRequest(BaseModel):
+    document_ids: list[UUID] = Field(min_length=2, max_length=10)
+
+    @field_validator("document_ids")
+    @classmethod
+    def at_least_two_distinct(cls, value: list[UUID]) -> list[UUID]:
+        unique = list(dict.fromkeys(value))
+        if len(unique) < 2:
+            raise ValueError("Choose at least two different documents")
+        return unique

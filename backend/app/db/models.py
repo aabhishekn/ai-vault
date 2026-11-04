@@ -10,10 +10,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    select,
     true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, object_session
 
 from app.core.config import EMBEDDING_DIMENSIONS
 
@@ -77,15 +78,45 @@ class DocumentChunk(Base):
     embedding_model: Mapped[str | None] = mapped_column(String(100))
 
 
+class ConversationDocument(Base):
+    """A document in the scope of a multi-document conversation."""
+
+    __tablename__ = "conversation_documents"
+    conversation_id: Mapped[UUID] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True
+    )
+    document_id: Mapped[UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+
+
 class Conversation(Base):
     __tablename__ = "conversations"
     __table_args__ = (CheckConstraint("turn_count >= 0", name="ck_conversations_turn_count"),)
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    document_id: Mapped[UUID] = mapped_column(
+    # Set for a conversation about one document; None when it spans several (see
+    # ConversationDocument).
+    document_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )
     turn_count: Mapped[int] = mapped_column(server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    @property
+    def document_ids(self) -> list[UUID]:
+        """The documents this conversation can draw on."""
+        if self.document_id is not None:
+            return [self.document_id]
+        session = object_session(self)
+        if session is None:
+            return []
+        return list(
+            session.scalars(
+                select(ConversationDocument.document_id)
+                .where(ConversationDocument.conversation_id == self.id)
+                .order_by(ConversationDocument.document_id)
+            )
+        )
 
 
 class ConversationTurn(Base):

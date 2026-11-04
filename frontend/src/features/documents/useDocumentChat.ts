@@ -3,6 +3,7 @@ import { ApiError } from '../../lib/api'
 import { canAskDocument, validateQuestion } from './answers'
 import {
   createConversation,
+  createMultiConversation,
   getLatestConversation,
   sendMessageStream,
   type ChatTurn,
@@ -22,7 +23,13 @@ type ChatState = {
 
 // Owns the open conversation for one mounted document view; render it with key={id}.
 // A document's latest saved conversation is restored once, so closing details loses nothing.
-export function useDocumentChat(id: string, documentStatus: DocumentStatus) {
+// With `documentIds` (and a null id) the conversation spans those documents instead;
+// it starts fresh each time because it is not tied to a single document.
+export function useDocumentChat(
+  id: string | null,
+  documentStatus: DocumentStatus,
+  documentIds?: string[],
+) {
   const [state, setState] = useState<ChatState>({
     turns: [],
     pendingQuestion: null,
@@ -33,10 +40,11 @@ export function useDocumentChat(id: string, documentStatus: DocumentStatus) {
   const activeRequest = useRef<AbortController | null>(null)
   const conversationId = useRef<string | null>(null)
   const eligible = canAskDocument(documentStatus)
-  const restoring = eligible && !restored
+  const multi = id === null
+  const restoring = eligible && !restored && !multi
 
   useEffect(() => {
-    if (!eligible || restored) return
+    if (!eligible || restored || id === null) return
     const controller = new AbortController()
     const signal = AbortSignal.any([
       controller.signal,
@@ -92,7 +100,9 @@ export function useDocumentChat(id: string, documentStatus: DocumentStatus) {
     }))
     try {
       // The conversation is created lazily so merely opening details costs nothing.
-      conversationId.current ??= await createConversation(id, signal)
+      conversationId.current ??= id
+        ? await createConversation(id, signal)
+        : await createMultiConversation(documentIds ?? [], signal)
       const turn = await sendMessageStream(
         id,
         conversationId.current,

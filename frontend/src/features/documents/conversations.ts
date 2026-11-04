@@ -42,9 +42,32 @@ export async function createConversation(
   }
 }
 
+/** A conversation that answers from several documents at once. */
+export async function createMultiConversation(
+  documentIds: string[],
+  signal: AbortSignal,
+): Promise<string> {
+  try {
+    const data = await requestJson('/multi-conversations', signal, {
+      method: 'POST',
+      json: { document_ids: documentIds },
+    })
+    if (
+      !isRecord(data) ||
+      typeof data.id !== 'string' ||
+      !data.id.trim() ||
+      data.document_id !== null
+    )
+      throw new ApiError(INVALID_RESPONSE)
+    return data.id
+  } catch (error: unknown) {
+    throw toAnswerError(error)
+  }
+}
+
 function parseTurn(
   data: unknown,
-  documentId: string,
+  documentId: string | null,
   conversationId: string,
   question: string,
 ): ChatTurn {
@@ -63,7 +86,7 @@ function parseTurn(
 }
 
 export async function sendMessage(
-  documentId: string,
+  documentId: string | null,
   conversationId: string,
   question: string,
   signal: AbortSignal,
@@ -128,7 +151,7 @@ function parseEvent(block: string): ServerEvent | null {
  * answer with its citations, and callers should show that instead.
  */
 export async function sendMessageStream(
-  documentId: string,
+  documentId: string | null,
   conversationId: string,
   question: string,
   signal: AbortSignal,

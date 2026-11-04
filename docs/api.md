@@ -495,3 +495,15 @@ A document can have several versions. Each version is a normal document of its o
 - Version numbers are unique per group; if two uploads race for the same number, one gets 409 and nothing is left behind (the file is removed and the previous latest version stays latest).
 
 Older versions are never deleted or changed, so a conversation always refers to the exact file it was asked about. Migration `c4e8f2b17d35` turns every existing document into version 1 of its own group.
+
+## Multi-document chat
+
+A conversation can span two to ten documents. Answers and citations name the document each passage came from.
+
+- `POST /multi-conversations` takes `{"document_ids": [...]}` (2–10 distinct ids, each already searchable, otherwise 404 or 409) and returns a conversation with `document_id: null` and the `document_ids` it covers.
+- `GET /multi-conversations` lists them, newest first (`limit`, `offset`, `has_turns`).
+- Messages use the **same endpoints** as single-document chat: `POST /conversations/{id}/messages`, `.../messages/stream` and `GET /conversations/{id}`. Single-document conversations are unchanged.
+- Retrieval searches all chosen documents in one vector query (an `IN` filter on `document_id`) and takes `max(top_k, 2 x documents)` passages, capped at 10, so each document has room to contribute without growing the prompt without bound.
+- Each source sent to the model carries its `document` name, and the prompt asks it to say where a fact comes from and to point out when documents disagree.
+- Answers have `document_id: null`. Each citation has `document_id` and `filename` as well as `page_number` and the quoted `text`, all taken from the stored chunks rather than from the model. Every validation rule for citations (inline `[n]` labels, one retry) is unchanged.
+- Deleting a document removes it from the scope of any multi-document conversation; the conversation and its saved turns remain. Migration `d5a9c3e07b46` makes `conversations.document_id` nullable and adds the `conversation_documents` table.

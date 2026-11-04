@@ -17,7 +17,7 @@ from app.core.errors import (
     NotFoundError,
 )
 from app.db.database import engine
-from app.db.models import Conversation, ConversationTurn
+from app.db.models import Conversation, ConversationDocument, ConversationTurn
 from app.db.queries import get_document_or_raise
 from app.schemas.chat import (
     AnswerResponse,
@@ -29,7 +29,7 @@ from app.schemas.chat import (
     SearchRequest,
     SearchResponse,
 )
-from app.services.search import require_searchable, search_document
+from app.services.search import require_searchable, search_document, search_documents
 
 MAX_CONTEXT_TURNS = 3
 
@@ -44,6 +44,54 @@ def create_conversation(document_id: UUID) -> ConversationResponse:
             response = ConversationResponse.model_validate(conversation)
             session.commit()
             return response
+    except SQLAlchemyError:
+        raise DependencyUnavailableError("Conversation database unavailable") from None
+
+
+def create_multi_conversation(document_ids: list[UUID]) -> ConversationResponse:
+    """A conversation that answers from several documents at once."""
+    try:
+        with Session(engine) as session:
+            for document_id in document_ids:
+                require_searchable(session, document_id)
+            conversation = Conversation(document_id=None)
+            session.add(conversation)
+            session.flush()
+            session.add_all(
+                ConversationDocument(conversation_id=conversation.id, document_id=item)
+                for item in document_ids
+            )
+            session.flush()
+            response = ConversationResponse.model_validate(conversation)
+            session.commit()
+            return response
+    except SQLAlchemyError:
+        raise DependencyUnavailableError("Conversation database unavailable") from None
+
+
+def list_multi_conversations(
+    limit: int = 20, offset: int = 0, has_turns: bool = False
+) -> ConversationListResponse:
+    """Conversations that span several documents, newest first."""
+    try:
+        with Session(engine) as session:
+            filters = [Conversation.document_id.is_(None)]
+            if has_turns:
+                filters.append(Conversation.turn_count > 0)
+            total = session.scalar(select(func.count()).select_from(Conversation).where(*filters))
+            conversations = session.scalars(
+                select(Conversation)
+                .where(*filters)
+                .order_by(Conversation.created_at.desc(), Conversation.id.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
+            return ConversationListResponse(
+                items=[ConversationSummary.model_validate(item) for item in conversations],
+                total=total,
+                limit=limit,
+                offset=offset,
+            )
     except SQLAlchemyError:
         raise DependencyUnavailableError("Conversation database unavailable") from None
 
@@ -115,7 +163,7 @@ def _prepare_message(conversation_id: UUID, request: SearchRequest) -> _Prepared
         conversation = session.get(Conversation, conversation_id)
         if conversation is None:
             raise NotFoundError("Conversation not found")
-        document_id = conversation.document_id
+        document_ids = conversation.document_ids
         version = conversation.turn_count
         recent = session.scalars(
             select(ConversationTurn)
@@ -135,9 +183,11 @@ def _prepare_message(conversation_id: UUID, request: SearchRequest) -> _Prepared
         previous = history[-1]
         context = f"\nPrevious question: {previous['question'][:800]}\nPrevious answer: {previous['answer'][:500]}"
         search_question = (search_question + context)[:2000]
-    retrieval = search_document(
-        document_id, SearchRequest(question=search_question, top_k=request.top_k)
-    )
+    scoped = SearchRequest(question=search_question, top_k=request.top_k)
+    if len(document_ids) == 1:
+        retrieval = search_document(document_ids[0], scoped)
+    else:
+        retrieval = search_documents(document_ids, scoped)
     retrieval.question = request.question
     return _Prepared(version, history, retrieval)
 

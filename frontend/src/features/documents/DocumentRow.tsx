@@ -1,4 +1,5 @@
 import { formatFileSize, formatUploadDate } from '../../lib/format'
+import { canAskDocument } from './answers'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
 import { TagChips } from './TagChips'
 import type { VaultDocument } from './types'
@@ -6,9 +7,14 @@ import type { VaultDocument } from './types'
 export function DocumentRow({
   document,
   onSelect,
+  chosen = false,
+  onChoose,
 }: {
   document: VaultDocument
   onSelect: (id: string) => void
+  // Marks the document for a question across several documents.
+  chosen?: boolean
+  onChoose?: (document: VaultDocument) => void
 }) {
   return (
     <li className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-4 px-[26px] py-6 not-first:border-t not-first:border-rule max-[600px]:grid-cols-[34px_minmax(0,1fr)] max-[600px]:items-start max-[600px]:gap-3 max-[600px]:px-[18px] max-[600px]:py-[22px]">
@@ -56,7 +62,18 @@ export function DocumentRow({
           <TagChips category={document.category} tags={document.tags} max={3} />
         </div>
       </div>
-      <div className="max-[600px]:col-start-2">
+      <div className="flex items-center gap-3 max-[600px]:col-start-2">
+        {onChoose && canAskDocument(document.status) && (
+          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted">
+            <input
+              type="checkbox"
+              checked={chosen}
+              onChange={() => onChoose(document)}
+              aria-label={`Ask across documents: include ${document.filename}`}
+            />
+            Compare
+          </label>
+        )}
         <DocumentStatusBadge status={document.status} />
       </div>
     </li>

@@ -26,16 +26,16 @@ from app.db.models import DocumentChunk
 DOCUMENT_ID = "document_id"
 
 
-def _document_id(query: VectorStoreQuery) -> UUID:
-    """Every search is scoped to one document; refuse anything else."""
+def _document_ids(query: VectorStoreQuery) -> list[UUID]:
+    """Every search is scoped to explicit documents: one (EQ) or several (IN)."""
     filters = query.filters.filters if query.filters else []
-    if (
-        len(filters) != 1
-        or filters[0].key != DOCUMENT_ID
-        or filters[0].operator != FilterOperator.EQ
-    ):
-        raise ValueError("Searches must filter on exactly one document_id")
-    return UUID(str(filters[0].value))
+    if len(filters) == 1 and filters[0].key == DOCUMENT_ID:
+        only = filters[0]
+        if only.operator == FilterOperator.EQ:
+            return [UUID(str(only.value))]
+        if only.operator == FilterOperator.IN and isinstance(only.value, list) and only.value:
+            return [UUID(str(item)) for item in only.value]
+    raise ValueError("Searches must filter on document_id (one document, or a list with IN)")
 
 
 class ChunkVectorStore(BasePydanticVectorStore):
@@ -55,17 +55,17 @@ class ChunkVectorStore(BasePydanticVectorStore):
     def query(self, query: VectorStoreQuery, **kwargs: Any) -> VectorStoreQueryResult:
         if query.query_embedding is None:
             raise ValueError("A query embedding is required")
-        document_id = _document_id(query)
+        document_ids = _document_ids(query)
         with Session(engine) as session:
             distance = DocumentChunk.embedding.cosine_distance(query.query_embedding)
             rows = session.execute(
                 select(DocumentChunk, distance.label("cosine_distance"))
                 .where(
-                    DocumentChunk.document_id == document_id,
+                    DocumentChunk.document_id.in_(document_ids),
                     DocumentChunk.embedding.is_not(None),
                     DocumentChunk.embedding_model == EMBEDDING_MODEL,
                 )
-                .order_by(distance, DocumentChunk.chunk_index)
+                .order_by(distance, DocumentChunk.document_id, DocumentChunk.chunk_index)
                 .limit(query.similarity_top_k)
             ).all()
             nodes, similarities = [], []

@@ -11,6 +11,7 @@ from app.schemas.chat import (
     ConversationListResponse,
     ConversationResponse,
     ConversationTurnResponse,
+    MultiConversationRequest,
     SearchRequest,
 )
 from app.services import conversations as service
@@ -23,6 +24,20 @@ router = APIRouter(tags=["conversations"])
 )
 def create_conversation(document_id: UUID) -> ConversationResponse:
     return service.create_conversation(document_id)
+
+
+@router.post("/multi-conversations", response_model=ConversationResponse, status_code=201)
+def create_multi_conversation(request: MultiConversationRequest) -> ConversationResponse:
+    return service.create_multi_conversation(request.document_ids)
+
+
+@router.get("/multi-conversations", response_model=ConversationListResponse)
+def list_multi_conversations(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    has_turns: bool = False,
+) -> ConversationListResponse:
+    return service.list_multi_conversations(limit, offset, has_turns)
 
 
 @router.get("/documents/{document_id}/conversations", response_model=ConversationListResponse)

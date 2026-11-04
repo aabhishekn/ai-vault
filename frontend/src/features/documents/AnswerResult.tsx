@@ -21,7 +21,9 @@ export function AnswerResult({ result }: { result: DocumentAnswer }) {
               <li key={citation.source_number}>
                 <details className="rounded-[10px] border border-evidence-border bg-[#f7f8f1] p-4">
                   <summary className="cursor-pointer text-xs font-semibold text-success">
-                    [{citation.source_number}] · Page {citation.page_number}
+                    [{citation.source_number}]
+                    {citation.filename ? ` · ${citation.filename}` : ''} · Page{' '}
+                    {citation.page_number}
                   </summary>
                   <blockquote className="mt-3 border-l-2 border-[#bdcbb0] pl-3 text-xs leading-[1.8] whitespace-pre-wrap text-muted">
                     {citation.text}
