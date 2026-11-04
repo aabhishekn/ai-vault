@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { ComparisonDialog } from './ComparisonDialog'
+import { canAskDocument } from './answers'
 import { MAX_COMPARED } from './comparison'
 import { DocumentDetails } from './DocumentDetails'
 import { DocumentList } from './DocumentList'
@@ -48,6 +49,13 @@ export function DocumentWorkspace() {
   const live =
     pushed.id === selectedId ? pushed : { id: '', revision: 0, content: 0 }
 
+  // Only documents that can be asked about show a Select box.
+  const askableCount =
+    documents.state.status === 'success'
+      ? documents.state.page.items.filter((item) => canAskDocument(item.status))
+          .length
+      : 0
+
   function choose(document) {
     setChosen((previous) => {
       const next = new Map(previous)
@@ -84,6 +92,12 @@ export function DocumentWorkspace() {
             </Button>
           </span>
         </div>
+      )}
+      {chosen.size === 0 && askableCount >= 2 && (
+        <p className="mb-4 rounded-[12px] border border-dashed border-evidence-border px-4 py-3 text-[13px] text-muted">
+          Tip: tick <strong className="font-semibold">Select</strong> on two or
+          more documents to ask across them or compare them.
+        </p>
       )}
       <DocumentList
         {...documents}

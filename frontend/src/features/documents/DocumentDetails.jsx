@@ -40,7 +40,7 @@ export function DocumentDetails({
   return (
     <dialog
       ref={dialog}
-      className="m-auto max-h-[calc(100svh-40px)] w-[min(620px,calc(100%-32px))] overflow-auto rounded-[18px] border border-panel-border bg-surface p-0 text-ink shadow-[0_24px_100px_#13251c33] backdrop:bg-[#17291dcc]"
+      className="m-auto max-h-[calc(100svh-40px)] w-[min(680px,calc(100%-32px))] overflow-auto rounded-[18px] border border-panel-border bg-surface p-0 text-ink shadow-[0_24px_100px_#13251c33] backdrop:bg-[#17291dcc]"
       aria-labelledby="details-heading"
       onCancel={onClose}
     >
@@ -95,35 +95,13 @@ export function DocumentDetails({
               category={state.data.category}
               tags={state.data.tags}
             />
-            <dl className="mt-6 grid grid-cols-2 gap-[22px] border-t border-rule py-6 max-[600px]:grid-cols-1 [&_dd]:leading-[1.6] [&_dd]:wrap-anywhere [&_dt]:mb-2 [&_dt]:text-[11px] [&_dt]:text-muted">
-              <div>
-                <dt>File size</dt>
-                <dd className="text-[13px]">
-                  {formatFileSize(state.data.size_bytes)}
-                </dd>
-              </div>
-              <div>
-                <dt>File type</dt>
-                <dd className="text-[13px]">{state.data.content_type}</dd>
-              </div>
-              <div>
-                <dt>Uploaded</dt>
-                <dd className="text-[13px]">
-                  <time dateTime={state.data.created_at}>
-                    {formatUploadDate(state.data.created_at)}
-                  </time>
-                </dd>
-              </div>
-              <div className="col-span-full">
-                <dt>Document ID</dt>
-                <dd className="font-mono text-xs">{state.data.id}</dd>
-              </div>
-            </dl>
-            <DocumentQuestion
-              key={id}
-              id={id}
-              documentStatus={state.data.status}
-            />
+            <div className="mt-6">
+              <DocumentQuestion
+                key={id}
+                id={id}
+                documentStatus={state.data.status}
+              />
+            </div>
             <DocumentSummary
               key={contentRevision}
               id={id}
@@ -134,6 +112,35 @@ export function DocumentDetails({
               id={id}
               documentStatus={state.data.status}
             />
+            <details className="border-t border-rule py-5">
+              <summary className="cursor-pointer text-[15px] font-semibold select-none">
+                File details
+              </summary>
+              <dl className="mt-5 grid grid-cols-2 gap-[22px] max-[600px]:grid-cols-1 [&_dd]:leading-[1.6] [&_dd]:wrap-anywhere [&_dt]:mb-2 [&_dt]:text-[11px] [&_dt]:text-muted">
+                <div>
+                  <dt>File size</dt>
+                  <dd className="text-[13px]">
+                    {formatFileSize(state.data.size_bytes)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>File type</dt>
+                  <dd className="text-[13px]">{state.data.content_type}</dd>
+                </div>
+                <div>
+                  <dt>Uploaded</dt>
+                  <dd className="text-[13px]">
+                    <time dateTime={state.data.created_at}>
+                      {formatUploadDate(state.data.created_at)}
+                    </time>
+                  </dd>
+                </div>
+                <div className="col-span-full">
+                  <dt>Document ID</dt>
+                  <dd className="font-mono text-xs">{state.data.id}</dd>
+                </div>
+              </dl>
+            </details>
             <DocumentVersions
               key={id}
               id={id}

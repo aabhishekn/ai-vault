@@ -39,16 +39,17 @@ export default function App() {
 
       <main className="mx-auto w-full max-w-[940px] pt-14 pb-[54px] max-[600px]:pt-12">
         <p className="mb-[18px] text-[11px] font-[650] tracking-[2.3px] text-earth">
-          YOUR WORKSPACE
+          AI DOCUMENT VAULT
         </p>
         <h1 className="font-serif text-[clamp(46px,6vw,68px)] leading-[1.08] font-normal tracking-[-2.8px] max-[600px]:tracking-[-1.8px]">
-          Room for your
+          Ask your
           <br />
-          next idea.
+          documents.
         </h1>
-        <p className="mt-[22px] mb-[34px] max-w-[420px] text-[15px] leading-[1.75] text-muted">
-          Your documents, gathered in one place. See what’s arrived and where
-          each one stands.
+        <p className="mt-[22px] mb-[34px] max-w-[520px] text-[15px] leading-[1.75] text-muted">
+          Upload PDFs, get summaries and key insights, then chat with answers
+          that cite the page they came from. Select two or more documents to ask
+          across them or compare.
         </p>
         <DocumentWorkspace />
         <AnalyticsPanel />
@@ -56,7 +57,7 @@ export default function App() {
       </main>
 
       <footer className="mt-auto pb-7 text-center text-[11px] tracking-[0.2px] text-muted">
-        A little order. A lot of possibility.
+        Answers are generated from your documents and cite their sources.
       </footer>
     </div>
   )

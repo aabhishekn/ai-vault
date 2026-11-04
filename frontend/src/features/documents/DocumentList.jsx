@@ -106,12 +106,17 @@ export function DocumentList({
           >
             +
           </span>
-          <h3>A little space for your next idea.</h3>
-          <p>
-            {filter.category || filter.tag
-              ? 'No documents match this filter.'
-              : 'No documents yet. Your uploaded PDFs will appear here.'}
-          </p>
+          {filter.category || filter.tag ? (
+            <>
+              <h3>Nothing matches this filter.</h3>
+              <p>Try a different category or tag.</p>
+            </>
+          ) : (
+            <>
+              <h3>Your vault is empty.</h3>
+              <p>No documents yet. Your uploaded PDFs will appear here.</p>
+            </>
+          )}
         </div>
       )}
 

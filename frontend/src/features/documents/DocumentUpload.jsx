@@ -33,7 +33,7 @@ export function DocumentUpload({ onUploaded }) {
           className="mb-2.5 font-serif text-2xl font-normal tracking-[-0.5px]"
           id="upload-heading"
         >
-          A new document. A new possibility.
+          Add a document
         </h2>
         <p
           className="mb-[22px] text-[13px] leading-[1.7] text-muted"
