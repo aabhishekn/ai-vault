@@ -42,6 +42,26 @@ export async function createConversation(
   }
 }
 
+function parseTurn(
+  data: unknown,
+  documentId: string,
+  conversationId: string,
+  question: string,
+): ChatTurn {
+  if (
+    !isRecord(data) ||
+    data.conversation_id !== conversationId ||
+    typeof data.id !== 'string' ||
+    !Number.isSafeInteger(data.turn_number)
+  )
+    throw new ApiError(INVALID_RESPONSE)
+  return {
+    id: data.id,
+    turnNumber: Number(data.turn_number),
+    answer: parseAnswer(data.response, documentId, question),
+  }
+}
+
 export async function sendMessage(
   documentId: string,
   conversationId: string,
@@ -57,18 +77,100 @@ export async function sendMessage(
       signal,
       { method: 'POST', json: { question: normalized, top_k: 3 } },
     )
-    if (
-      !isRecord(data) ||
-      data.conversation_id !== conversationId ||
-      typeof data.id !== 'string' ||
-      !Number.isSafeInteger(data.turn_number)
-    )
-      throw new ApiError(INVALID_RESPONSE)
-    return {
-      id: data.id,
-      turnNumber: Number(data.turn_number),
-      answer: parseAnswer(data.response, documentId, normalized),
+    return parseTurn(data, documentId, conversationId, normalized)
+  } catch (error: unknown) {
+    throw toAnswerError(error)
+  }
+}
+
+type ServerEvent = { name: string; data: unknown }
+
+// Splits a server-sent-event byte stream into events; chunk boundaries can fall anywhere.
+async function* readEvents(body: ReadableStream<Uint8Array>) {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      buffer += decoder.decode(value, { stream: !done })
+      let end: number
+      while ((end = buffer.indexOf('\n\n')) !== -1) {
+        const event = parseEvent(buffer.slice(0, end))
+        buffer = buffer.slice(end + 2)
+        if (event) yield event
+      }
+      if (done) break
     }
+  } finally {
+    await reader.cancel().catch(() => {})
+  }
+}
+
+function parseEvent(block: string): ServerEvent | null {
+  let name = 'message'
+  const data: string[] = []
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event:')) name = line.slice(6).trim()
+    else if (line.startsWith('data:')) data.push(line.slice(5).trimStart())
+  }
+  if (data.length === 0) return null
+  try {
+    return { name, data: JSON.parse(data.join('\n')) as unknown }
+  } catch {
+    throw new ApiError(INVALID_RESPONSE)
+  }
+}
+
+/**
+ * Sends a question and reports the answer text as the server writes it.
+ * The streamed text is only a preview: the returned turn is the saved, validated
+ * answer with its citations, and callers should show that instead.
+ */
+export async function sendMessageStream(
+  documentId: string,
+  conversationId: string,
+  question: string,
+  signal: AbortSignal,
+  onText: (text: string) => void,
+): Promise<ChatTurn> {
+  const validationError = validateQuestion(question)
+  if (validationError) throw new ApiError(validationError)
+  const normalized = question.trim()
+  try {
+    const response = await fetch(
+      `/api/conversations/${encodeURIComponent(conversationId)}/messages/stream`,
+      {
+        method: 'POST',
+        signal,
+        headers: {
+          Accept: 'text/event-stream',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ question: normalized, top_k: 3 }),
+      },
+    )
+    if (!response.ok)
+      throw new ApiError(
+        'The document service is unavailable. Make sure your backend is running, then try again.',
+        response.status,
+      )
+    if (!response.body) throw new ApiError(INVALID_RESPONSE)
+    for await (const event of readEvents(response.body)) {
+      if (event.name === 'delta' && isRecord(event.data)) {
+        if (typeof event.data.text === 'string') onText(event.data.text)
+      } else if (event.name === 'turn') {
+        return parseTurn(event.data, documentId, conversationId, normalized)
+      } else if (event.name === 'error') {
+        const status =
+          isRecord(event.data) && Number.isSafeInteger(event.data.status)
+            ? Number(event.data.status)
+            : 500
+        throw new ApiError('The answer could not be completed.', status)
+      }
+    }
+    // The stream ended without a saved turn (connection dropped mid-answer).
+    throw new ApiError(INVALID_RESPONSE)
   } catch (error: unknown) {
     throw toAnswerError(error)
   }

@@ -17,6 +17,7 @@ export function DocumentQuestion({
   const {
     turns,
     pendingQuestion,
+    streamingText,
     error,
     restoring,
     send,
@@ -71,7 +72,7 @@ export function DocumentQuestion({
             </li>
           ))}
         </ol>
-        {busy && (
+        {busy && !streamingText && (
           <p
             className="mt-4 text-[13px] leading-[1.8] text-muted"
             role="status"
@@ -79,6 +80,19 @@ export function DocumentQuestion({
             Finding relevant passages for “{pendingQuestion}”. Keep this view
             open; this may take a moment.
           </p>
+        )}
+        {busy && streamingText && (
+          <div className="mt-4 wrap-anywhere" aria-live="off">
+            <p className="mb-2 text-[11px] font-semibold text-muted">
+              Answering “{pendingQuestion}”
+            </p>
+            <p className="text-[13px] leading-[1.9] whitespace-pre-wrap">
+              {streamingText}
+            </p>
+            <p className="mt-2 text-xs text-muted">
+              Sources appear once the answer is complete.
+            </p>
+          </div>
         )}
       </div>
       {error && (

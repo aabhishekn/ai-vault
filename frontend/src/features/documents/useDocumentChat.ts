@@ -4,7 +4,7 @@ import { canAskDocument, validateQuestion } from './answers'
 import {
   createConversation,
   getLatestConversation,
-  sendMessage,
+  sendMessageStream,
   type ChatTurn,
 } from './conversations'
 import type { DocumentStatus } from './types'
@@ -15,6 +15,8 @@ const RESTORE_TIMEOUT_MS = 15_000
 type ChatState = {
   turns: ChatTurn[]
   pendingQuestion: string | null
+  // Answer text received so far for the pending question (a preview of the final answer).
+  streamingText: string
   error: string | null
 }
 
@@ -24,6 +26,7 @@ export function useDocumentChat(id: string, documentStatus: DocumentStatus) {
   const [state, setState] = useState<ChatState>({
     turns: [],
     pendingQuestion: null,
+    streamingText: '',
     error: null,
   })
   const [restored, setRestored] = useState(false)
@@ -44,7 +47,12 @@ export function useDocumentChat(id: string, documentStatus: DocumentStatus) {
         if (controller.signal.aborted || !saved || conversationId.current)
           return
         conversationId.current = saved.id
-        setState({ turns: saved.turns, pendingQuestion: null, error: null })
+        setState({
+          turns: saved.turns,
+          pendingQuestion: null,
+          streamingText: '',
+          error: null,
+        })
       })
       // Restoring is a convenience: if it fails, asking a new question still works.
       .catch(() => {})
@@ -79,21 +87,28 @@ export function useDocumentChat(id: string, documentStatus: DocumentStatus) {
     setState((previous) => ({
       ...previous,
       pendingQuestion: question.trim(),
+      streamingText: '',
       error: null,
     }))
     try {
       // The conversation is created lazily so merely opening details costs nothing.
       conversationId.current ??= await createConversation(id, signal)
-      const turn = await sendMessage(
+      const turn = await sendMessageStream(
         id,
         conversationId.current,
         question,
         signal,
+        (text) =>
+          setState((previous) => ({
+            ...previous,
+            streamingText: previous.streamingText + text,
+          })),
       )
       if (controller.signal.aborted) return false
       setState((previous) => ({
         turns: [...previous.turns, turn],
         pendingQuestion: null,
+        streamingText: '',
         error: null,
       }))
       return true
@@ -102,6 +117,7 @@ export function useDocumentChat(id: string, documentStatus: DocumentStatus) {
         setState((previous) => ({
           ...previous,
           pendingQuestion: null,
+          streamingText: '',
           error:
             error instanceof ApiError
               ? error.message
@@ -117,7 +133,12 @@ export function useDocumentChat(id: string, documentStatus: DocumentStatus) {
   function startNewConversation() {
     if (activeRequest.current) return
     conversationId.current = null
-    setState({ turns: [], pendingQuestion: null, error: null })
+    setState({
+      turns: [],
+      pendingQuestion: null,
+      streamingText: '',
+      error: null,
+    })
   }
 
   return { ...state, restoring, send, startNewConversation }

@@ -3,6 +3,7 @@ import {
   createConversation,
   getLatestConversation,
   sendMessage,
+  sendMessageStream,
 } from './conversations'
 
 const documentId = 'document-a'
@@ -238,5 +239,85 @@ describe('latest saved conversation', () => {
   ])('rejects malformed saved history', async (body) => {
     respond({ items: [summary] }, body)
     await expect(getLatestConversation(documentId, signal())).rejects.toThrow()
+  })
+})
+
+describe('streamed messages', () => {
+  const turnEvent = `event: turn\ndata: ${JSON.stringify(turn)}\n\n`
+  const delta = (text: string) =>
+    `event: delta\ndata: ${JSON.stringify({ text })}\n\n`
+
+  // Delivers the body in tiny pieces so events straddle chunk boundaries.
+  function streamOf(text: string, size: number, status = 200) {
+    const bytes = new TextEncoder().encode(text)
+    return new Response(
+      new ReadableStream({
+        start(controller) {
+          for (let i = 0; i < bytes.length; i += size)
+            controller.enqueue(bytes.slice(i, i + size))
+          controller.close()
+        },
+      }),
+      { status, headers: { 'Content-Type': 'text/event-stream' } },
+    )
+  }
+
+  const run = (response: Response, onText = vi.fn()) => {
+    const fetch = vi.fn().mockResolvedValue(response)
+    vi.stubGlobal('fetch', fetch)
+    return {
+      fetch,
+      onText,
+      result: sendMessageStream(
+        documentId,
+        conversationId,
+        question,
+        signal(),
+        onText,
+      ),
+    }
+  }
+
+  it.each([1, 7, 1000])(
+    'reports text as it arrives and returns the saved turn (%i-byte chunks)',
+    async (size) => {
+      const { fetch, onText, result } = run(
+        streamOf(delta('Python ') + delta('café ') + turnEvent, size),
+      )
+      await expect(result).resolves.toMatchObject({
+        id: 'turn-a',
+        answer: { answer: 'Python is required [1].' },
+      })
+      expect(onText.mock.calls.map(([text]) => text)).toEqual([
+        'Python ',
+        'café ',
+      ])
+      expect(fetch.mock.calls[0]?.[0]).toBe(
+        `/api/conversations/${conversationId}/messages/stream`,
+      )
+      expect(fetch.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' })
+    },
+  )
+
+  it('rejects a stream that ends before the saved turn arrives', async () => {
+    const { result } = run(streamOf(delta('Partial'), 5))
+    await expect(result).rejects.toThrow(/invalid conversation response/)
+  })
+
+  it('turns a server error event into a readable error', async () => {
+    const error = `event: error\ndata: ${JSON.stringify({ detail: 'x', status: 409 })}\n\n`
+    const { result } = run(streamOf(delta('Hi') + error, 4))
+    await expect(result).rejects.toThrow(/not ready for questions/)
+  })
+
+  it('maps HTTP errors before the stream starts', async () => {
+    const { result } = run(new Response('{}', { status: 404 }))
+    await expect(result).rejects.toThrow(/could not be found/)
+  })
+
+  it('rejects a turn for another conversation', async () => {
+    const wrong = `event: turn\ndata: ${JSON.stringify({ ...turn, conversation_id: 'other' })}\n\n`
+    const { result } = run(streamOf(wrong, 50))
+    await expect(result).rejects.toThrow(/invalid conversation response/)
   })
 })

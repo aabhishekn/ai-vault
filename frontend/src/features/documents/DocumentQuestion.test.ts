@@ -35,6 +35,18 @@ function answerFor(documentId: string, asked: string, text = 'Python') {
 type Saved = { id: string; turns: { question: string; text: string }[] }
 type ApiOptions = { saved?: Saved; restoreStatus?: number }
 
+// The chat endpoint streams: turn the JSON a test supplies into the events the server sends.
+async function asEventStream(response: Response) {
+  if (!response.ok) return response
+  const turn: unknown = await response.json()
+  const event = (name: string, data: unknown) =>
+    `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`
+  return new Response(
+    event('delta', { text: 'Working on it' }) + event('turn', turn),
+    { headers: { 'Content-Type': 'text/event-stream' } },
+  )
+}
+
 // Routes the conversation endpoints; `message` supplies each new turn's response.
 function mockApi(
   message: (asked: string, call: number) => Promise<Response>,
@@ -90,7 +102,7 @@ function mockApi(
       )
     const body = JSON.parse(String(init?.body)) as { question: string }
     const call = ++calls
-    return message(body.question, call)
+    return message(body.question, call).then(asEventStream)
   })
   vi.stubGlobal('fetch', fetch)
   return fetch
@@ -186,8 +198,8 @@ describe('document conversation UI', () => {
     expect(screen.getByText('Python is required [1].')).toBeTruthy()
     expect(posts(fetch)).toEqual([
       '/api/documents/a/conversations',
-      '/api/conversations/c1/messages',
-      '/api/conversations/c1/messages',
+      '/api/conversations/c1/messages/stream',
+      '/api/conversations/c1/messages/stream',
     ])
   })
   it('keeps the draft and earlier turns when a follow-up fails, then allows a retry', async () => {
@@ -269,7 +281,7 @@ describe('document conversation UI', () => {
     ask()
     await waitFor(() => expect(posts(fetch)).toHaveLength(2))
     const messageCall = fetch.mock.calls.find(([url]) =>
-      String(url).endsWith('/messages'),
+      String(url).endsWith('/messages/stream'),
     )!
     const signal = messageCall[1]!.signal as AbortSignal
     unmount()
@@ -288,7 +300,7 @@ describe('document conversation UI', () => {
     ask()
     await waitFor(() => expect(posts(fetch)).toHaveLength(2))
     const messageCall = fetch.mock.calls.find(([url]) =>
-      String(url).endsWith('/messages'),
+      String(url).endsWith('/messages/stream'),
     )!
     const signal = messageCall[1]!.signal as AbortSignal
     rerender(
@@ -342,7 +354,7 @@ describe('restoring a saved conversation', () => {
     enter(followUp)
     ask()
     await screen.findByText('SQL is required [1].')
-    expect(posts(fetch)).toEqual(['/api/conversations/c0/messages'])
+    expect(posts(fetch)).toEqual(['/api/conversations/c0/messages/stream'])
   })
   it('starts a fresh conversation on request while the old one stays saved', async () => {
     const fetch = mockApi(
@@ -364,7 +376,7 @@ describe('restoring a saved conversation', () => {
     await screen.findByText('Python is required [1].')
     expect(posts(fetch)).toEqual([
       '/api/documents/a/conversations',
-      '/api/conversations/c1/messages',
+      '/api/conversations/c1/messages/stream',
     ])
   })
   it('lets you ask a new question when nothing is saved or restoring fails', async () => {
@@ -426,7 +438,9 @@ describe('suggested questions', () => {
       (screen.getByLabelText('Your question') as HTMLTextAreaElement).value,
     ).toBe('What is the deadline?')
     expect(
-      fetch.mock.calls.some(([url]) => String(url).endsWith('/messages')),
+      fetch.mock.calls.some(([url]) =>
+        String(url).endsWith('/messages/stream'),
+      ),
     ).toBe(false)
     vi.unstubAllGlobals()
   })
@@ -455,6 +469,67 @@ describe('suggested questions', () => {
       'textContent',
       expect.stringContaining('summary or insights first'),
     )
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('streaming answers', () => {
+  it('shows the answer as it is written, then replaces it with the cited answer', async () => {
+    let finish: (() => void) | undefined
+    const encoder = new TextEncoder()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (/conversations\?/.test(url))
+          return Promise.resolve(Response.json({ items: [] }))
+        if (
+          init?.method === 'POST' &&
+          /documents\/[^/]+\/conversations$/.test(url)
+        )
+          return Promise.resolve(Response.json({ id: 'c1', document_id: 'a' }))
+        const turn = {
+          id: 't1',
+          conversation_id: 'c1',
+          turn_number: 1,
+          response: answerFor('a', question),
+        }
+        return Promise.resolve(
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(
+                  encoder.encode(
+                    `event: delta\ndata: ${JSON.stringify({ text: 'Python is' })}\n\n`,
+                  ),
+                )
+                finish = () => {
+                  controller.enqueue(
+                    encoder.encode(
+                      `event: turn\ndata: ${JSON.stringify(turn)}\n\n`,
+                    ),
+                  )
+                  controller.close()
+                }
+              },
+            }),
+            { headers: { 'Content-Type': 'text/event-stream' } },
+          ),
+        )
+      }),
+    )
+    render(
+      createElement(DocumentQuestion, { id: 'a', documentStatus: 'embedded' }),
+    )
+    fireEvent.change(await screen.findByLabelText('Your question'), {
+      target: { value: question },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Ask question' }))
+    expect(await screen.findByText('Python is')).toBeTruthy()
+    expect(screen.queryByText(/Sources$/)).toBeNull()
+    await act(async () => finish?.())
+    expect(await screen.findByText('Python is required [1].')).toBeTruthy()
+    expect(screen.getByText('Sources')).toBeTruthy()
+    expect(screen.queryByText(/Answering/)).toBeNull()
     vi.unstubAllGlobals()
   })
 })

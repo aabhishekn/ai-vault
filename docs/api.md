@@ -379,7 +379,7 @@ Endpoints that spend provider money are limited per client IP with fixed-window 
 
 | Scope | Endpoints | Default |
 | --- | --- | --- |
-| `ai` | `POST /documents/{id}/ask`, `POST /conversations/{id}/messages`, `POST /documents/{id}/summary`, `POST /documents/{id}/insights` | 20 per minute and 500 per day |
+| `ai` | `POST /documents/{id}/ask`, `POST /conversations/{id}/messages`, `POST /conversations/{id}/messages/stream`, `POST /documents/{id}/suggested-questions`, `POST /documents/{id}/summary`, `POST /documents/{id}/insights` | 20 per minute and 500 per day |
 | `upload` | `POST /documents` | 10 per minute |
 
 An exceeded limit returns HTTP 429 with a `Retry-After` header (seconds until the window resets) and a message naming the rule. Rejected requests still count toward the window. Configure with `AI_RATE_LIMIT_PER_MINUTE`, `AI_DAILY_QUOTA` and `UPLOAD_RATE_LIMIT_PER_MINUTE` (0 disables a rule) or turn everything off with `RATE_LIMIT_ENABLED=false`; restart the API after changing them. Reads, health checks, statistics and metrics are not limited.
@@ -441,3 +441,21 @@ Search, ask and conversation messages embed the question before searching. The v
 ## Suggested questions
 
 `POST /documents/{document_id}/suggested-questions` returns 3–4 starter questions (`questions`, plus `cached`) built from the document's saved summary and insights, not its full text, so the request is small. It returns 409 until at least one of them exists. The result is cached in Redis for 7 days under a hash of the model, summary and insights, so repeating the call is free and editing the content produces fresh suggestions. A Redis outage only costs a regeneration. The endpoint uses the `ai` rate limit. The chat panel shows it as a **Suggest questions** button; choosing a suggestion fills the question box without sending it.
+
+## Streaming chat answers
+
+`POST /conversations/{conversation_id}/messages/stream` takes the same body as `/messages` and responds with `text/event-stream`. Events:
+
+| Event | Data | Meaning |
+| --- | --- | --- |
+| `delta` | `{"text": "..."}` | Next piece of the answer text. A preview only. |
+| `turn` | the saved turn, same shape as the `/messages` response | Final event. Contains the validated answer, citations and token usage; clients should show it instead of the streamed text. |
+| `error` | `{"detail": "...", "status": 502}` | Generation or saving failed after streaming began. |
+
+Problems found before generation starts (unknown conversation 404, document not searchable 409, retrieval or database failure 503) return a normal HTTP error because the status line has not been sent yet. The turn is saved only after the complete answer passes citation validation, so a dropped connection or an `error` event leaves the conversation unchanged and the question can be asked again. The version check and rate limit are the same as `/messages`.
+
+Implementation: the model returns structured JSON with `answer` first, and the server decodes the `answer` string from the raw JSON deltas as they arrive. Request latency in `/metrics/api` measures time to the first byte for this route, not the full stream.
+
+## Citation validation
+
+The server requires at least one `[n]` label in the answer text, each within the retrieved sources; the labels written in the text decide which sources are attached as citations (their page and quote come from the stored chunks, never from the model). If the model returns no usable label the request is retried once; a streamed answer falls back to a regular request. A second failure returns 502 and nothing is saved. In a live comparison on a sample document this took successful answers from 1 of 8 to 8 of 8, because the previous prompt and strict cross-check often rejected valid answers.
