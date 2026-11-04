@@ -2,9 +2,9 @@
 
 How AI tools were used to build this is described in [AI_USAGE.md](AI_USAGE.md).
 
-A local document vault with PDF uploads, background text extraction, semantic search, source-cited answers, saved conversations, summaries, insights, and processing metrics.
+A local document vault with PDF uploads, background text extraction, semantic search, source-cited answers (chat with one document or across several), saved conversations, customizable summaries, insights, automatic category and tags, document versions, comparative analysis, live status updates over WebSocket, and processing metrics.
 
-Built with Python 3.12, FastAPI, SQLAlchemy, PostgreSQL + pgvector, Redis/RQ, and OpenAI. A React frontend styled with Tailwind CSS uploads PDFs, lists documents with processing status and pagination, and verifies the backend connection.
+Built with Python 3.12, FastAPI, SQLAlchemy, PostgreSQL + pgvector, Redis/RQ, and OpenAI. A React frontend (plain JavaScript, Vite and Tailwind CSS) covers the whole workflow: upload, filter, read, chat, compare and manage documents.
 
 ## Run locally
 
@@ -26,7 +26,7 @@ In a second terminal, from `backend/` with the same virtual environment active:
 python -m app.worker
 ```
 
-Open [Swagger](http://localhost:8000/docs), [health](http://localhost:8000/health), or [database health](http://localhost:8000/health/db). PostgreSQL binds to localhost:5433 and Redis to localhost:6379.
+Open [Swagger](http://localhost:8000/docs), [health](http://localhost:8000/health), [database health](http://localhost:8000/health/db), or [queue health](http://localhost:8000/health/queue) (shows whether a worker is running). PostgreSQL binds to localhost:5433 and Redis to localhost:6379.
 
 Set `OPENAI_API_KEY` in the root `.env` before starting the API and worker: with a key present, uploads are embedded automatically and documents reach **Search ready**, which chat, search, summaries, and insights need. Without a key, extraction still works and documents stop at **Text extracted**. Set `ENABLE_EMBEDDINGS=false` to force extraction-only even when a key exists. After embedding, the worker also generates a summary and key insights automatically (set `AUTO_GENERATE_CONTENT=false` to turn that off); if that step fails the document stays searchable and you can generate them on demand. These features send document text to the provider and can incur charges.
 
@@ -40,9 +40,15 @@ npm ci
 npm run dev
 ```
 
-Open [the frontend](http://localhost:5173). Choose a PDF up to 10 MB and select **Upload PDF**; the form saves it and refreshes the list. It lists documents with status, size, upload time, and pagination. **Refresh** reloads the list. Select a filename to see document details, read its saved summary and insights with page references and evidence, and refresh its processing status. Viewing summaries and insights reads saved content without calling the AI provider. If none exists, **Generate summary** or **Generate insights** creates and saves the result using AI when extracted text is available; API charges may apply. Generation blocks repeated submissions, and an unconfirmed request requires checking for a saved result before trying again. Answers stream in as they are written and are replaced by the cited, saved answer when complete. The details dialog lists a document's **versions** and uploads a new one; the list shows only the latest version of each document (a `v2` badge marks revisions). Each document row shows its category and tags, and the list can be filtered by either. **Customize the summary** writes a one-off summary with a chosen length, tone and focus (not saved, cached for repeats). **Suggest questions** offers starter questions built from the saved summary and insights (choosing one fills the box). **Ask this document** holds a saved conversation for search-ready documents: ask a question, then follow-ups, with expandable sources and page citations for each answer. Questions use AI and may incur charges; the view clears when details close. Close or press Escape to return to the list. The **Workspace overview** below the list shows document statistics (counts, storage, pages, searchable chunks, status breakdown) and processing metrics (attempts, success rate, average and slowest time, embedding tokens); **Refresh overview** reloads both without calling the AI provider. Closing a document's details does not lose the chat: reopening it restores its latest conversation (**New conversation** starts a fresh one). Expand **Service connection** to check backend health. Listing documents and checking health do not use the AI API. Uploads queue background processing, which uses the AI API when embeddings are enabled. The Python server must be running on port 8000.
+Open [the frontend](http://localhost:5173). The Python server must be running on port 8000 (the dev server proxies `/api` to it).
 
-Frontend code is grouped under `src/app`, `src/features`, `src/components`, and `src/lib`. Requests, validation, loading state, and presentation have separate modules. Lint, formatting, API contract tests, and build checks are enabled. See the [frontend guide](frontend/README.md) for commands and proxy behavior. Production API routing is not configured yet.
+- **Upload and browse.** Choose a PDF up to 10 MB and select **Upload PDF**. The list shows status, size, upload time, category and tags, with pagination and filters by category or tag. A **Live** badge means status changes arrive without refreshing (WebSocket, reconnecting automatically); **Refresh** reloads on demand. A notice appears if no background worker is running, since uploads would stay queued.
+- **Open a document** by selecting its filename. The dialog starts with **Ask this document**: a saved conversation for search-ready documents, with streaming answers, expandable sources with page citations, suggested starter questions and **New conversation**. Reopening a document restores its latest conversation. Below it are the saved **summary** (or **Generate summary**) and **Customize the summary** (length, tone, focus; not saved, cached for repeats), **insights** with page evidence, collapsible **File details**, **Versions** (upload a new version; the list shows only the latest, with a `v2` badge for revisions) and **Manage**: **Process again** for failed or text-only documents, and permanent **Delete** with a confirmation. Close or press Escape to return to the list.
+- **Several documents.** Tick **Select** on two or more search-ready documents, then **Ask across documents** (one conversation, sources labelled by document) or **Compare** (2 to 5 documents: similarities and differences by topic, with an optional focus).
+- **Overview.** The **Workspace overview** shows document statistics and processing metrics; **Service connection** checks backend health.
+- **Cost.** Listing, health checks and viewing saved content do not call the AI provider. Questions, generating or customizing summaries and insights, comparing, and processing uploads (embeddings) do, and may incur charges.
+
+Frontend code is grouped under `src/app`, `src/features`, `src/components`, `src/hooks`, and `src/lib`. Requests, validation, loading state, and presentation have separate modules. Lint, formatting, API contract tests, and build checks are enabled. See the [frontend guide](frontend/README.md) for commands and proxy behavior. Production API routing is not configured yet.
 
 ## Code structure
 
@@ -57,7 +63,7 @@ backend/
     db/               SQLAlchemy engine, models and shared lookups
     schemas/          Request/response models grouped by feature
     core/             Configuration, shared constants and service errors
-    cli/              Manual enqueue and learning utilities
+    cli/              Manual enqueue and recovery commands
     main.py           Application construction and resource lifecycle
     worker.py         Worker entry point
   migrations/         Versioned database changes
@@ -131,11 +137,11 @@ See [docs/architecture.md](docs/architecture.md) for transaction boundaries and 
 | PostgreSQL + pgvector for vectors | One store for metadata, chats and vectors, written in the same transactions | Not specialised for huge vector workloads; fine for per-document search |
 | RQ + Redis instead of Celery | Smaller surface, enough for retries, status and a single queue | Fewer built-in scheduling features |
 | Page-bounded chunks of up to 200 words with about 40 overlap, split on sentence boundaries | A chunk belongs to exactly one page, so every citation has a precise page; sentence boundaries keep passages readable | Text spanning a page break is split; word counts are not token counts |
-| Top 3 chunks, no distance cutoff | Keeps prompts cheap; the model abstains via an explicit `insufficient_evidence` flag | A cutoff or reranker could improve borderline questions |
+| Top 3 chunks for one document (2 per document, at most 10, for several), no distance cutoff | Keeps prompts cheap; the model abstains via an explicit `insufficient_evidence` flag | A cutoff or reranker could improve borderline questions; with many documents each gets only a few passages |
 | The `[n]` labels written in the answer pick the sources; the server attaches page and quote | Citations cannot be hallucinated | Checks that a source exists, not that every claim follows from it |
 | Follow-ups: last 3 turns plus a short slice of the previous turn in the retrieval query | No extra rewrite call (cost and latency) | Very old references retrieve poorly |
 | Summaries and insights saved on the document, generated automatically after embedding | Repeat views cost nothing and users see results without clicking | Their token usage is logged but not stored in the database |
-| One conversation belongs to one document | Keeps retrieval and citations unambiguous | Multi-document chat is future work |
+| A conversation covers one document, or a chosen set of 2 to 10 | Retrieval is filtered to exactly those documents and every source names its document, so citations stay unambiguous | The set is fixed when the conversation starts; deleting a document deletes the multi-document conversations that included it |
 | Failures are isolated | Embedding failure keeps the extracted text; generation failure keeps the document searchable; a Redis outage does not break the limiter or reads | More states to reason about, covered by tests |
 | Rate limits per client IP, failing open | Protects the endpoints that spend money without accounts | Shared IPs share limits; a Redis outage disables limiting |
 
@@ -150,8 +156,8 @@ See [docs/architecture.md](docs/architecture.md) for transaction boundaries and 
 
 This has not been load-tested; the following is how the design is expected to behave and what I would change.
 
-- **Ingestion.** Uploads return as soon as the file is stored and a job is queued, so request time does not grow with document size. Add throughput by running more `python -m app.worker` processes: claiming a document is atomic, duplicate jobs are skipped, and a dead worker's documents are recovered automatically. Embeddings are sent in batches of 64 chunks to limit round trips and cost.
-- **Search.** Retrieval is scoped to one document, so the database compares only that document's few hundred vectors and no vector index is needed yet. Cross-document search would need an HNSW index on the embedding column plus a metadata filter.
+- **Ingestion.** Uploads return as soon as the file is stored and a job is queued, so request time does not grow with document size. Add throughput by running more `python -m app.worker` processes: claiming a document is atomic, duplicate jobs are skipped, and a dead worker's documents are recovered when a worker next starts. Embeddings are sent in batches of 64 chunks to limit round trips and cost.
+- **Search.** Retrieval is filtered to the chosen document or documents (at most 10 per question), so the database compares only their few hundred vectors each and no vector index is needed yet. Searching the whole library at once would need an HNSW index on the embedding column.
 - **Reads.** Lists are paginated, large text columns are not loaded for metadata queries, and statistics are single aggregate queries. At very large scale I would cache or pre-aggregate the statistics and move extracted page text out of the document row.
 - **Caching.** Summaries and insights are generated once and reused. Query embeddings are cached in Redis for 24 hours, keyed by a hash of the normalised question plus the model, so repeated or retried questions skip the embedding call. Answers are deliberately not cached: they depend on conversation history and cost more to get wrong.
 - **Cost control.** Small model, output caps, batching, per-IP rate limits and a daily quota, plus `GET /metrics/ai-usage` for estimated spend.
@@ -162,7 +168,7 @@ This has not been load-tested; the following is how the design is expected to be
 - No authentication or per-user isolation, so anyone who can reach the API can read or delete any document. Deletion is permanent (no trash or undo).
 - PDF text only: no OCR, no DOCX, 60,000-character limit for summaries and insights.
 - Summaries and insights are not streamed; only chat answers are.
-- Token usage for summaries, insights and stateless `/ask` is logged but not stored, so `/metrics/ai-usage` undercounts spend.
+- Token usage for summaries, insights and stateless `/ask` is logged but not stored, so `/metrics/ai-usage` undercounts spend. It is also computed from stored chats and processing attempts, so deleting a document removes its tokens from the totals.
 - Answer quality is checked by tests and manual trials, not by an automated evaluation set.
 - Hosted production would need HTTPS, a proxy-aware client-IP policy, secrets management, and database backups.
 

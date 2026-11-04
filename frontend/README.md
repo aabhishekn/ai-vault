@@ -81,7 +81,7 @@ The hook prevents duplicate submissions, times out after two minutes, and cancel
 - `src/components/`: shared UI primitives such as Button.
 - `src/lib/format.js`: date and file-size display helpers.
 - `src/features/health/`: health API contract and connection component.
-- `src/lib/api.js`: shared fetch entry point for future feature APIs.
+- `src/lib/api.js`: shared fetch entry point for API requests (JSON, and bodiless 204 responses).
 - `src/styles.css`: Tailwind entry point, shared theme tokens, and global base/focus styles.
 
 API modules validate unknown JSON, hooks own request lifecycle, and components render state. Feature components do not call fetch directly.

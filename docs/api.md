@@ -126,9 +126,9 @@ python -m app.worker --burst
 
 New uploads are queued automatically. For older uploads or recovery, use a document ID returned by `POST /documents`. The manual enqueue command submits extraction in Redis; the worker then reads the stored PDF and writes its pages to PostgreSQL. Alternatively, leave `python -m app.worker` running in another terminal. Check `GET /documents/{document_id}` for the resulting status.
 
-With embeddings disabled, the lifecycle is `queued → processing → extracted`. With embeddings enabled, it is `queued → processing → embedded`. Invalid or unreadable documents become `failed`; the worker stores an error message and raises the error so RQ also records the failed job. A failed document can be queued again with the same command. `extracted` means text is available; `ready` is reserved for the later AI pipeline.
+With embeddings disabled, the lifecycle is `queued → processing → extracted`. With embeddings enabled, it is `queued → processing → embedded`. Invalid or unreadable documents become `failed`; the worker stores an error message and raises the error so RQ also records the failed job. A failed document can be queued again with the same command, with `POST /documents/{id}/reprocess` or with **Process again** in the web UI. `extracted` means text is available. `ready` is accepted by the schema and treated as searchable, but the current pipeline stops at `embedded`.
 
-The `extracted_pages` JSONB column stores objects with `page_number` and `text`, including blank pages. This internal content is not returned by the metadata endpoints. A conditional database update claims each document before reading it, so duplicate jobs skip documents already processing or extracted. Unexpected worker termination can leave a document in `processing`; automatic recovery and retries are not implemented yet. Keep the worker running for new uploads to process automatically.
+The `extracted_pages` JSONB column stores objects with `page_number` and `text`, including blank pages. This internal content is not returned by the metadata endpoints. A conditional database update claims each document before reading it, so duplicate jobs skip documents already processing or extracted. Unexpected worker termination can leave a document in `processing`; the next worker start (or a reprocess request) closes attempts older than twice the job timeout as failed and queues the document again. Keep the worker running for new uploads to process automatically.
 
 To run the database integration tests alongside the unit tests (requires local PostgreSQL and migrations):
 
@@ -168,7 +168,7 @@ Apply the latest migration from `backend/` using `python -m alembic upgrade head
 
 The worker replaces any previous chunks on a retry. The replacement and extracted pages commit together, along with `extracted` when embeddings are disabled or `processing` when embedding continues. If saving fails, that transaction rolls back and the worker separately records `failed`. Previously saved content survives a failed replacement. Search will need to check document status before using stored chunks.
 
-Documents already marked `extracted` before this migration are preserved without backfilling chunks. A fresh upload exercises the full pipeline; automatic backfill and a reprocessing endpoint are not implemented yet. The metadata API still returns the same fields. Embeddings are optional as described below; document similarity search is available as described below.
+Documents already marked `extracted` before this migration are preserved without backfilling chunks. Those documents are not backfilled automatically; `POST /documents/{id}/reprocess` builds their chunks and embeddings on request. The metadata API still returns the same fields. Embeddings are optional as described below; document similarity search is available as described below.
 
 Downgrading this migration deletes the chunk table and its contents while preserving document records and extracted pages.
 
@@ -176,7 +176,7 @@ Downgrading this migration deletes the chunk table and its contents while preser
 
 `app.ai.embeddings.generate_embeddings(texts)` sends a list of text strings to OpenAI and returns an `EmbeddingBatch` containing `vectors` in the original input order, the returned model name, and the input token count. It uses `text-embedding-3-small` with 1,536 dimensions. See the [official OpenAI embeddings guide](https://developers.openai.com/api/docs/guides/embeddings).
 
-For future live use, set `OPENAI_API_KEY` in the repository root `.env` (ignored by Git). No key is needed to start the API, extract PDFs, create chunks, or run the mocked embedding tests. The supplied assignment key is configured only in the ignored local `.env`; repository clones must supply their own key.
+To use the AI features, set `OPENAI_API_KEY` in the repository root `.env` (ignored by Git). No key is needed to start the API, extract PDFs, create chunks, or run the mocked embedding tests. The supplied assignment key is configured only in the ignored local `.env`; repository clones must supply their own key.
 
 The helper accepts up to 64 texts per request, rejects blank inputs, and returns an empty batch without an API request for empty input. It checks response positions, vector dimensions, and finite values before returning. Requests have a 30-second SDK timeout and up to two SDK retries. Provider errors propagate to the caller for handling by the later pipeline integration.
 
@@ -209,7 +209,7 @@ The worker commits extracted pages and chunks first, keeping status `processing`
 
 `embedded` means vectors are stored; it does not mean a summary or chat answer exists. `ready` remains reserved for the later complete pipeline. The RQ result includes `embedding_input_tokens` from successful batches; this is temporary job-result data. New processing attempts also persist observed token usage as described below; neither is a complete billing ledger or accounts for all failed requests and SDK retries.
 
-A manual retry of a failed document re-extracts and replaces its chunks, then repeats embedding requests if enabled. Successful provider batches can therefore be charged again after a later failure. Existing `extracted` documents are not automatically reprocessed or embedded; the current path for testing the new pipeline is a fresh upload. Worker termination/timeouts still need automatic recovery in a later step.
+A manual retry of a failed document re-extracts and replaces its chunks, then repeats embedding requests if enabled. Successful provider batches can therefore be charged again after a later failure. Existing `extracted` documents are not reprocessed automatically; use `POST /documents/{id}/reprocess` (or **Process again** in the UI) to embed them. A worker killed mid-job is recovered when a worker next starts.
 
 ## Live pipeline verification
 
@@ -265,7 +265,7 @@ Apply the latest migration from `backend/` with `python -m alembic upgrade head`
 3. Send a follow-up to the same messages endpoint, such as `{"question":"Which of those are for document chat?"}`.
 4. `GET /conversations/{conversation_id}?limit=20&offset=0` retrieves persisted turns in order, with `total`, `limit`, and `offset`. Limit allows 1–100; offset must be nonnegative.
 
-A conversation belongs to one document. A turn stores the complete question/answer response, including citation snapshots, model name, and generation token usage. Question and answer are stored as one paired turn; unsuccessful generation does not leave a partial user message. PostgreSQL saves each turn and updates its conversation count in the same transaction. Deleting a document cascades through its conversations and turns.
+A conversation created here belongs to one document (conversations across several documents are described under Multi-document chat below). A turn stores the complete question/answer response, including citation snapshots, model name, and generation token usage. Question and answer are stored as one paired turn; unsuccessful generation does not leave a partial user message. PostgreSQL saves each turn and updates its conversation count in the same transaction. Deleting a document cascades through its conversations and turns.
 
 For each follow-up, the server loads the latest three turns, in chronological order, clipping each historical question to 1,000 characters and answer to 2,000. All turns remain stored, but only this bounded context is sent to the answer model. Retrieval combines the current question with up to 800 characters of the latest prior question and 500 of its answer, capped at 2,000 characters with the current question first. This simple approach avoids an extra model request for question rewriting; complex follow-ups or references to older turns may require a better rewrite or memory strategy later.
 
@@ -329,7 +329,7 @@ The worker creates a `processing_attempts` row in the transaction that claims a 
 
 Durations use Python's monotonic performance clock from the start of the handler through its completion-record update, rounded to milliseconds. They exclude time waiting in Redis and do not measure upload, search, chat, summary generation, or the final database commit acknowledgment. A successful extraction-only job counts as succeeded, as does successful processing with embeddings. The live extraction-only check recorded one succeeded attempt at 129 ms with zero embedding tokens; this is a functional check, not a performance benchmark.
 
-Metrics begin with this migration and worker update; earlier jobs are not backfilled. A force-killed worker or unavailable database can leave an attempt marked `processing`, just as it can leave the document processing state unfinished. Automatic reconciliation is not implemented. Observed token usage is not an invoice: it omits unknown provider usage, failed request/retry charges, and other API features; active attempts are not updated incrementally. Deleting a document cascades to its attempts, so aggregates describe retained history. Downgrading removes attempt history without deleting documents.
+Metrics begin with this migration and worker update; earlier jobs are not backfilled. A force-killed worker or unavailable database can leave an attempt marked `processing`, just as it can leave the document processing state unfinished. An attempt left that way is closed as failed, and its document queued again, when a worker next starts or the document is reprocessed (once it is older than twice the job timeout). Observed token usage is not an invoice: it omits unknown provider usage, failed request/retry charges, and other API features; active attempts are not updated incrementally. Deleting a document cascades to its attempts, so aggregates describe retained history. Downgrading removes attempt history without deleting documents.
 
 This metrics endpoint performs one aggregate PostgreSQL query and makes no AI requests. Tests verify successful and failed runs, retry history, duplicate skips, observed batch usage, empty aggregates, duration calculations, completion constraints, and safe database errors.
 
@@ -495,7 +495,7 @@ Uploading a new version never changes or removes an older one, so a conversation
 - By default only that version is deleted. Deleting the newest version makes the one before it current again. Add `?all_versions=true` to delete every version of the document (the id of any version works). The web UI uses this.
 - A document a worker is processing right now returns 409 and nothing is deleted; try again when it finishes. A job abandoned by a dead worker does not count as running.
 - A queued job for a deleted document is skipped by the worker, not failed. The PDF is removed after the database commit, and a failure to remove it is logged, not returned.
-- Processing metrics and statistics are computed from stored rows, so they no longer include deleted documents or their attempts.
+- Statistics, processing metrics and `GET /metrics/ai-usage` are computed from stored rows, so they stop counting a deleted document, its attempts, its chats and the tokens they used. Estimated spend can therefore go down after a deletion.
 
 Deletion cannot be undone. There is no authentication in this project, so anyone who can reach the API can delete documents.
 
