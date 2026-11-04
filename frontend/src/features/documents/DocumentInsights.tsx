@@ -1,7 +1,6 @@
 import { Button } from '../../components/Button'
 import { useResource } from '../../hooks/useResource'
 import { getSavedInsights } from './insights'
-import './DocumentInsights.css'
 
 export function DocumentInsights({ id }: { id: string }) {
   const { state, refresh } = useResource(
@@ -13,11 +12,11 @@ export function DocumentInsights({ id }: { id: string }) {
   const saved = state.status === 'success' ? state.data : null
   return (
     <section
-      className="document-insights"
+      className="border-t border-rule py-6"
       aria-labelledby="insights-heading"
       aria-busy={loading}
     >
-      <div className="insights-header">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 [&_h3]:text-[15px] [&_h3]:font-semibold">
         <h3 id="insights-heading">Saved insights</h3>
         <Button
           onClick={() => {
@@ -29,32 +28,39 @@ export function DocumentInsights({ id }: { id: string }) {
         </Button>
       </div>
       {loading && (
-        <p className="insights-message" role="status">
+        <p className="text-[13px] leading-[1.9] text-muted" role="status">
           Loading saved insights…
         </p>
       )}
       {state.status === 'error' && (
-        <p className="insights-error" role="alert">
+        <p className="text-[13px] leading-[1.9] text-error" role="alert">
           {state.message}
         </p>
       )}
       {state.status === 'success' && !saved && (
-        <p className="insights-message" role="status">
+        <p className="text-[13px] leading-[1.9] text-muted" role="status">
           No insights have been saved for this document yet.
         </p>
       )}
       {saved && saved.insights.length === 0 && (
-        <p className="insights-message" role="status">
+        <p className="text-[13px] leading-[1.9] text-muted" role="status">
           The saved result contains no insights.
         </p>
       )}
       {saved && saved.insights.length > 0 && (
-        <ol className="insights-list">
+        <ol className="grid list-none gap-3.5">
           {saved.insights.map((insight, index) => (
-            <li key={index} className="insight-card">
-              <p className="insight-text">{insight.text}</p>
-              <p className="insight-page">Page {insight.page_number}</p>
-              <blockquote className="insight-evidence">
+            <li
+              key={index}
+              className="rounded-[10px] border border-evidence-border bg-[#f7f8f1] p-[18px] wrap-anywhere"
+            >
+              <p className="text-[13px] leading-[1.9] whitespace-pre-wrap">
+                {insight.text}
+              </p>
+              <p className="mt-3.5 mb-2.5 text-[11px] font-semibold text-success">
+                Page {insight.page_number}
+              </p>
+              <blockquote className="border-l-2 border-[#bdcbb0] pl-3 [&_p]:text-xs [&_p]:leading-[1.8] [&_p]:whitespace-pre-wrap [&_p]:text-muted">
                 <p>{insight.evidence}</p>
               </blockquote>
             </li>

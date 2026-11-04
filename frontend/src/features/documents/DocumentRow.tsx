@@ -10,8 +10,11 @@ export function DocumentRow({
   onSelect: (id: string) => void
 }) {
   return (
-    <li className="document-row">
-      <span className="document-file-icon" aria-hidden="true">
+    <li className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-4 px-[26px] py-6 not-first:border-t not-first:border-rule max-[600px]:grid-cols-[34px_minmax(0,1fr)] max-[600px]:items-start max-[600px]:gap-3 max-[600px]:px-[18px] max-[600px]:py-[22px]">
+      <span
+        className="grid h-12 w-[42px] place-items-center rounded-lg border border-evidence-border bg-[#f2f4ec] text-[#71816a] max-[600px]:h-10 max-[600px]:w-[34px] [&_svg]:size-[23px]"
+        aria-hidden="true"
+      >
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -22,11 +25,11 @@ export function DocumentRow({
           <path d="M14 3v5h5M8 13h8m-8 4h5" />
         </svg>
       </span>
-      <div className="document-description">
+      <div className="[&_h3]:mb-[7px] [&_h3]:text-[13px] [&_h3]:leading-normal [&_h3]:font-[550] [&_h3]:wrap-anywhere [&_p]:flex [&_p]:flex-wrap [&_p]:gap-1.5 [&_p]:text-[11px] [&_p]:leading-[1.6] [&_p]:text-muted max-[600px]:[&_p]:text-[10px]">
         <h3>
           <button
             type="button"
-            className="document-open"
+            className="cursor-pointer border-0 bg-transparent p-0 text-left wrap-anywhere text-inherit underline decoration-[#b9c4ae] underline-offset-4 [font:inherit] hover:text-success hover:decoration-current"
             aria-haspopup="dialog"
             onClick={(event) => {
               event.currentTarget.focus()
@@ -44,7 +47,9 @@ export function DocumentRow({
           </time>
         </p>
       </div>
-      <DocumentStatusBadge status={document.status} />
+      <div className="max-[600px]:col-start-2">
+        <DocumentStatusBadge status={document.status} />
+      </div>
     </li>
   )
 }

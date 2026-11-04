@@ -2,7 +2,7 @@
 
 A local document vault with PDF uploads, background text extraction, semantic search, source-cited answers, saved conversations, summaries, insights, and processing metrics.
 
-Built with Python 3.12, FastAPI, SQLAlchemy, PostgreSQL + pgvector, Redis/RQ, and OpenAI. A React/TypeScript frontend uploads PDFs, lists documents with processing status and pagination, and verifies the backend connection.
+Built with Python 3.12, FastAPI, SQLAlchemy, PostgreSQL + pgvector, Redis/RQ, and OpenAI. A React/TypeScript frontend styled with Tailwind CSS uploads PDFs, lists documents with processing status and pagination, and verifies the backend connection.
 
 ## Run locally
 

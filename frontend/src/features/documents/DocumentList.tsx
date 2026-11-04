@@ -1,7 +1,6 @@
 import { Button } from '../../components/Button'
 import { DocumentRow } from './DocumentRow'
 import type { useDocuments } from './useDocuments'
-import './DocumentList.css'
 
 export function DocumentList({
   state,
@@ -14,16 +13,16 @@ export function DocumentList({
 
   return (
     <section
-      className="document-list"
+      className="overflow-hidden rounded-[18px] border border-panel-border bg-surface shadow-panel"
       aria-labelledby="documents-heading"
       aria-busy={loading}
     >
-      <div className="document-list-header">
-        <div className="document-list-title">
+      <div className="flex items-center justify-between gap-4 border-b border-rule px-[26px] py-[22px] max-[600px]:p-[18px]">
+        <div className="flex items-center gap-2.5 [&_h2]:text-sm [&_h2]:font-semibold">
           <h2 id="documents-heading">All documents</h2>
           {page && (
             <span
-              className="document-count"
+              className="grid h-6 min-w-6 place-items-center rounded-[7px] bg-[#f0f1e9] px-[7px] text-[11px] text-[#58634f]"
               aria-label={`${page.total} documents`}
             >
               {page.total}
@@ -49,8 +48,14 @@ export function DocumentList({
       </div>
 
       {loading && (
-        <div className="document-list-message" role="status">
-          <span className="document-loading-mark" aria-hidden="true" />
+        <div
+          className="px-[26px] py-[54px] text-center [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-[550] [&_h3]:tracking-[-0.3px] [&_p]:mx-auto [&_p]:max-w-[370px] [&_p]:text-[13px] [&_p]:leading-[1.8] [&_p]:text-muted"
+          role="status"
+        >
+          <span
+            className="inline-block size-[22px] animate-spin rounded-full border-2 border-[#e1e5d8] border-t-[#71816a] motion-reduce:animate-none"
+            aria-hidden="true"
+          />
           <h3>Gathering your documents…</h3>
           <p>This will only take a moment.</p>
         </div>
@@ -58,18 +63,26 @@ export function DocumentList({
 
       {state.status === 'error' && (
         <div
-          className="document-list-message document-list-message--error"
+          className="bg-[#fffaf7] px-[26px] py-[54px] text-center [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-[550] [&_h3]:tracking-[-0.3px] [&_p]:mx-auto [&_p]:max-w-[370px] [&_p]:text-[13px] [&_p]:leading-[1.8] [&_p]:text-muted"
           role="alert"
         >
           <h3>We couldn’t load your documents.</h3>
           <p>{state.message}</p>
-          <Button onClick={refresh}>Try again</Button>
+          <Button className="mt-5" onClick={refresh}>
+            Try again
+          </Button>
         </div>
       )}
 
       {page && page.items.length === 0 && (
-        <div className="document-list-message" role="status">
-          <span className="document-empty-mark" aria-hidden="true">
+        <div
+          className="px-[26px] py-[54px] text-center [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-[550] [&_h3]:tracking-[-0.3px] [&_p]:mx-auto [&_p]:max-w-[370px] [&_p]:text-[13px] [&_p]:leading-[1.8] [&_p]:text-muted"
+          role="status"
+        >
+          <span
+            className="inline-grid size-10 place-items-center rounded-full bg-[#f0f2e8] text-[26px] font-normal text-[#738364]"
+            aria-hidden="true"
+          >
             +
           </span>
           <h3>A little space for your next idea.</h3>
@@ -79,7 +92,7 @@ export function DocumentList({
 
       {page && page.items.length > 0 && (
         <>
-          <ul className="document-rows" aria-label="Uploaded documents">
+          <ul className="list-none" aria-label="Uploaded documents">
             {page.items.map((document) => (
               <DocumentRow
                 key={document.id}
@@ -88,7 +101,7 @@ export function DocumentList({
               />
             ))}
           </ul>
-          <div className="document-list-footer">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule bg-panel-footer px-[26px] py-4 max-[600px]:p-[18px] [&_nav]:flex [&_nav]:gap-2 [&_p]:text-[11px] [&_p]:text-muted [&_strong]:font-[550] [&_strong]:text-[#3e4a37]">
             <p>
               Showing{' '}
               <strong>

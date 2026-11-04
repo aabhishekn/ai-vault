@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react'
 import { Button } from '../../components/Button'
 import { ApiError } from '../../lib/api'
 import { getHealth } from './api'
-import './HealthCard.css'
+
+const healthStyles = {
+  online: 'bg-success-soft text-success',
+  checking: 'bg-warning-soft text-warning',
+  offline: 'bg-danger-soft text-danger',
+}
 
 type HealthState =
   | { status: 'checking' }
@@ -47,27 +52,37 @@ export function HealthCard() {
   const online = health.status === 'online'
 
   return (
-    <section className="health-card" aria-labelledby="connection-heading">
-      <div className="health-card-topline">
-        <h2 id="connection-heading">Document service</h2>
-        <span className={`health-badge health-badge--${health.status}`}>
-          <span className="health-badge-dot" aria-hidden="true" />
+    <section
+      className="overflow-hidden rounded-[18px] border border-panel-border bg-surface shadow-panel"
+      aria-labelledby="connection-heading"
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-rule px-[26px] py-[22px] max-[600px]:p-[18px]">
+        <h2 className="text-[13px] font-semibold" id="connection-heading">
+          Document service
+        </h2>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-[20px] px-[9px] py-[5px] text-[10px] font-semibold ${healthStyles[health.status]}`}
+        >
+          <span
+            className="size-[5px] rounded-full bg-current"
+            aria-hidden="true"
+          />
           {checking ? 'Checking' : online ? 'Connected' : 'Disconnected'}
         </span>
       </div>
 
       <div
-        className="health-result"
+        className="px-[26px] pt-8 pb-9 max-[600px]:px-[18px] max-[600px]:py-[26px]"
         role="status"
         aria-live="polite"
         aria-atomic="true"
       >
         <div
-          className={`health-symbol health-symbol--${health.status}`}
+          className={`mb-[18px] grid size-11 place-items-center rounded-full [&_svg]:size-6 ${healthStyles[health.status]}`}
           aria-hidden="true"
         >
           {checking ? (
-            <span className="health-spinner" />
+            <span className="size-[18px] animate-spin rounded-full border-[1.5px] border-[#ddcfb5] border-t-[#947548] motion-reduce:animate-none" />
           ) : (
             <svg
               viewBox="0 0 24 24"
@@ -83,14 +98,14 @@ export function HealthCard() {
             </svg>
           )}
         </div>
-        <h3>
+        <h3 className="mb-2 text-xl font-[550] tracking-[-0.5px] max-[600px]:text-lg">
           {checking
             ? 'Making the connection…'
             : online
               ? 'Everything is connected.'
               : 'Let’s reconnect.'}
         </h3>
-        <p>
+        <p className="max-w-[430px] text-[13px] leading-[1.8] text-muted">
           {checking
             ? 'Checking that your workspace can reach the document service.'
             : online
@@ -99,8 +114,10 @@ export function HealthCard() {
         </p>
       </div>
 
-      <div className="health-card-footer">
-        <span>Connection checks don’t use AI credits.</span>
+      <div className="flex items-center justify-between gap-4 border-t border-rule bg-panel-footer px-[26px] py-4 max-[600px]:p-[18px]">
+        <span className="text-[10px] leading-normal text-muted max-[600px]:max-w-[150px]">
+          Connection checks don’t use AI credits.
+        </span>
         <Button onClick={retry} disabled={checking}>
           <svg
             viewBox="0 0 20 20"

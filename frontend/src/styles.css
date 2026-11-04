@@ -1,35 +1,57 @@
-:root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  color: #222922;
-  background: #f7f7f2;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif: Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, monospace;
+  --color-canvas: #f7f7f2;
+  --color-ink: #222922;
+  --color-surface: #fffefa;
+  --color-brand: #263c31;
+  --color-brand-hover: #35523f;
+  --color-muted: #66705f;
+  --color-earth: #786447;
+  --color-focus: #b46d36;
+  --color-divider: #e4e5dc;
+  --color-rule: #eeeee6;
+  --color-panel-border: #dedfd4;
+  --color-panel-footer: #fafaf5;
+  --color-evidence-border: #e4e9dc;
+  --color-success: #527347;
+  --color-success-soft: #eef3e9;
+  --color-error: #8e3f2d;
+  --color-danger: #a05a46;
+  --color-danger-soft: #f9ece7;
+  --color-warning: #947548;
+  --color-warning-soft: #f6efe2;
+  --shadow-panel: 0 5px 22px #25322704;
 }
 
-* {
-  box-sizing: border-box;
-}
-body {
-  margin: 0;
-  min-width: 320px;
-}
-button,
-a {
-  -webkit-tap-highlight-color: transparent;
-}
-button {
-  font: inherit;
-}
-a {
-  color: inherit;
-}
-button:focus-visible,
-a:focus-visible {
-  outline: 3px solid #b46d36;
-  outline-offset: 5px;
-}
-::selection {
-  background: #e9dfcb;
+@layer base {
+  :root {
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    min-width: 320px;
+    @apply bg-canvas font-sans text-ink;
+    line-height: normal;
+  }
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  summary:focus-visible,
+  [tabindex='-1']:focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 5px;
+  }
+  ::selection {
+    background: #e9dfcb;
+  }
 }

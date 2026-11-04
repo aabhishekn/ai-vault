@@ -1,6 +1,6 @@
 # AI Vault frontend
 
-React + TypeScript + Vite. The workspace uploads PDFs and lists documents with processing status, size, upload time, and pagination.
+React + TypeScript + Vite + Tailwind CSS. The workspace uploads PDFs and lists documents with processing status, size, upload time, and pagination.
 
 From this directory:
 
@@ -62,11 +62,19 @@ The insights API validates the selected document ID, nonempty insight/evidence t
 - `src/lib/format.ts`: date and file-size display helpers.
 - `src/features/health/`: health API contract and connection component.
 - `src/lib/api.ts`: shared fetch entry point for future feature APIs.
-- `src/styles.css`: base styles.
+- `src/styles.css`: Tailwind entry point, shared theme tokens, and global base/focus styles.
 
 API modules validate unknown JSON, hooks own request lifecycle, and components render state. Feature components do not call fetch directly.
 
 The browser requests `/api/documents` and `/api/health`. Vite's development proxy forwards requests to `http://127.0.0.1:8000` and strips `/api`; API keys stay on the Python side. See the [Vite proxy documentation](https://vite.dev/config/server-options.html#server-proxy).
+
+## Styling
+
+Tailwind CSS is compiled by `@tailwindcss/vite`, following the [official Vite integration](https://tailwindcss.com/docs/installation/using-vite). Components use utility classes; `src/styles.css` defines shared colors, fonts, and shadows with `@theme`. For example, `bg-surface` and `text-muted` refer to those theme tokens. The existing 600 px mobile breakpoint is preserved with `max-[600px]:` variants.
+
+Use `Button` with its `primary` or default `secondary` variant for shared button appearance. Status colors use complete class strings in typed maps so Tailwind can discover every state at build time. Keep request logic in hooks and API modules; styling belongs in components. Add shared UI components when a repeated UI pattern needs reuse rather than copying large blocks. Prettier's Tailwind plugin sorts utility classes automatically when running `npm run format`.
+
+Only theme definitions and global base rules remain in CSS. Feature styles live alongside their markup; there are no component-specific stylesheets. Tailwind generates the final browser CSS during development and production builds.
 
 ## Checks
 

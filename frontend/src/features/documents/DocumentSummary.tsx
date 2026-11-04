@@ -3,7 +3,6 @@ import { Button } from '../../components/Button'
 import { canGenerateSummary } from './summary'
 import type { DocumentStatus } from './types'
 import { useDocumentSummary } from './useDocumentSummary'
-import './DocumentSummary.css'
 
 export function DocumentSummary({
   id,
@@ -18,11 +17,11 @@ export function DocumentSummary({
   const canGenerate = canGenerateSummary(documentStatus)
   return (
     <section
-      className="document-summary"
+      className="border-t border-rule py-6"
       aria-labelledby="summary-heading"
       aria-busy={busy}
     >
-      <div className="summary-header">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 [&_h3]:text-[15px] [&_h3]:font-semibold">
         <h3 ref={heading} tabIndex={-1} id="summary-heading">
           Summary
         </h3>
@@ -36,25 +35,31 @@ export function DocumentSummary({
         </Button>
       </div>
       {state.status === 'loading' && (
-        <p className="summary-message" role="status">
+        <p
+          className="text-[13px] leading-[1.9] wrap-anywhere text-muted"
+          role="status"
+        >
           Loading saved summary…
         </p>
       )}
       {state.status === 'empty' && (
         <div>
-          <p className="summary-message" role="status">
+          <p
+            className="text-[13px] leading-[1.9] wrap-anywhere text-muted"
+            role="status"
+          >
             No summary has been saved for this document yet.
           </p>
           {canGenerate ? (
             <p
-              className="summary-message summary-generation-note"
+              className="mt-3 text-[13px] leading-[1.9] wrap-anywhere text-muted"
               id="summary-generation-note"
             >
               Generate a short summary using AI. Document text is sent to your
               configured AI provider and API charges may apply.
             </p>
           ) : (
-            <p className="summary-message summary-generation-note">
+            <p className="mt-3 text-[13px] leading-[1.9] wrap-anywhere text-muted">
               A summary needs extracted document text. Refresh document details
               after processing finishes.
             </p>
@@ -63,7 +68,7 @@ export function DocumentSummary({
       )}
       {(state.status === 'empty' || state.status === 'generating') && (
         <Button
-          className="summary-generate"
+          className="mt-4"
           aria-disabled={!canGenerate || busy}
           aria-describedby={
             state.status === 'empty' && canGenerate
@@ -80,17 +85,25 @@ export function DocumentSummary({
         </Button>
       )}
       {state.status === 'generating' && (
-        <p className="summary-message summary-generation-note" role="status">
+        <p
+          className="mt-3 text-[13px] leading-[1.9] wrap-anywhere text-muted"
+          role="status"
+        >
           Generating your summary. Keep this view open; this may take a moment.
         </p>
       )}
       {state.status === 'error' && (
-        <p className="summary-error" role="alert">
+        <p
+          className="text-[13px] leading-[1.9] wrap-anywhere text-error"
+          role="alert"
+        >
           {state.message}
         </p>
       )}
       {state.status === 'success' && (
-        <p className="summary-content">{state.summary.summary}</p>
+        <p className="text-[13px] leading-[1.9] wrap-anywhere whitespace-pre-wrap">
+          {state.summary.summary}
+        </p>
       )}
     </section>
   )

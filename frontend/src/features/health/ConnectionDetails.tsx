@@ -5,10 +5,12 @@ export function ConnectionDetails() {
   const [open, setOpen] = useState(false)
   return (
     <details
-      className="connection-details"
+      className="group mt-6"
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary>Service connection</summary>
+      <summary className="w-fit cursor-pointer py-2.5 text-xs text-muted group-open:mb-3">
+        Service connection
+      </summary>
       {open && <HealthCard />}
     </details>
   )
