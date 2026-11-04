@@ -21,7 +21,7 @@ The file input and submit button are disabled during upload. Uploads time out af
 
 Select a document filename to open its details dialog. It fetches fresh metadata from `GET /documents/{id}`, validates that the returned ID matches the selected document, and shows status, size, type, upload time, and ID. **Refresh details** checks for processing updates without an AI call. Close or press Escape to return to the same list and page. The modal contains keyboard focus and restores it to the selected filename on close.
 
-Loading, missing documents, invalid responses, and connection failures have dedicated feedback. Details requests time out after ten seconds and are cancelled when the dialog closes. Selection is local UI state; reloading the page closes the dialog. PDF preview and summary generation are separate future steps.
+Loading, missing documents, invalid responses, and connection failures have dedicated feedback. Details requests time out after ten seconds and are cancelled when the dialog closes. Selection is local UI state; reloading the page closes the dialog. PDF preview is a separate future step.
 
 ## Saved summaries
 
@@ -29,12 +29,18 @@ Document details include a **Saved summary** section. Opening it or using **Refr
 
 The backend returns 404 for both a missing summary and a missing document. On that response, the summary API confirms the document exists before showing an empty state. Responses must match the selected document ID. Requests time out after ten seconds and are cancelled on unmount; switching documents cannot display a previous document’s result.
 
+## Generate a summary
+
+When no saved summary exists, **Generate summary** is available for documents whose status is extracted, embedded, or ready. Its cost note explains that document text is sent to the configured AI provider and API charges may apply. A click submits `POST /documents/{id}/summary`; opening details and refreshing continue to use GET only. Completed results are cached by the backend and immediately shown in the summary section.
+
+The summary hook owns both reading and generation. A request ref prevents repeated submissions, refresh is unavailable while generation runs, and generation has a two-minute browser timeout. A failed or unconfirmed generation must be followed by **Check saved summary** before the UI allows another attempt. No frontend generation request is automatically retried. Closing or refreshing document details cancels the browser request; the server may still finish saving the result. Concurrent requests from other tabs can still generate more than once before a cache entry exists; backend deduplication is not implemented here.
+
 ## Structure
 
 - `src/app/`: application layout.
 - `src/features/documents/DocumentWorkspace.tsx`: composes upload, list, and details; owns list state and selected document ID.
-- `src/features/documents/summary.ts`: saved-summary API contract and missing-content handling.
-- `src/features/documents/useSavedSummary.ts`: independent summary loading, cancellation, and refresh.
+- `src/features/documents/summary.ts`: validated read/generation requests, processing-status eligibility, and safe API errors.
+- `src/features/documents/useDocumentSummary.ts`: summary loading, generation, cancellation, refresh, and submission guard.
 - `src/features/documents/DocumentSummary.tsx`: summary, empty state, and retry UI.
 - `src/features/documents/useDocument.ts`: selected-document request lifecycle and refresh.
 - `src/features/documents/DocumentDetails.tsx`: metadata dialog and focus lifecycle.

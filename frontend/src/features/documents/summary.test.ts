@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getSavedSummary } from './summary'
+import {
+  canGenerateSummary,
+  generateDocumentSummary,
+  getSavedSummary,
+} from './summary'
 
 const id = 'summary-document'
 const document = {
@@ -93,4 +97,75 @@ describe('saved summary API', () => {
       getSavedSummary(id, new AbortController().signal),
     ).rejects.toThrow('Connection failed')
   })
+})
+
+describe('summary generation API', () => {
+  it('posts once without a request body and validates the saved result', async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json(summary))
+    vi.stubGlobal('fetch', fetch)
+    const signal = new AbortController().signal
+    await expect(generateDocumentSummary(id, signal)).resolves.toEqual(summary)
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      `/api/documents/${id}/summary`,
+      {
+        method: 'POST',
+        signal,
+        headers: { Accept: 'application/json' },
+      },
+    )
+  })
+  it.each([
+    [404, 'document could not be found'],
+    [409, 'text is not ready or has changed'],
+    [413, 'summary size limit'],
+    [502, 'couldn’t confirm summary generation'],
+    [503, 'couldn’t confirm summary generation'],
+  ])(
+    'provides safe feedback for HTTP %i without retrying',
+    async (status, message) => {
+      const fetch = vi
+        .fn()
+        .mockResolvedValue(
+          Response.json({ detail: 'private provider details' }, { status }),
+        )
+      vi.stubGlobal('fetch', fetch)
+      await expect(
+        generateDocumentSummary(id, new AbortController().signal),
+      ).rejects.toThrow(message)
+      expect(fetch).toHaveBeenCalledTimes(1)
+    },
+  )
+  it('does not repeat a request when the connection fails after submission', async () => {
+    const fetch = vi.fn().mockRejectedValue(new TypeError('Disconnected'))
+    vi.stubGlobal('fetch', fetch)
+    await expect(
+      generateDocumentSummary(id, new AbortController().signal),
+    ).rejects.toThrow('Refresh the summary')
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+  it('treats a mismatched result as unconfirmed rather than showing it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json({ ...summary, document_id: 'another-document' }),
+        ),
+    )
+    await expect(
+      generateDocumentSummary(id, new AbortController().signal),
+    ).rejects.toThrow('couldn’t confirm')
+  })
+  it.each(['extracted', 'embedded', 'ready'] as const)(
+    'allows generation after text is available: %s',
+    (status) => {
+      expect(canGenerateSummary(status)).toBe(true)
+    },
+  )
+  it.each(['queued', 'processing', 'failed'] as const)(
+    'prevents generation before usable text: %s',
+    (status) => {
+      expect(canGenerateSummary(status)).toBe(false)
+    },
+  )
 })

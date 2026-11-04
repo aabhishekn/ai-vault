@@ -82,7 +82,7 @@ export function DocumentDetails({
                 <dd>{state.document.id}</dd>
               </div>
             </dl>
-            <DocumentSummary id={id} />
+            <DocumentSummary id={id} documentStatus={state.document.status} />
           </>
         )}
         <div className="details-footer">

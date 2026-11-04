@@ -32,7 +32,18 @@
 .summary-content {
   white-space: pre-wrap;
 }
-.summary-header .button[aria-disabled='true'] {
+.document-summary .button[aria-disabled='true'] {
   opacity: 0.6;
   cursor: wait;
+}
+
+.summary-generation-note {
+  margin-top: 12px;
+}
+.summary-generate {
+  margin-top: 16px;
+}
+#summary-heading:focus-visible {
+  outline: 3px solid #b46d36;
+  outline-offset: 5px;
 }

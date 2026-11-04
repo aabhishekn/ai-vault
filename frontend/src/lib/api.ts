@@ -10,7 +10,7 @@ export class ApiError extends Error {
 export async function requestJson(
   path: `/${string}`,
   signal: AbortSignal,
-  options: { method: 'POST'; body: FormData } | undefined = undefined,
+  options: { method: 'POST'; body?: FormData } | undefined = undefined,
 ): Promise<unknown> {
   const response = await fetch(`/api${path}`, {
     ...options,
