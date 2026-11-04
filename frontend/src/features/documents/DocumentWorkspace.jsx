@@ -9,12 +9,15 @@ import { DocumentUpload } from './DocumentUpload'
 import { MultiDocumentChat } from './MultiDocumentChat'
 
 import { useDocuments } from './useDocuments'
+import { useQueueHealth } from '../health/useQueueHealth'
+import { WorkerNotice } from '../health/WorkerNotice'
 import { useLiveUpdates } from './useLiveUpdates'
 
 const MAX_CHOSEN = 10
 
 export function DocumentWorkspace() {
   const documents = useDocuments()
+  const queue = useQueueHealth()
   const [selectedId, setSelectedId] = useState(null)
   // Documents chosen for a question across several (id -> filename).
   const [chosen, setChosen] = useState(new Map())
@@ -68,6 +71,7 @@ export function DocumentWorkspace() {
   return (
     <>
       <DocumentUpload onUploaded={() => documents.goToPage(0)} />
+      <WorkerNotice health={queue} />
       {chosen.size > 0 && (
         <div
           className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-evidence-border bg-[#f7f8f1] px-4 py-3 text-[13px]"

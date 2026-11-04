@@ -13,3 +13,8 @@ async def health() -> dict[str, str]:
 @router.get("/health/db")
 def database_health() -> dict[str, str]:
     return service.database_health()
+
+
+@router.get("/health/queue")
+def queue_health() -> dict[str, str | int]:
+    return service.queue_health()

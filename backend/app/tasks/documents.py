@@ -42,11 +42,6 @@ class ChunkEmbedding:
     model: str
 
 
-def greet(name: str) -> str:
-    """Small queue demo used by the learning CLI."""
-    return f"Hello, {name}! Your background worker is running."
-
-
 def _claim_document(context: ProcessingContext) -> tuple[str | None, str]:
     """Atomically claim one document and start its attempt; duplicates are skipped."""
     with Session(engine) as session:

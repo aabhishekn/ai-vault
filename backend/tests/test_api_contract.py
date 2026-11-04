@@ -5,6 +5,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.core.errors import (
     ConflictError,
@@ -32,6 +33,7 @@ class APIContractTests(unittest.TestCase):
         expected = {
             ("GET", "/health"),
             ("GET", "/health/db"),
+            ("GET", "/health/queue"),
             ("GET", "/documents"),
             ("POST", "/documents"),
             ("GET", "/documents/{document_id}"),
@@ -99,6 +101,32 @@ class APIContractTests(unittest.TestCase):
                     response = self.client.delete(f"/documents/{self.identifier}")
                 self.assertEqual(response.status_code, error.status_code)
                 self.assertEqual(response.json(), {"detail": error.detail})
+
+    def test_queue_health_reports_workers_and_backlog(self):
+        for workers, expected in [(2, "ok"), (0, "no_workers")]:
+            with self.subTest(workers=workers):
+                with (
+                    patch("app.services.health.Worker.count", return_value=workers),
+                    patch("app.services.health.document_queue") as queue,
+                ):
+                    queue.count = 3
+                    response = self.client.get("/health/queue")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    response.json(),
+                    {
+                        "status": expected,
+                        "redis": "connected",
+                        "workers": workers,
+                        "queued_jobs": 3,
+                    },
+                )
+
+    def test_queue_health_is_503_when_redis_is_unreachable(self):
+        with patch("app.services.health.Worker.count", side_effect=RedisConnectionError("down")):
+            response = self.client.get("/health/queue")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"detail": "Job queue unavailable"})
 
     def test_queue_failure_preserves_recovery_document_id(self):
         detail = {

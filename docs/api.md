@@ -73,40 +73,30 @@ Redis uses append-only persistence in the `redis_data` volume and `noeviction` t
 
 To start both supporting services, use `docker compose up -d --wait`. To stop them, use `docker compose stop`. Avoid `docker compose down -v` unless you intend to delete both database and Redis data.
 
-## Run the first background job
+## Run the background worker
 
-With Redis running, open a terminal in `backend/` and activate `.venv`:
+Uploads return as soon as the file is saved and a job is queued; a separate worker process does the processing. With Redis running, open a terminal in `backend/`, activate `.venv` and start it:
 
 ```bash
 source .venv/bin/activate
-python -m app.cli.enqueue_demo
-```
-
-This puts `app.tasks.documents.greet("Abhishek")` on the `documents` queue and prints its job ID. It does not execute the function in that terminal. Start the worker in another terminal from `backend/`, also with the virtual environment active:
-
-```bash
 python -m app.worker
 ```
 
-The worker executes the queued function and logs a successful completion. Leave it running to pick up more jobs, or stop it with Ctrl+C. For a one-off check, `python -m app.worker --burst` processes waiting jobs and exits.
+Leave it running to pick up jobs, or stop it with Ctrl+C. `python -m app.worker --burst` processes the waiting jobs and exits. Restart the worker after changing its code.
 
-To inspect the result within one hour, replace the placeholder with the printed ID:
+Without a worker, uploaded documents stay `queued`. `GET /health/queue` reports whether one is running (see below) and the web UI shows a notice when none is.
 
-```bash
-python - <<'PY'
-from rq.job import Job
-from rq.serializers import JSONSerializer
-from app.tasks.queue import redis_connection
+`app/tasks/queue.py` shares the Redis connection and queue between producers and workers. Set `REDIS_URL` in the root `.env` to override the local default. Jobs use JSON serialization on both sides. The worker uses RQ's `SpawnWorker`, which avoids unsafe forking on macOS; see the [RQ worker documentation](https://python-rq.org/docs/workers/#spawnworker).
 
-job = Job.fetch("YOUR_JOB_ID", connection=redis_connection, serializer=JSONSerializer)
-print(job.get_status())
-print(job.return_value())
-PY
+### Queue health
+
+`GET /health/queue` checks Redis and counts the workers listening on the `documents` queue:
+
+```json
+{"status": "ok", "redis": "connected", "workers": 1, "queued_jobs": 0}
 ```
 
-The completed job returns `Hello, Abhishek! Your background worker is running.` Its result expires after one hour. This demo does not process documents, change document statuses, or call an AI API.
-
-`app/tasks/queue.py` shares the Redis connection and queue between producers and workers. Set `REDIS_URL` in the root `.env` to override the local default. Jobs use JSON serialization on both sides. The worker uses RQ's `SpawnWorker`, which avoids unsafe forking on macOS; see the [RQ worker documentation](https://python-rq.org/docs/workers/#spawnworker). Restart the worker after changing its code.
+`status` is `no_workers` (HTTP 200) when Redis is reachable but no worker is registered, so queued documents will not move. If Redis cannot be reached it returns 503. A worker that was killed without shutting down stays counted until its registration expires (a few minutes), so a recent crash can briefly still read as `ok`.
 
 ## Extract PDF text locally
 

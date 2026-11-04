@@ -81,6 +81,7 @@ Routes delegate to services. Services coordinate database access and provider ad
 | Upload/list/get | `POST /documents`, `GET /documents`, `GET /documents/{id}` |
 | Retry processing | `POST /documents/{id}/reprocess` |
 | Delete | `DELETE /documents/{id}` (`?all_versions=true` removes every version) |
+| Health | `GET /health`, `GET /health/db`, `GET /health/queue` (Redis and whether a worker is running) |
 | Semantic search | `POST /documents/{id}/search` |
 | One question with citations | `POST /documents/{id}/ask` |
 | Real-time updates | `WS /ws/events` (status changes pushed from the worker through Redis) |
@@ -179,10 +180,9 @@ python -m alembic check
 
 Tests run with pytest (the suite is written with `unittest` classes and `pytest` collects them; `python -m unittest discover -s tests` also works). Database integration tests require local PostgreSQL with migrations applied and use their own records or temporary tables. Tests mock paid provider requests. GitHub Actions runs formatting, lint, migration replay and the complete test suite against PostgreSQL/pgvector and Redis. To format an edit, run `python -m ruff format .`.
 
-For the queue demo or recovery of a saved queued/failed upload:
+To recover a saved queued/failed upload from the command line (the web UI's **Process again** and `POST /documents/{id}/reprocess` do the same):
 
 ```bash
-python -m app.cli.enqueue_demo
 python -m app.cli.enqueue_document DOCUMENT_UUID
 python -m app.worker --burst
 ```

@@ -27,16 +27,23 @@ function documentNamed(id, status = 'embedded') {
   }
 }
 
-function serve(items) {
+const RUNNING = { status: 'ok', redis: 'connected', workers: 1, queued_jobs: 0 }
+
+function serve(items, queue = RUNNING) {
   vi.stubGlobal(
     'fetch',
-    vi.fn((url) =>
-      Promise.resolve(
-        String(url).includes('/documents')
+    vi.fn((url) => {
+      const path = String(url)
+      if (path.includes('/health/queue'))
+        return Promise.resolve(
+          queue ? Response.json(queue) : new Response('down', { status: 503 }),
+        )
+      return Promise.resolve(
+        path.includes('/documents')
           ? Response.json({ items, total: items.length, limit: 10, offset: 0 })
           : Response.json({ categories: [], tags: [] }),
-      ),
-    ),
+      )
+    }),
   )
 }
 
@@ -68,5 +75,40 @@ describe('document workspace selection hint', () => {
     render(createElement(DocumentWorkspace))
     await screen.findByText('a.pdf')
     expect(screen.queryByText(hint)).toBeNull()
+  })
+})
+
+describe('background worker notice', () => {
+  beforeEach(() => {
+    vi.stubGlobal('WebSocket', IdleSocket)
+  })
+
+  const notice = /background worker is not running/i
+
+  it('warns that uploads will stay queued when no worker is running', async () => {
+    serve([documentNamed('a')], {
+      status: 'no_workers',
+      redis: 'connected',
+      workers: 0,
+      queued_jobs: 2,
+    })
+    render(createElement(DocumentWorkspace))
+    const warning = await screen.findByText(notice)
+    expect(warning.textContent).toMatch(/2 waiting now/)
+    expect(warning.textContent).toMatch(/python -m app\.worker/)
+  })
+
+  it('stays quiet when a worker is running', async () => {
+    serve([documentNamed('a')])
+    render(createElement(DocumentWorkspace))
+    await screen.findByText('a.pdf')
+    expect(screen.queryByText(notice)).toBeNull()
+  })
+
+  it('never warns when the check itself fails', async () => {
+    serve([documentNamed('a')], null)
+    render(createElement(DocumentWorkspace))
+    await screen.findByText('a.pdf')
+    expect(screen.queryByText(notice)).toBeNull()
   })
 })

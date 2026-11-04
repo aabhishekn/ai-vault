@@ -75,6 +75,7 @@ The hook prevents duplicate submissions, times out after two minutes, and cancel
 - `src/features/documents/upload.js`: upload validation and multipart API request.
 - `src/features/documents/useUploadDocument.js`: upload lifecycle, timeout, duplicate-submit guard, and cancellation.
 - `src/features/documents/DocumentUpload.jsx`: accessible file picker, form, and feedback.
+- `src/features/health/queue.js`, `useQueueHealth.js` and `WorkerNotice.jsx`: polls `GET /health/queue` every 30 s and shows a notice when no worker is running; a failed check shows nothing.
 - `src/features/documents/manage.js` and `DocumentActions.jsx`: Process again (failed or text-only documents) and permanent delete behind an inline confirmation; delete removes every version, and a document that is already gone counts as deleted.
 - `src/features/documents/`: document types, validated API requests, loading/pagination hook, list, rows, and status badges.
 - `src/components/`: shared UI primitives such as Button.
