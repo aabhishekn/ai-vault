@@ -1,5 +1,6 @@
-import { ApiError } from '../../lib/api'
+import { ApiError, requestJson } from '../../lib/api'
 import { getSavedDocumentContent } from './savedContent'
+import type { DocumentStatus } from './types'
 
 export type DocumentInsight = {
   text: string
@@ -31,6 +32,10 @@ export async function getSavedInsights(
 ): Promise<SavedInsights | null> {
   const data = await getSavedDocumentContent(id, 'insights', signal)
   if (data === undefined) return null
+  return parseInsights(data, id)
+}
+
+function parseInsights(data: unknown, id: string): SavedInsights {
   if (
     typeof data !== 'object' ||
     data === null ||
@@ -45,4 +50,41 @@ export async function getSavedInsights(
     )
   }
   return { document_id: id, insights: data.insights }
+}
+
+export function canGenerateInsights(status: DocumentStatus): boolean {
+  return status === 'extracted' || status === 'embedded' || status === 'ready'
+}
+
+export async function generateDocumentInsights(
+  id: string,
+  signal: AbortSignal,
+): Promise<SavedInsights> {
+  try {
+    const data = await requestJson(
+      `/documents/${encodeURIComponent(id)}/insights`,
+      signal,
+      { method: 'POST' },
+    )
+    return parseInsights(data, id)
+  } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      if (error.status === 404)
+        throw new ApiError(
+          'This document could not be found. Close this view and refresh the document list.',
+        )
+      if (error.status === 409)
+        throw new ApiError(
+          'Document text is not ready or has changed. Refresh document details and check for saved insights before trying again.',
+        )
+      if (error.status === 413)
+        throw new ApiError(
+          'This document exceeds the current insight size limit. Try a shorter document.',
+        )
+    }
+    // A disconnect can happen after the server saves the result. Do not retry.
+    throw new ApiError(
+      'We couldn’t confirm insight generation. Refresh insights to check for a saved result before generating again.',
+    )
+  }
 }

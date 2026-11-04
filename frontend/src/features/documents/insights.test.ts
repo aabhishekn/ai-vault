@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getSavedInsights } from './insights'
+import {
+  canGenerateInsights,
+  generateDocumentInsights,
+  getSavedInsights,
+} from './insights'
 
 const id = 'insights-document'
 const insight = {
@@ -93,4 +97,79 @@ describe('saved insights API', () => {
     ).rejects.toThrow('document service is unavailable')
     expect(fetch).toHaveBeenCalledTimes(1)
   })
+})
+
+describe('insight generation API', () => {
+  it('posts once with no body and validates source citations', async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json(saved))
+    vi.stubGlobal('fetch', fetch)
+    const signal = new AbortController().signal
+    await expect(generateDocumentInsights(id, signal)).resolves.toEqual(saved)
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      `/api/documents/${id}/insights`,
+      {
+        method: 'POST',
+        signal,
+        headers: { Accept: 'application/json' },
+      },
+    )
+  })
+  it('accepts a saved empty result without treating it as ungenerated', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(Response.json({ ...saved, insights: [] })),
+    )
+    await expect(
+      generateDocumentInsights(id, new AbortController().signal),
+    ).resolves.toEqual({ ...saved, insights: [] })
+  })
+  it.each([
+    [404, 'document could not be found'],
+    [409, 'text is not ready or has changed'],
+    [413, 'insight size limit'],
+    [502, 'couldn’t confirm insight generation'],
+    [503, 'couldn’t confirm insight generation'],
+  ])('reports HTTP %i safely without retrying', async (status, message) => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json({ detail: 'private provider details' }, { status }),
+      )
+    vi.stubGlobal('fetch', fetch)
+    await expect(
+      generateDocumentInsights(id, new AbortController().signal),
+    ).rejects.toThrow(message)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+  it.each([
+    null,
+    { ...saved, document_id: 'wrong-document' },
+    { ...saved, insights: [{ ...insight, page_number: 0 }] },
+    { ...saved, insights: [{ ...insight, evidence: '' }] },
+  ])('rejects an invalid generated result as unconfirmed', async (data) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(data)))
+    await expect(
+      generateDocumentInsights(id, new AbortController().signal),
+    ).rejects.toThrow('Refresh insights')
+  })
+  it('does not retry after a disconnect', async () => {
+    const fetch = vi.fn().mockRejectedValue(new TypeError('Disconnected'))
+    vi.stubGlobal('fetch', fetch)
+    await expect(
+      generateDocumentInsights(id, new AbortController().signal),
+    ).rejects.toThrow('Refresh insights')
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+  it.each(['extracted', 'embedded', 'ready'] as const)(
+    'allows generation with usable text: %s',
+    (status) => {
+      expect(canGenerateInsights(status)).toBe(true)
+    },
+  )
+  it.each(['queued', 'processing', 'failed'] as const)(
+    'blocks generation without usable text: %s',
+    (status) => {
+      expect(canGenerateInsights(status)).toBe(false)
+    },
+  )
 })

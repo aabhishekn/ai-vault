@@ -103,7 +103,7 @@ export function DocumentDetails({
               </div>
             </dl>
             <DocumentSummary id={id} documentStatus={state.data.status} />
-            <DocumentInsights id={id} />
+            <DocumentInsights id={id} documentStatus={state.data.status} />
           </>
         )}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule pt-5 [&_p]:text-[11px] [&_p]:text-muted">

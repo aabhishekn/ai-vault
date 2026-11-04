@@ -102,7 +102,7 @@ export function DocumentSummary({
       )}
       {state.status === 'success' && (
         <p className="text-[13px] leading-[1.9] wrap-anywhere whitespace-pre-wrap">
-          {state.summary.summary}
+          {state.data.summary}
         </p>
       )}
     </section>

@@ -1,33 +1,43 @@
+import { useRef } from 'react'
 import { Button } from '../../components/Button'
-import { useResource } from '../../hooks/useResource'
-import { getSavedInsights } from './insights'
+import { canGenerateInsights } from './insights'
+import type { DocumentStatus } from './types'
+import { useDocumentInsights } from './useDocumentInsights'
 
-export function DocumentInsights({ id }: { id: string }) {
-  const { state, refresh } = useResource(
-    id,
-    getSavedInsights,
-    'We couldn’t load the saved insights. Check your connection and try again.',
-  )
-  const loading = state.status === 'loading'
+export function DocumentInsights({
+  id,
+  documentStatus,
+}: {
+  id: string
+  documentStatus: DocumentStatus
+}) {
+  const { state, refresh, generate } = useDocumentInsights(id, documentStatus)
+  const heading = useRef<HTMLHeadingElement>(null)
+  const busy = state.status === 'loading' || state.status === 'generating'
+  const canGenerate = canGenerateInsights(documentStatus)
   const saved = state.status === 'success' ? state.data : null
   return (
     <section
       className="border-t border-rule py-6"
       aria-labelledby="insights-heading"
-      aria-busy={loading}
+      aria-busy={busy}
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 [&_h3]:text-[15px] [&_h3]:font-semibold">
-        <h3 id="insights-heading">Saved insights</h3>
+        <h3 ref={heading} tabIndex={-1} id="insights-heading">
+          Insights
+        </h3>
         <Button
           onClick={() => {
-            if (!loading) refresh()
+            if (!busy) refresh()
           }}
-          aria-disabled={loading}
+          aria-disabled={busy}
         >
-          {state.status === 'error' ? 'Retry insights' : 'Refresh insights'}
+          {state.status === 'error'
+            ? 'Check saved insights'
+            : 'Refresh insights'}
         </Button>
       </div>
-      {loading && (
+      {state.status === 'loading' && (
         <p className="text-[13px] leading-[1.9] text-muted" role="status">
           Loading saved insights…
         </p>
@@ -37,9 +47,40 @@ export function DocumentInsights({ id }: { id: string }) {
           {state.message}
         </p>
       )}
-      {state.status === 'success' && !saved && (
-        <p className="text-[13px] leading-[1.9] text-muted" role="status">
-          No insights have been saved for this document yet.
+      {state.status === 'empty' && (
+        <div>
+          <p className="text-[13px] leading-[1.9] text-muted" role="status">
+            No insights have been saved for this document yet.
+          </p>
+          <p
+            className="mt-3 text-[13px] leading-[1.9] text-muted"
+            id="insights-generation-note"
+          >
+            {canGenerate
+              ? 'Generate insights with page references using AI. Document text is sent to your configured AI provider and API charges may apply.'
+              : 'Insights need extracted document text. Refresh document details after processing finishes.'}
+          </p>
+        </div>
+      )}
+      {(state.status === 'empty' || state.status === 'generating') && (
+        <Button
+          className="mt-4"
+          aria-disabled={!canGenerate || busy}
+          aria-describedby={
+            state.status === 'empty' ? 'insights-generation-note' : undefined
+          }
+          onClick={async () => {
+            if (!canGenerate || busy) return
+            await generate()
+            heading.current?.focus()
+          }}
+        >
+          {state.status === 'generating' ? 'Generating…' : 'Generate insights'}
+        </Button>
+      )}
+      {state.status === 'generating' && (
+        <p className="mt-3 text-[13px] leading-[1.9] text-muted" role="status">
+          Generating your insights. Keep this view open; this may take a moment.
         </p>
       )}
       {saved && saved.insights.length === 0 && (

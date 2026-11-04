@@ -33,26 +33,32 @@ The backend returns 404 for both a missing summary and a missing document. On th
 
 When no saved summary exists, **Generate summary** is available for documents whose status is extracted, embedded, or ready. Its cost note explains that document text is sent to the configured AI provider and API charges may apply. A click submits `POST /documents/{id}/summary`; opening details and refreshing continue to use GET only. Completed results are cached by the backend and immediately shown in the summary section.
 
-The summary hook owns both reading and generation. A request ref prevents repeated submissions, refresh is unavailable while generation runs, and generation has a two-minute browser timeout. A failed or unconfirmed generation must be followed by **Check saved summary** before the UI allows another attempt. No frontend generation request is automatically retried. Closing or refreshing document details cancels the browser request; the server may still finish saving the result. Concurrent requests from other tabs can still generate more than once before a cache entry exists; backend deduplication is not implemented here.
+The summary hook configures the shared generated-content lifecycle, which owns both reading and generation. A request ref prevents repeated submissions, refresh is unavailable while generation runs, and generation has a two-minute browser timeout. A failed or unconfirmed generation must be followed by **Check saved summary** before the UI allows another attempt. No frontend generation request is automatically retried. Closing or refreshing document details cancels the browser request; the server may still finish saving the result. Concurrent requests from other tabs can still generate more than once before a cache entry exists; backend deduplication is not implemented here.
 
 ## Saved insights
 
-Document details include **Saved insights**, loaded independently from metadata and the summary. Each card displays the insight, source page number, and quoted evidence as plain text. **Refresh insights** reads the saved result without calling the AI provider. No saved insights, a saved empty result, malformed data, and service failures are handled separately. Generation of insights is a subsequent step.
+Document details include **Insights**, loaded independently from metadata and the summary. Each card displays the insight, source page number, and quoted evidence as plain text. **Refresh insights** reads the saved result without calling the AI provider. No saved insights, a saved empty result, malformed data, and service failures are handled separately. When no saved result exists and extracted text is available, **Generate insights** sends one POST request. Its note explains document-text sharing and possible API charges. Results appear immediately with page references and evidence. A saved empty result is shown explicitly and does not offer regeneration.
 
 The insights API validates the selected document ID, nonempty insight/evidence text, and positive integer page numbers. It shares the missing-content lookup with summaries so a deleted document is not presented as simply missing generated content. Page labels are references, not PDF navigation links; PDF preview is not implemented.
+
+## Generate insights
+
+`POST /documents/{id}/insights` uses the existing backend generation and cache. Opening details and refreshing insights use GET only. Eligibility matches summary generation: extracted, embedded, or ready. The shared lifecycle blocks duplicate submissions and refresh while generating, applies a two-minute browser timeout, and cancels pending requests when details close or the document changes. After failure, **Check saved insights** must finish before another generation can be attempted. The server may still save a result after browser cancellation; requests from other tabs are not deduplicated by this frontend guard.
 
 ## Structure
 
 - `src/app/`: application layout.
 - `src/features/documents/DocumentWorkspace.tsx`: composes upload, list, and details; owns list state and selected document ID.
 - `src/features/documents/summary.ts`: validated read/generation requests, processing-status eligibility, and safe API errors.
-- `src/features/documents/useDocumentSummary.ts`: summary loading, generation, cancellation, refresh, and submission guard.
+- `src/features/documents/useDocumentSummary.ts`: summary lifecycle configuration through the shared generated-content hook.
 - `src/features/documents/DocumentSummary.tsx`: summary, empty state, and retry UI.
 - `src/features/documents/useDocument.ts`: metadata loading through the shared resource hook.
-- `src/features/documents/insights.ts`: saved-insights validation and API requests.
-- `src/features/documents/DocumentInsights.tsx`: independent insight cards, empty states, and retry.
+- `src/features/documents/insights.ts`: saved/generated insight validation, processing-status eligibility, and safe API requests.
+- `src/features/documents/useDocumentInsights.ts`: insight lifecycle configuration.
+- `src/features/documents/useGeneratedDocumentContent.ts`: shared saved-content reads and explicit generation, with request guards, timeouts, cancellation, and document isolation.
+- `src/features/documents/DocumentInsights.tsx`: independent insight cards, generation, empty states, and recovery.
 - `src/features/documents/savedContent.ts`: shared summary/insights missing-content handling.
-- `src/hooks/useResource.ts`: read-only loading, timeout, cancellation, key isolation, and refresh for metadata and insights.
+- `src/hooks/useResource.ts`: metadata loading, timeout, cancellation, key isolation, and refresh.
 - `src/features/documents/DocumentDetails.tsx`: metadata dialog and focus lifecycle.
 - `src/features/documents/upload.ts`: upload validation and multipart API request.
 - `src/features/documents/useUploadDocument.ts`: upload lifecycle, timeout, duplicate-submit guard, and cancellation.
@@ -85,4 +91,4 @@ npm test
 npm run build
 ```
 
-Vitest verifies response validation, pagination parameters, cancellation signal forwarding, safe error messages, upload size boundaries, multipart data, and unconfirmed saves and saved-summary contracts without live API calls. CI runs all four checks. TypeScript strict mode is enabled. The lockfile pins installed dependencies; use `npm ci` for repeatable installs. The proxy applies to the development server. A production deployment will need its own `/api` routing; deployment is not configured in this step.
+Vitest verifies response validation, pagination parameters, cancellation signal forwarding, safe error messages, upload size boundaries, multipart data, unconfirmed saves, and summary/insight generation contracts without live API calls. React Testing Library also checks lifecycle guards, cancellation, document switching, recovery, citation rendering, and focus after generation. CI runs all four checks. TypeScript strict mode is enabled. The lockfile pins installed dependencies; use `npm ci` for repeatable installs. The proxy applies to the development server. A production deployment will need its own `/api` routing; deployment is not configured in this step.
