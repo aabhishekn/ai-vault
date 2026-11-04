@@ -1,9 +1,9 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Button } from '../../components/Button'
 import { AnswerResult } from './AnswerResult'
 import { canAskDocument, MAX_QUESTION_LENGTH } from './answers'
 import type { DocumentStatus } from './types'
-import { useDocumentAnswer } from './useDocumentAnswer'
+import { useDocumentChat } from './useDocumentChat'
 
 export function DocumentQuestion({
   id,
@@ -13,17 +13,26 @@ export function DocumentQuestion({
   documentStatus: DocumentStatus
 }) {
   const [question, setQuestion] = useState('')
-  const { state, ask } = useDocumentAnswer(id, documentStatus)
-  const heading = useRef<HTMLHeadingElement>(null)
-  const busy = state.status === 'asking'
+  const { turns, pendingQuestion, error, send } = useDocumentChat(
+    id,
+    documentStatus,
+  )
+  const input = useRef<HTMLTextAreaElement>(null)
+  const busy = pendingQuestion !== null
   const eligible = canAskDocument(documentStatus)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!eligible || busy) return
-    await ask(question)
-    heading.current?.focus()
+    if (await send(question)) setQuestion('')
   }
+
+  // The field is disabled while busy, so focus only once it is enabled again.
+  const wasBusy = useRef(false)
+  useEffect(() => {
+    if (wasBusy.current && !busy) input.current?.focus()
+    wasBusy.current = busy
+  }, [busy])
 
   return (
     <section
@@ -31,12 +40,7 @@ export function DocumentQuestion({
       aria-labelledby="question-heading"
       aria-busy={busy}
     >
-      <h3
-        ref={heading}
-        tabIndex={-1}
-        id="question-heading"
-        className="mb-3 text-[15px] font-semibold"
-      >
+      <h3 id="question-heading" className="mb-3 text-[15px] font-semibold">
         Ask this document
       </h3>
       <p
@@ -44,17 +48,45 @@ export function DocumentQuestion({
         className="mb-4 text-[13px] leading-[1.8] text-muted"
       >
         {eligible
-          ? 'Ask a question and get an answer supported by passages from this document.'
+          ? 'Ask a question, then ask follow-ups. Each answer is supported by cited passages from this document.'
           : 'Questions need indexed document text. Refresh document details once processing finishes and the document is search ready.'}
       </p>
-      <form onSubmit={(event) => void submit(event)} noValidate>
+      <div role="log" aria-label="Conversation" aria-live="polite">
+        <ol className="grid list-none gap-6">
+          {turns.map((turn) => (
+            <li key={turn.id}>
+              <AnswerResult result={turn.answer} />
+            </li>
+          ))}
+        </ol>
+        {busy && (
+          <p
+            className="mt-4 text-[13px] leading-[1.8] text-muted"
+            role="status"
+          >
+            Finding relevant passages for “{pendingQuestion}”. Keep this view
+            open; this may take a moment.
+          </p>
+        )}
+      </div>
+      {error && (
+        <p className="mt-4 text-[13px] leading-[1.8] text-error" role="alert">
+          {error}
+        </p>
+      )}
+      <form
+        className="mt-6"
+        onSubmit={(event) => void submit(event)}
+        noValidate
+      >
         <label
           htmlFor="document-question"
           className="mb-2 block text-xs font-semibold"
         >
-          Your question
+          {turns.length ? 'Your follow-up question' : 'Your question'}
         </label>
         <textarea
+          ref={input}
           id="document-question"
           rows={3}
           maxLength={MAX_QUESTION_LENGTH}
@@ -66,14 +98,15 @@ export function DocumentQuestion({
           onChange={(event) => setQuestion(event.currentTarget.value)}
         />
         <p id="question-cost" className="mt-2 text-xs leading-[1.8] text-muted">
-          Your question and relevant document text are sent to your configured
-          AI provider. API charges may apply.
+          Your question, recent conversation, and relevant document text are
+          sent to your configured AI provider. API charges may apply.
         </p>
         <p
           id="question-context"
           className="mt-2 text-xs leading-[1.8] text-muted"
         >
-          Each question is independent. Closing details clears this answer.
+          The conversation is saved on the server. Closing details clears this
+          view.
         </p>
         <Button
           type="submit"
@@ -83,18 +116,6 @@ export function DocumentQuestion({
           {busy ? 'Finding an answer…' : 'Ask question'}
         </Button>
       </form>
-      {state.status === 'asking' && (
-        <p className="mt-4 text-[13px] leading-[1.8] text-muted" role="status">
-          Finding relevant passages and preparing your answer. Keep this view
-          open; this may take a moment.
-        </p>
-      )}
-      {state.status === 'error' && (
-        <p className="mt-4 text-[13px] leading-[1.8] text-error" role="alert">
-          {state.message}
-        </p>
-      )}
-      {state.status === 'success' && <AnswerResult result={state.data} />}
     </section>
   )
 }

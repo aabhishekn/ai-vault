@@ -47,11 +47,11 @@ The insights API validates the selected document ID, nonempty insight/evidence t
 
 ## Ask a document
 
-**Ask this document** supports independent questions for `embedded` and `ready` documents. Other statuses show why questions are unavailable. The form validates trimmed, nonempty questions up to 2,000 characters and sends `POST /documents/{id}/ask` as JSON with `top_k: 3`. No request runs on mount. Questions use the configured AI provider for retrieval and answer generation; the form explains text sharing and possible charges.
+**Ask this document** is a saved multi-turn conversation for `embedded` and `ready` documents. Other statuses show why questions are unavailable. The form validates trimmed, nonempty questions up to 2,000 characters and sends `POST /documents/{id}/conversations` once, on the first question, then `POST /conversations/{id}/messages` as JSON with `top_k: 3` for each question and follow-up. No request runs on mount. Questions use the configured AI provider for retrieval and answer generation; the form explains text sharing and possible charges.
 
 Answers show the submitted question, plain-text response, and expandable sources labelled with the same citation numbers and page numbers used in the answer. Citation text is the backend's retrieved passage. The client checks the returned document ID, echoed question, citation fields, uniqueness, and correspondence between answer labels and source numbers before displaying a result. Insufficient evidence has its own state and no invented source links.
 
-The hook prevents duplicate submissions, times out after two minutes, and cancels browser requests when details close or change documents. Failures are not retried automatically; submitting again starts a new request and may incur charges. The server may finish work after browser cancellation. Each question is independent, and the answer is not stored by this endpoint; saved multi-turn conversations are a separate future step. Draft edits do not relabel an existing answer, and closing or refreshing details clears the question UI.
+The hook prevents duplicate submissions, times out after two minutes, and cancels browser requests when details close or change documents. Failures are not retried automatically; submitting again starts a new request and may incur charges. The server may finish work after browser cancellation. Turns are saved on the server and the backend uses the latest three as follow-up context, but the UI does not reload earlier conversations: closing or refreshing details clears the view and the next question starts a new conversation. A failed follow-up keeps the draft and earlier turns. Draft edits do not relabel an existing answer.
 
 ## Structure
 

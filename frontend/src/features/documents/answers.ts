@@ -1,4 +1,4 @@
-import { ApiError, requestJson } from '../../lib/api'
+import { ApiError } from '../../lib/api'
 import type { DocumentStatus } from './types'
 
 export type AnswerCitation = {
@@ -47,7 +47,7 @@ function isCitation(value: unknown): value is AnswerCitation {
   )
 }
 
-function parseAnswer(
+export function parseAnswer(
   data: unknown,
   id: string,
   question: string,
@@ -99,42 +99,23 @@ function parseAnswer(
   }
 }
 
-export async function askDocument(
-  id: string,
-  question: string,
-  signal: AbortSignal,
-): Promise<DocumentAnswer> {
-  const validationError = validateQuestion(question)
-  if (validationError) throw new ApiError(validationError)
-  const normalized = question.trim()
-  try {
-    const data = await requestJson(
-      `/documents/${encodeURIComponent(id)}/ask`,
-      signal,
-      {
-        method: 'POST',
-        json: { question: normalized, top_k: 3 },
-      },
-    )
-    return parseAnswer(data, id, normalized)
-  } catch (error: unknown) {
-    if (error instanceof ApiError) {
-      if (error.status === 404)
-        throw new ApiError(
-          'This document could not be found. Close this view and refresh the document list.',
-        )
-      if (error.status === 409)
-        throw new ApiError(
-          'This document is not ready for questions. Refresh document details and wait until it is search ready.',
-        )
-      if (error.status === 422)
-        throw new ApiError(
-          'The question was not accepted. Enter a question within 2,000 characters.',
-        )
-      if (error.status === undefined) throw error
-    }
-    throw new ApiError(
-      'We couldn’t complete your answer. Check your connection and try again when the document service is available.',
-    )
+export function toAnswerError(error: unknown): ApiError {
+  if (error instanceof ApiError) {
+    if (error.status === 404)
+      return new ApiError(
+        'This document could not be found. Close this view and refresh the document list.',
+      )
+    if (error.status === 409)
+      return new ApiError(
+        'This document is not ready for questions, or the conversation changed. Refresh document details and try again.',
+      )
+    if (error.status === 422)
+      return new ApiError(
+        'The question was not accepted. Enter a question within 2,000 characters.',
+      )
+    if (error.status === undefined) return error
   }
+  return new ApiError(
+    'We couldn’t complete your answer. Check your connection and try again when the document service is available.',
+  )
 }
