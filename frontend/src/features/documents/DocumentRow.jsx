@@ -5,7 +5,6 @@ import {
 } from '../../lib/format'
 import { canAskDocument } from './answers'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
-import { TagChips } from './TagChips'
 
 export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
   const title = displayTitle(document)
@@ -13,7 +12,7 @@ export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
   const pending = document.pending === true
   return (
     <li
-      className={`grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-4 px-[26px] py-6 not-first:border-t not-first:border-rule max-[600px]:grid-cols-[34px_minmax(0,1fr)] max-[600px]:items-start max-[600px]:gap-3 max-[600px]:px-[18px] max-[600px]:py-[22px] ${pending ? 'animate-pulse motion-reduce:animate-none' : ''}`}
+      className={`grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-4 px-[26px] py-4 not-first:border-t not-first:border-rule max-[600px]:grid-cols-[34px_minmax(0,1fr)] max-[600px]:items-start max-[600px]:gap-3 max-[600px]:px-[18px] max-[600px]:py-4 ${pending ? 'animate-pulse motion-reduce:animate-none' : ''}`}
       aria-busy={pending}
     >
       <span
@@ -61,15 +60,6 @@ export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
             {formatUploadDate(document.created_at)}
           </time>
         </p>
-        {!pending && (
-          <div className="mt-2">
-            <TagChips
-              category={document.category}
-              tags={document.tags}
-              max={3}
-            />
-          </div>
-        )}
       </div>
       <div className="flex items-center gap-3 max-[600px]:col-start-2">
         {onChoose && canAskDocument(document.status) && (

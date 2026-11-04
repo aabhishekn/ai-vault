@@ -47,34 +47,26 @@ function serve(items, queue = RUNNING) {
   )
 }
 
-describe('document workspace selection hint', () => {
+describe('selecting documents', () => {
   beforeEach(() => {
     vi.stubGlobal('WebSocket', IdleSocket)
   })
 
-  // The word "Select" is bold, so match the surrounding text of the paragraph.
-  const hint = /on two or more documents to ask across them/i
-
-  it('explains multi-document actions when two documents can be asked about', async () => {
+  it('shows a selection bar once a document is chosen', async () => {
     serve([documentNamed('a'), documentNamed('b')])
     render(createElement(DocumentWorkspace))
-    expect(await screen.findByText(hint)).toBeTruthy()
-  })
-
-  it('swaps the hint for the selection bar once a document is chosen', async () => {
-    serve([documentNamed('a'), documentNamed('b')])
-    render(createElement(DocumentWorkspace))
-    await screen.findByText(hint)
+    await screen.findByText('a')
+    expect(screen.queryByText(/selected/)).toBeNull()
     fireEvent.click(screen.getAllByRole('checkbox')[0])
-    await waitFor(() => expect(screen.queryByText(hint)).toBeNull())
-    expect(screen.getByText(/1 selected/)).toBeTruthy()
+    await waitFor(() => expect(screen.getByText(/1 selected/)).toBeTruthy())
+    expect(screen.getByRole('button', { name: 'Compare' })).toBeTruthy()
   })
 
-  it('stays out of the way with a single selectable document', async () => {
+  it('only offers Select on documents that can be asked about', async () => {
     serve([documentNamed('a'), documentNamed('b', 'queued')])
     render(createElement(DocumentWorkspace))
     await screen.findByText('a')
-    expect(screen.queryByText(hint)).toBeNull()
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1)
   })
 })
 
@@ -83,7 +75,7 @@ describe('background worker notice', () => {
     vi.stubGlobal('WebSocket', IdleSocket)
   })
 
-  const notice = /background worker is not running/i
+  const notice = /background processing is not running/i
 
   it('warns that uploads will stay queued when no worker is running', async () => {
     serve([documentNamed('a')], {
@@ -94,8 +86,9 @@ describe('background worker notice', () => {
     })
     render(createElement(DocumentWorkspace))
     const warning = await screen.findByText(notice)
-    expect(warning.textContent).toMatch(/2 waiting now/)
-    expect(warning.textContent).toMatch(/python -m app\.worker/)
+    expect(warning.textContent).toMatch(/new uploads will wait in the queue/)
+    // No shell commands on screen: those live in the README.
+    expect(warning.textContent).not.toMatch(/python/)
   })
 
   it('stays quiet when a worker is running', async () => {

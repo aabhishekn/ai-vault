@@ -1,11 +1,10 @@
 import { DocumentWorkspace } from '../features/documents/DocumentWorkspace'
 import { AnalyticsPanel } from '../features/analytics/AnalyticsPanel'
-import { ConnectionDetails } from '../features/health/ConnectionDetails'
 
 export default function App() {
   return (
     <div className="flex min-h-svh flex-col px-[6.5%] max-[600px]:px-[22px]">
-      <header className="flex h-[104px] items-center justify-between border-b border-divider max-[600px]:h-[82px]">
+      <header className="flex h-[76px] items-center justify-between border-b border-divider">
         <a
           className="inline-flex items-center gap-[11px] text-[21px] font-bold tracking-[-0.8px] no-underline"
           href="/"
@@ -28,32 +27,18 @@ export default function App() {
           </span>
           AI Vault
         </a>
-        <span className="inline-flex items-center gap-2 text-xs font-medium text-muted max-[600px]:text-[11px]">
-          <span
-            className="size-1.5 rounded-full bg-[#d97757]"
-            aria-hidden="true"
-          />
-          Local workspace
-        </span>
       </header>
 
-      <main className="mx-auto w-full max-w-[940px] pt-14 pb-[54px] max-[600px]:pt-12">
-        <p className="mb-[18px] text-[11px] font-[650] tracking-[2.3px] text-earth">
-          AI DOCUMENT VAULT
-        </p>
-        <h1 className="font-serif text-[clamp(46px,6vw,68px)] leading-[1.1] font-normal tracking-[-0.03em] max-[600px]:tracking-[-0.025em]">
-          Ask your
-          <br />
-          documents.
+      <main className="mx-auto w-full max-w-[940px] pt-10 pb-[54px]">
+        <h1 className="font-serif text-[clamp(34px,5vw,48px)] leading-[1.1] font-normal tracking-[-0.03em]">
+          Ask your documents.
         </h1>
-        <p className="mt-[22px] mb-[34px] max-w-[520px] text-[15px] leading-[1.75] text-muted">
-          Upload PDFs, get summaries and key insights, then chat with answers
-          that cite the page they came from. Select two or more documents to ask
-          across them or compare.
+        <p className="mt-3 mb-8 max-w-[540px] text-[15px] leading-[1.7] text-muted">
+          Upload PDFs, get summaries and insights, and chat with answers that
+          cite the page they came from.
         </p>
         <DocumentWorkspace />
         <AnalyticsPanel />
-        <ConnectionDetails />
       </main>
 
       <footer className="mt-auto pb-7 text-center text-[11px] tracking-[0.2px] text-muted">

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { ComparisonDialog } from './ComparisonDialog'
-import { canAskDocument } from './answers'
 import { MAX_COMPARED } from './comparison'
 import { DocumentDetails } from './DocumentDetails'
 import { DocumentList } from './DocumentList'
@@ -31,7 +30,7 @@ export function DocumentWorkspace() {
   useEffect(() => {
     selected.current = selectedId
   }, [selectedId])
-  const connected = useLiveUpdates((changed) => {
+  useLiveUpdates((changed) => {
     documents.refreshQuietly()
     const open = selected.current
     if (!open) return
@@ -55,13 +54,6 @@ export function DocumentWorkspace() {
     pushed.id === selectedId ? pushed : { id: '', revision: 0, content: 0 }
   // Upload, delete and "process again" show their result before the server confirms.
   const optimistic = useOptimisticDocuments(documents, selected)
-
-  // Only documents that can be asked about show a Select box.
-  const askableCount =
-    optimistic.view.status === 'success'
-      ? optimistic.view.page.items.filter((item) => canAskDocument(item.status))
-          .length
-      : 0
 
   function choose(document) {
     setChosen((previous) => {
@@ -121,19 +113,12 @@ export function DocumentWorkspace() {
           </span>
         </div>
       )}
-      {chosen.size === 0 && askableCount >= 2 && (
-        <p className="mb-4 rounded-[12px] border border-dashed border-evidence-border px-4 py-3 text-[13px] text-muted">
-          Tip: tick <strong className="font-semibold">Select</strong> on two or
-          more documents to ask across them or compare them.
-        </p>
-      )}
       <DocumentList
         {...documents}
         state={optimistic.view}
         onSelect={setSelectedId}
         chosen={chosen}
         onChoose={choose}
-        live={connected}
       />
       {selectedId && (
         <DocumentDetails

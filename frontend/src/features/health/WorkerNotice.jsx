@@ -6,12 +6,8 @@ export function WorkerNotice({ health }) {
       className="mb-4 rounded-[12px] border border-[#e6d6a8] bg-[#fffaf0] px-4 py-3 text-[13px] leading-[1.7] text-[#6b5a1e]"
       role="status"
     >
-      The background worker is not running, so uploaded documents will stay
-      queued
-      {health.queuedJobs > 0 ? ` (${health.queuedJobs} waiting now)` : ''}.
-      Start it with{' '}
-      <code className="font-mono text-xs">python -m app.worker</code> from{' '}
-      <code className="font-mono text-xs">backend/</code>.
+      Background processing is not running, so new uploads will wait in the
+      queue.
     </p>
   )
 }

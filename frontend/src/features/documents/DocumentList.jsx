@@ -1,5 +1,7 @@
 import { Button } from '../../components/Button'
+import { useState } from 'react'
 import { DocumentFilters } from './DocumentFilters'
+import { hasFilterChoices } from './filters'
 import { DocumentRow } from './DocumentRow'
 import { useTagsOverview } from './useTagsOverview'
 
@@ -12,11 +14,13 @@ export function DocumentList({
   onSelect,
   chosen,
   onChoose,
-  live = false,
 }) {
   const loading = state.status === 'loading'
   const page = state.status === 'success' ? state.page : null
   const overview = useTagsOverview(page)
+  const [showFilters, setShowFilters] = useState(false)
+  const activeFilters =
+    Number(Boolean(filter.category)) + Number(Boolean(filter.tag))
 
   return (
     <section
@@ -26,15 +30,7 @@ export function DocumentList({
     >
       <div className="flex items-center justify-between gap-4 border-b border-rule px-[26px] py-[22px] max-[600px]:p-[18px]">
         <div className="flex items-center gap-2.5 [&_h2]:text-sm [&_h2]:font-semibold">
-          <h2 id="documents-heading">All documents</h2>
-          {live && (
-            <span
-              className="shrink-0 rounded-[7px] bg-success-soft px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-[#3f6338]"
-              title="Status changes appear here as they happen"
-            >
-              ● Live
-            </span>
-          )}
+          <h2 id="documents-heading">Documents</h2>
           {page && (
             <span
               className="grid h-6 min-w-6 shrink-0 place-items-center rounded-[7px] bg-[#f0eee6] px-[7px] text-[11px] text-[#5f5e57]"
@@ -44,29 +40,45 @@ export function DocumentList({
             </span>
           )}
         </div>
-        <Button onClick={refresh} disabled={loading}>
-          <svg
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            aria-hidden="true"
+        <div className="flex items-center gap-2">
+          {hasFilterChoices(overview, filter) && (
+            <Button
+              onClick={() => setShowFilters((previous) => !previous)}
+              aria-expanded={showFilters}
+            >
+              Filter{activeFilters > 0 ? ` · ${activeFilters}` : ''}
+            </Button>
+          )}
+          <Button
+            onClick={refresh}
+            disabled={loading}
+            aria-label="Refresh the list"
+            title="Refresh the list"
           >
-            <path
-              d="M15.5 7a6 6 0 1 0 .3 5M15.5 3.5V7H12"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          {loading ? 'Loading…' : 'Refresh'}
-        </Button>
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden="true"
+            >
+              <path
+                d="M15.5 7a6 6 0 1 0 .3 5M15.5 3.5V7H12"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </Button>
+        </div>
       </div>
 
-      <DocumentFilters
-        overview={overview}
-        filter={filter}
-        onChange={setFilter}
-      />
+      {showFilters && hasFilterChoices(overview, filter) && (
+        <DocumentFilters
+          overview={overview}
+          filter={filter}
+          onChange={setFilter}
+        />
+      )}
 
       {loading && (
         <div

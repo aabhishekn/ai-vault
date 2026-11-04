@@ -2,13 +2,6 @@ const select =
   'rounded-lg border border-panel-border bg-surface px-2.5 py-1.5 text-xs'
 
 export function DocumentFilters({ overview, filter, onChange }) {
-  if (
-    overview.categories.length === 0 &&
-    overview.tags.length === 0 &&
-    !filter.category &&
-    !filter.tag
-  )
-    return null
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-rule px-[26px] py-3 max-[600px]:px-[18px]">
       <label className="flex items-center gap-2 text-xs font-semibold">
