@@ -54,3 +54,10 @@ def database_url() -> URL:
 
 def redis_url() -> str:
     return os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+
+
+def get_api_key() -> str:
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise ConfigurationError("Set OPENAI_API_KEY in the repository root .env file")
+    return api_key
