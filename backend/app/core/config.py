@@ -112,6 +112,11 @@ _RATE_LIMITS = {
 }
 
 
+def embedding_cache_ttl_seconds() -> int:
+    """How long query embeddings stay cached in Redis; 0 turns the cache off."""
+    return _count_setting("EMBEDDING_CACHE_TTL_SECONDS", 86_400)
+
+
 def rate_limiting_enabled() -> bool:
     return _bool_setting("RATE_LIMIT_ENABLED", "true")
 

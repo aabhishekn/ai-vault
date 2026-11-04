@@ -17,6 +17,7 @@ from app.db.database import engine
 from app.db.models import DocumentChunk
 from app.db.queries import get_document_or_raise
 from app.schemas.chat import SearchMatch, SearchRequest, SearchResponse
+from app.services.embedding_cache import cached_query_embedding
 
 
 def require_searchable(session: Session, document_id: UUID) -> None:
@@ -36,14 +37,21 @@ def require_searchable(session: Session, document_id: UUID) -> None:
         raise ConflictError("No compatible document embeddings found")
 
 
+def _embed_query(question: str) -> list[float]:
+    def compute() -> list[float]:
+        batch = generate_embeddings([question])
+        if batch.model != EMBEDDING_MODEL:
+            raise ValueError("Unexpected query embedding model")
+        return batch.vectors[0]
+
+    return cached_query_embedding(question, compute)
+
+
 def search_document(document_id: UUID, request: SearchRequest) -> SearchResponse:
     try:
         with Session(engine) as session:
             require_searchable(session, document_id)
-        batch = generate_embeddings([request.question])
-        if batch.model != EMBEDDING_MODEL:
-            raise ValueError("Unexpected query embedding model")
-        query_vector = batch.vectors[0]
+        query_vector = _embed_query(request.question)
         with Session(engine) as session:
             require_searchable(session, document_id)
             distance = DocumentChunk.embedding.cosine_distance(query_vector)
@@ -52,7 +60,7 @@ def search_document(document_id: UUID, request: SearchRequest) -> SearchResponse
                 .where(
                     DocumentChunk.document_id == document_id,
                     DocumentChunk.embedding.is_not(None),
-                    DocumentChunk.embedding_model == batch.model,
+                    DocumentChunk.embedding_model == EMBEDDING_MODEL,
                 )
                 .order_by(distance, DocumentChunk.chunk_index)
                 .limit(request.top_k)

@@ -143,7 +143,7 @@ This has not been load-tested; the following is how the design is expected to be
 - **Ingestion.** Uploads return as soon as the file is stored and a job is queued, so request time does not grow with document size. Add throughput by running more `python -m app.worker` processes: claiming a document is atomic, duplicate jobs are skipped, and a dead worker's documents are recovered automatically. Embeddings are sent in batches of 64 chunks to limit round trips and cost.
 - **Search.** Retrieval is scoped to one document, so the database compares only that document's few hundred vectors and no vector index is needed yet. Cross-document search would need an HNSW index on the embedding column plus a metadata filter.
 - **Reads.** Lists are paginated, large text columns are not loaded for metadata queries, and statistics are single aggregate queries. At very large scale I would cache or pre-aggregate the statistics and move extracted page text out of the document row.
-- **Caching.** Summaries and insights are generated once and reused. Not yet cached: query embeddings and repeated answers, which I would key by a hash of the normalised question in Redis.
+- **Caching.** Summaries and insights are generated once and reused. Query embeddings are cached in Redis for 24 hours, keyed by a hash of the normalised question plus the model, so repeated or retried questions skip the embedding call. Answers are deliberately not cached: they depend on conversation history and cost more to get wrong.
 - **Cost control.** Small model, output caps, batching, per-IP rate limits and a daily quota, plus `GET /metrics/ai-usage` for estimated spend.
 - **Storage.** Local disk is behind a single save path; S3-compatible storage would replace it for multiple API hosts.
 
