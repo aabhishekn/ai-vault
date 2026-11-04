@@ -37,6 +37,11 @@ def publish_content_ready(document_id: UUID | str) -> None:
     publish_event("document.content", document_id)
 
 
+def publish_updated(document_id: UUID | str) -> None:
+    """A person changed a document's details, such as renaming it."""
+    publish_event("document.updated", document_id)
+
+
 def publish_deleted(document_id: UUID | str) -> None:
     """A document (one version of it) was removed."""
     publish_event("document.deleted", document_id)

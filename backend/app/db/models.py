@@ -29,6 +29,10 @@ class Document(Base):
     __table_args__ = (
         CheckConstraint("size_bytes > 0", name="ck_documents_positive_size"),
         CheckConstraint("version_number >= 1", name="ck_documents_version_number"),
+        CheckConstraint(
+            "title_source IS NULL OR title_source IN ('ai', 'user')",
+            name="ck_documents_title_source",
+        ),
         UniqueConstraint("group_id", "version_number", name="uq_documents_group_version"),
         CheckConstraint(
             "status IN ('queued', 'processing', 'extracted', 'embedded', 'ready', 'failed')",
@@ -39,6 +43,10 @@ class Document(Base):
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     filename: Mapped[str] = mapped_column(String(255))
+    # A readable name to show instead of the file name: written by the AI when the document
+    # is classified, or set by a person (who always wins). Null means "use the file name".
+    title: Mapped[str | None] = mapped_column(String(200))
+    title_source: Mapped[str | None] = mapped_column(String(10))
     storage_path: Mapped[str] = mapped_column(Text, unique=True)
     content_type: Mapped[str] = mapped_column(String(100))
     size_bytes: Mapped[int]

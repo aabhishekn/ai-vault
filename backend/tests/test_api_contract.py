@@ -37,6 +37,7 @@ class APIContractTests(unittest.TestCase):
             ("GET", "/documents"),
             ("POST", "/documents"),
             ("GET", "/documents/{document_id}"),
+            ("PATCH", "/documents/{document_id}"),
             ("DELETE", "/documents/{document_id}"),
             ("POST", "/documents/{document_id}/reprocess"),
             ("POST", "/documents/{document_id}/search"),
@@ -84,6 +85,49 @@ class APIContractTests(unittest.TestCase):
                     response = self.client.get(f"/documents/{self.identifier}")
                 self.assertEqual(response.status_code, error.status_code)
                 self.assertEqual(response.json(), {"detail": error.detail})
+
+    def test_rename_forwards_a_tidied_title_and_null_clears_it(self):
+        with patch("app.services.documents.rename_document") as rename:
+            rename.side_effect = lambda document_id, title: {
+                "id": str(document_id),
+                "filename": "a.pdf",
+                "title": title,
+                "content_type": "application/pdf",
+                "size_bytes": 1,
+                "status": "embedded",
+                "created_at": "2026-11-04T06:00:00Z",
+            }
+            response = self.client.patch(
+                f"/documents/{self.identifier}", json={"title": "  Q3   Budget  Review "}
+            )
+            self.assertEqual(
+                (response.status_code, response.json()["title"]), (200, "Q3 Budget Review")
+            )
+            rename.assert_called_once_with(self.identifier, "Q3 Budget Review")
+            for blank in (None, "", "   "):
+                rename.reset_mock()
+                self.client.patch(f"/documents/{self.identifier}", json={"title": blank})
+                rename.assert_called_once_with(self.identifier, None)
+
+    def test_rename_rejects_a_missing_or_overlong_title(self):
+        with patch("app.services.documents.rename_document") as rename:
+            for body in ({}, {"title": "x" * 121}, {"title": 5}):
+                with self.subTest(body=body):
+                    self.assertEqual(
+                        self.client.patch(f"/documents/{self.identifier}", json=body).status_code,
+                        422,
+                    )
+            rename.assert_not_called()
+
+    def test_rename_renders_service_errors(self):
+        with patch(
+            "app.services.documents.rename_document",
+            side_effect=NotFoundError("Document not found"),
+        ):
+            response = self.client.patch(f"/documents/{self.identifier}", json={"title": "x"})
+        self.assertEqual(
+            (response.status_code, response.json()), (404, {"detail": "Document not found"})
+        )
 
     def test_delete_returns_no_content_and_forwards_the_versions_flag(self):
         with patch("app.services.deletion.delete_document") as delete_document:

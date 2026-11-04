@@ -6,6 +6,7 @@ from app.api.rate_limit import limit
 from app.schemas.documents import (
     DocumentListResponse,
     DocumentResponse,
+    DocumentUpdate,
     DocumentVersionsResponse,
 )
 from app.services import deletion
@@ -22,6 +23,12 @@ def upload_document(file: UploadFile) -> DocumentResponse:
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(document_id: UUID) -> DocumentResponse:
     return service.get_document(document_id)
+
+
+@router.patch("/{document_id}", response_model=DocumentResponse)
+def rename_document(document_id: UUID, update: DocumentUpdate) -> DocumentResponse:
+    """Set the title shown for a document; `{"title": null}` shows the file name again."""
+    return service.rename_document(document_id, update.title)
 
 
 @router.delete("/{document_id}", status_code=204)

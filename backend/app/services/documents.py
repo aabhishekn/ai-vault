@@ -27,7 +27,7 @@ from app.schemas.documents import (
     DocumentVersionsResponse,
 )
 from app.tasks.documents import extract_document
-from app.tasks.events import publish_status
+from app.tasks.events import publish_status, publish_updated
 from app.tasks.queue import document_queue
 
 
@@ -101,14 +101,23 @@ def _save_upload(
                 digest.update(chunk)
         with Session(engine) as session:
             group_id, version_number = document_id, 1
+            title = None
             if parent_id is not None:
                 group_id, version_number = _next_version(session, parent_id, digest.hexdigest())
+                # A name a person chose belongs to the document, so every version keeps it.
+                title = session.scalar(
+                    select(Document.title)
+                    .where(Document.group_id == group_id, Document.title_source == "user")
+                    .limit(1)
+                )
             document = Document(
                 id=document_id,
                 group_id=group_id,
                 version_number=version_number,
                 content_hash=digest.hexdigest(),
                 filename=filename,
+                title=title,
+                title_source="user" if title else None,
                 storage_path=str(destination.relative_to(STORAGE_DIR.parent.parent)),
                 content_type="application/pdf",
                 size_bytes=size,
@@ -171,6 +180,28 @@ def get_document(document_id: UUID) -> DocumentResponse:
             return DocumentResponse.model_validate(document)
     except SQLAlchemyError:
         raise DependencyUnavailableError("Unable to retrieve document metadata") from None
+
+
+def rename_document(document_id: UUID, title: str | None) -> DocumentResponse:
+    """Set the title shown for a document; a blank title goes back to the file name.
+
+    The title names the whole document, so every version of it is renamed together.
+    """
+    try:
+        with Session(engine) as session:
+            document = get_document_or_raise(session, document_id)
+            session.execute(
+                update(Document)
+                .where(Document.group_id == document.group_id)
+                .values(title=title, title_source="user" if title else None)
+            )
+            session.commit()
+            session.refresh(document)
+            response = DocumentResponse.model_validate(document)
+    except SQLAlchemyError:
+        raise DependencyUnavailableError("Unable to rename document") from None
+    publish_updated(document_id)
+    return response
 
 
 def list_documents(

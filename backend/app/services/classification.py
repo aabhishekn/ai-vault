@@ -36,23 +36,35 @@ def get_classification(document_id: UUID) -> ClassificationResponse:
             if document.category is None:
                 raise NotFoundError("Document has not been classified")
             return ClassificationResponse(
-                document_id=document_id, category=document.category, tags=document.tags or []
+                document_id=document_id,
+                category=document.category,
+                tags=document.tags or [],
+                title=document.title,
             )
     except SQLAlchemyError:
         raise DependencyUnavailableError("Classification database unavailable") from None
 
 
 def create_classification(document_id: UUID) -> ClassificationResponse:
-    """Classify once; later calls return the saved result without a provider request."""
+    """Classify once; later calls return the saved result without a provider request.
+
+    The same request also writes a title. A document classified before titles existed is
+    asked once more for its title alone; its category and tags are left as they were. A title
+    a person set is never replaced.
+    """
     try:
         with Session(engine) as session:
             document = get_document_or_raise(
                 session, document_id, load=("extracted_pages", "insights")
             )
-            if document.category is not None:
+            if document.category is not None and document.title is not None:
                 return ClassificationResponse(
-                    document_id=document_id, category=document.category, tags=document.tags or []
+                    document_id=document_id,
+                    category=document.category,
+                    tags=document.tags or [],
+                    title=document.title,
                 )
+            title_only = document.category is not None
             if document.status not in TEXT_AVAILABLE_STATUSES:
                 raise ConflictError("Document text is not ready for classification")
             summary = document.summary
@@ -64,24 +76,35 @@ def create_classification(document_id: UUID) -> ClassificationResponse:
         if not (summary or insights or excerpt):
             raise ConflictError("No document text is available")
         try:
-            category, tags = classify(summary, insights, excerpt)
+            result = classify(summary, insights, excerpt)
         except (APIError, ConfigurationError):
             raise DependencyUnavailableError("Classification service unavailable") from None
         except ValueError:
             raise InvalidAIResponseError("Classification returned an invalid response") from None
         with Session(engine) as session:
+            if not title_only:
+                # If a concurrent request saved first, its category and tags stand.
+                session.execute(
+                    update(Document)
+                    .where(Document.id == document_id, Document.category.is_(None))
+                    .values(category=result.category, tags=result.tags)
+                )
+            if result.title:
+                session.execute(
+                    update(Document)
+                    .where(Document.id == document_id, Document.title.is_(None))
+                    .values(title=result.title, title_source="ai")
+                )
             saved = session.execute(
-                update(Document)
-                .where(Document.id == document_id, Document.category.is_(None))
-                .values(category=category, tags=tags)
-                .returning(Document.category, Document.tags)
+                select(Document.category, Document.tags, Document.title).where(
+                    Document.id == document_id
+                )
             ).first()
-            if saved is None:  # a concurrent request saved first; use its result
-                document = get_document_or_raise(session, document_id)
-                saved = (document.category, document.tags)
             session.commit()
+            if saved is None:  # deleted while the provider was answering
+                raise NotFoundError("Document not found")
             return ClassificationResponse(
-                document_id=document_id, category=saved[0], tags=saved[1] or []
+                document_id=document_id, category=saved[0], tags=saved[1] or [], title=saved[2]
             )
     except SQLAlchemyError:
         raise DependencyUnavailableError("Classification database unavailable") from None

@@ -469,10 +469,21 @@ Each document can carry one `category` and 3–6 `tags`, generated once by the m
 - `POST /documents/{document_id}/classification` generates and saves them (or returns the saved result, with no provider call). `GET` on the same path reads them and returns 404 until they exist. The workers also do this automatically after the summary and insights, as a best-effort step that can never fail the document.
 - Categories are a fixed list: `Legal`, `Finance`, `Technical`, `Policy`, `Research`, `Business`, `Education`, `Other`. The model's choice is validated against it. Tags are lowercase, trimmed, de-duplicated and at most 30 characters.
 - The source is the saved summary and insights (a small request). Documents with neither fall back to the first 4,000 characters of text.
-- `GET /documents` accepts `category=Legal` and `tag=lease` (both optional, combinable); `total` reflects the filter. Documents include `category` (nullable) and `tags` (empty when unclassified).
+- `GET /documents` accepts `category=Legal` and `tag=lease` (both optional, combinable); `total` reflects the filter. Documents include `category` (nullable), `tags` (empty when unclassified) and `title` (see below).
 - `GET /tags` returns `categories` and `tags` with document counts (most used first, 100 tags at most) for building filters.
 
 Both columns are indexed (a GIN index for tags), so filtering stays fast as the library grows. Migration `b7d3e1a94c20` adds them; existing documents stay unclassified until `POST /classification` is called or they are reprocessed.
+
+## Document titles
+
+File names such as `System_ Case Study.pdf` read badly, so a document can carry a `title` (up to 120 characters) and a `title_source` (`ai` or `user`). Both are `null` until one is set, and clients then show the file name.
+
+- **AI titles cost nothing extra.** The classification request that picks the category and tags also writes a title of at most 10 words (a missing or unusable title never fails classification). The workers do this automatically with the summary and insights. A document classified before titles existed is asked once, for its title alone, the next time `POST /documents/{id}/classification` is called; its category and tags are left as they were.
+- `PATCH /documents/{document_id}` with `{"title": "Q3 Plan"}` sets a title and marks it `user`; `{"title": null}` (or blank) clears it so the file name shows again. Whitespace is tidied, titles over 120 characters get 422, and an unknown document gets 404. It returns the document and publishes `document.updated`.
+- **A person's title always wins.** The AI never replaces a `user` title, and renaming applies to every version of the document, because the title names the document, not one file. A new version inherits a `user` title; an `ai` title is written afresh from the new version's content.
+- Versions and the classification response include `title`. Citations and comparison results still name the source file.
+
+Migration `e6f1a4c92d58` adds the two nullable columns (and a check that `title_source` is `ai` or `user`).
 
 ## Document versions
 
@@ -533,6 +544,7 @@ Messages are JSON text frames:
 | `{"type": "document.status", "document_id": "...", "status": "processing"}` | A document moved to `queued`, `processing`, `extracted`, `embedded` or `failed`. |
 | `{"type": "document.content", "document_id": "..."}` | The automatic summary, insights and tags finished (or were skipped), so they can be fetched. |
 | `{"type": "document.deleted", "document_id": "..."}` | A document (one version) was deleted, so lists should be refetched. |
+| `{"type": "document.updated", "document_id": "..."}` | A person changed a document's details (for example renamed it). |
 
 How it works: the worker is a separate process from the API, so it cannot talk to browsers directly. Whenever it (or an upload or reprocess request) changes a status, it publishes the event on the Redis channel `vault:events`. Each WebSocket connection subscribes to that channel in the API process and forwards what it receives. Publishing is best effort and never fails the work it reports.
 

@@ -8,7 +8,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.ai.classification import ClassificationDraft, classify, clean_tags
+from app.ai.classification import (
+    Classification,
+    ClassificationDraft,
+    classify,
+    clean_tags,
+    clean_title,
+)
 from app.core.errors import AppError
 from app.db.database import engine
 from app.db.models import Document
@@ -32,23 +38,50 @@ def run_classify(draft, status="completed"):
 
 
 def test_category_and_cleaned_tags_come_back_with_untrusted_input_as_data():
-    result, call = run_classify(ClassificationDraft(category="Technical", tags=["API", "rag"]))
-    assert result == ("Technical", ["api", "rag"])
+    result, call = run_classify(
+        ClassificationDraft(category="Technical", tags=["API", "rag"], title=' "Vault Design." ')
+    )
+    assert result == ("Technical", ["api", "rag"], "Vault Design")
     assert json.loads(call["input"])["summary"] == "A summary."
     assert call["store"] is False
     assert "Legal" in call["instructions"] and "untrusted" in call["instructions"]
 
 
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("  Q3   Budget  Review.  ", "Q3 Budget Review"),
+        ("“Residential Lease Agreement”", "Residential Lease Agreement"),
+        ("   ", None),
+        ('""', None),
+        ("x" * 101, None),
+        ("x" * 100, "x" * 100),
+    ],
+)
+def test_titles_are_tidied_and_unusable_ones_dropped(raw, expected):
+    assert clean_title(raw) == expected
+
+
+def test_a_missing_title_does_not_fail_classification():
+    result, _ = run_classify(ClassificationDraft(category="Legal", tags=["lease"], title="  "))
+    assert result == ("Legal", ["lease"], None)
+
+
+def test_the_instructions_ask_for_a_title_without_a_file_extension():
+    _, call = run_classify(ClassificationDraft(category="Legal", tags=["lease"], title="T"))
+    assert "title" in call["instructions"] and "file extension" in call["instructions"]
+
+
 def test_unknown_categories_are_rejected_by_the_schema():
     with pytest.raises(ValueError):
-        ClassificationDraft(category="Spaceships", tags=["x"])
+        ClassificationDraft(category="Spaceships", tags=["x"], title="T")
 
 
 @pytest.mark.parametrize(
     "draft,status",
     [
-        (ClassificationDraft(category="Other", tags=[" ", "#"]), "completed"),
-        (ClassificationDraft(category="Other", tags=["ok"]), "incomplete"),
+        (ClassificationDraft(category="Other", tags=[" ", "#"], title="T"), "completed"),
+        (ClassificationDraft(category="Other", tags=["ok"], title="T"), "incomplete"),
         (None, "completed"),
     ],
 )
@@ -93,12 +126,61 @@ class TestClassificationStorage:
 
     def test_classification_is_saved_once_and_reused(self):
         identifier = self.add()
-        with patch.object(service, "classify", return_value=("Finance", ["budget", "q3"])) as ai:
+        with patch.object(
+            service,
+            "classify",
+            return_value=Classification("Finance", ["budget", "q3"], "Q3 Budget Review"),
+        ) as ai:
             first = service.create_classification(identifier)
             second = service.create_classification(identifier)
         assert (first.category, first.tags) == ("Finance", ["budget", "q3"])
         assert second == first and ai.call_count == 1
         assert service.get_classification(identifier) == first
+        assert first.title == "Q3 Budget Review"
+
+    def test_the_title_is_saved_as_ai_written(self):
+        identifier = self.add()
+        with patch.object(
+            service, "classify", return_value=Classification("Legal", ["lease"], "Lease")
+        ):
+            service.create_classification(identifier)
+        with Session(engine) as session:
+            saved = session.get(Document, identifier)
+            assert (saved.title, saved.title_source) == ("Lease", "ai")
+
+    def test_a_person_s_title_is_never_replaced_by_the_ai(self):
+        identifier = self.add(title="My Name", title_source="user")
+        with patch.object(
+            service, "classify", return_value=Classification("Legal", ["lease"], "AI Name")
+        ):
+            result = service.create_classification(identifier)
+        assert (result.category, result.title) == ("Legal", "My Name")
+        with Session(engine) as session:
+            assert session.get(Document, identifier).title_source == "user"
+
+    def test_a_document_classified_before_titles_existed_gets_only_a_title(self):
+        identifier = self.add(category="Finance", tags=["old", "tags"])
+        with patch.object(
+            service, "classify", return_value=Classification("Legal", ["new"], "Fresh Title")
+        ) as ai:
+            result = service.create_classification(identifier)
+            again = service.create_classification(identifier)
+        assert (result.category, result.tags, result.title) == (
+            "Finance",
+            ["old", "tags"],
+            "Fresh Title",
+        )
+        assert again == result and ai.call_count == 1
+
+    def test_no_usable_title_leaves_the_file_name_in_charge(self):
+        identifier = self.add()
+        with patch.object(
+            service, "classify", return_value=Classification("Legal", ["lease"], None)
+        ):
+            result = service.create_classification(identifier)
+        assert result.title is None
+        with Session(engine) as session:
+            assert session.get(Document, identifier).title_source is None
 
     def test_a_document_without_text_or_summary_is_a_conflict(self):
         identifier = self.add(summary=None, extracted_pages=[{"page_number": 1, "text": " "}])
@@ -112,7 +194,9 @@ class TestClassificationStorage:
         identifier = self.add(
             summary=None, extracted_pages=[{"page_number": 1, "text": "Lease terms"}]
         )
-        with patch.object(service, "classify", return_value=("Legal", ["lease"])) as ai:
+        with patch.object(
+            service, "classify", return_value=Classification("Legal", ["lease"], None)
+        ) as ai:
             service.create_classification(identifier)
         assert ai.call_args.args == (None, [], "Lease terms")
 

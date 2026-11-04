@@ -4,11 +4,16 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+MAX_TITLE_CHARACTERS = 120
+
 
 class DocumentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     filename: str
+    # Null until the document is classified or renamed; clients then show the file name.
+    title: str | None = None
+    title_source: Literal["ai", "user"] | None = None
     content_type: str
     size_bytes: int
     status: str
@@ -23,6 +28,20 @@ class DocumentResponse(BaseModel):
     @classmethod
     def no_tags_means_empty(cls, value: list[str] | None) -> list[str]:
         return value or []
+
+
+class DocumentUpdate(BaseModel):
+    """A new display title. Null or blank removes it, so the file name is shown again."""
+
+    title: str | None = Field(max_length=MAX_TITLE_CHARACTERS * 2)
+
+    @field_validator("title")
+    @classmethod
+    def tidy_title(cls, value: str | None) -> str | None:
+        value = " ".join(value.split()) if value else None
+        if value and len(value) > MAX_TITLE_CHARACTERS:
+            raise ValueError(f"Title must be at most {MAX_TITLE_CHARACTERS} characters")
+        return value or None
 
 
 class DocumentListResponse(BaseModel):
@@ -79,6 +98,7 @@ class ClassificationResponse(BaseModel):
     document_id: UUID
     category: str
     tags: list[str]
+    title: str | None = None
 
 
 class TagCount(BaseModel):
@@ -101,6 +121,7 @@ class DocumentVersion(BaseModel):
     id: UUID
     version_number: int
     filename: str
+    title: str | None = None
     size_bytes: int
     status: str
     is_latest: bool
