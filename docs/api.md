@@ -437,3 +437,7 @@ Routes are grouped by template (`/documents/{document_id}`) rather than the raw 
 ## Query embedding cache
 
 Search, ask and conversation messages embed the question before searching. The vector is cached in Redis under `embedding:{model}:{dimensions}:{sha256}` where the hash covers the question with case and whitespace normalised, so `Leave  POLICY?` and `leave policy?` share an entry. Entries expire after `EMBEDDING_CACHE_TTL_SECONDS` (default 86400; 0 disables the cache). A cache hit makes no provider call. Redis errors and corrupt entries are logged and fall back to the provider, so the cache can never fail a request. Chat answers are not cached because they depend on the conversation history. Hits and misses appear in the JSON log as `embedding_cache` events.
+
+## Suggested questions
+
+`POST /documents/{document_id}/suggested-questions` returns 3–4 starter questions (`questions`, plus `cached`) built from the document's saved summary and insights, not its full text, so the request is small. It returns 409 until at least one of them exists. The result is cached in Redis for 7 days under a hash of the model, summary and insights, so repeating the call is free and editing the content produces fresh suggestions. A Redis outage only costs a regeneration. The endpoint uses the `ai` rate limit. The chat panel shows it as a **Suggest questions** button; choosing a suggestion fills the question box without sending it.

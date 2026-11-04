@@ -32,6 +32,12 @@ class DocumentInsight(BaseModel):
     evidence: str
 
 
+class SuggestedQuestionsResponse(BaseModel):
+    document_id: UUID
+    questions: list[str]
+    cached: bool
+
+
 class InsightsResponse(BaseModel):
     document_id: UUID
     insights: list[DocumentInsight]

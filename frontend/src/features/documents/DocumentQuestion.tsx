@@ -4,6 +4,7 @@ import { AnswerResult } from './AnswerResult'
 import { canAskDocument, MAX_QUESTION_LENGTH } from './answers'
 import type { DocumentStatus } from './types'
 import { useDocumentChat } from './useDocumentChat'
+import { useSuggestedQuestions } from './useSuggestedQuestions'
 
 export function DocumentQuestion({
   id,
@@ -21,6 +22,7 @@ export function DocumentQuestion({
     send,
     startNewConversation,
   } = useDocumentChat(id, documentStatus)
+  const suggestions = useSuggestedQuestions(id)
   const input = useRef<HTMLTextAreaElement>(null)
   const busy = pendingQuestion !== null
   const locked = busy || restoring
@@ -83,6 +85,53 @@ export function DocumentQuestion({
         <p className="mt-4 text-[13px] leading-[1.8] text-error" role="alert">
           {error}
         </p>
+      )}
+      {eligible && turns.length === 0 && !restoring && !busy && (
+        <div className="mt-6">
+          {suggestions.questions.length === 0 ? (
+            <Button
+              onClick={() => void suggestions.suggest()}
+              aria-disabled={suggestions.loading}
+            >
+              {suggestions.loading
+                ? 'Thinking of questions…'
+                : 'Suggest questions'}
+            </Button>
+          ) : (
+            <>
+              <p className="mb-2 text-xs font-semibold">Try asking</p>
+              <ul className="grid list-none gap-2">
+                {suggestions.questions.map((suggestion) => (
+                  <li key={suggestion}>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-panel-border bg-surface px-3 py-2 text-left text-[13px] leading-[1.8] hover:border-ink"
+                      onClick={() => {
+                        setQuestion(suggestion)
+                        input.current?.focus()
+                      }}
+                    >
+                      {suggestion}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          <p className="mt-2 text-xs leading-[1.8] text-muted">
+            Suggestions are built from your saved summary and insights. The
+            first request for a document uses the AI provider and may incur a
+            small charge.
+          </p>
+          {suggestions.error && (
+            <p
+              className="mt-2 text-[13px] leading-[1.8] text-error"
+              role="alert"
+            >
+              {suggestions.error}
+            </p>
+          )}
+        </div>
       )}
       <form
         className="mt-6"

@@ -399,3 +399,62 @@ describe('restoring a saved conversation', () => {
     expect(fetch.mock.calls.length).toBe(reads)
   })
 })
+
+describe('suggested questions', () => {
+  it('offers suggestions that fill the question box without sending it', async () => {
+    const fetch = vi.fn((url: string) => {
+      if (url.endsWith('/suggested-questions'))
+        return Promise.resolve(
+          Response.json({ questions: ['What is the deadline?'] }),
+        )
+      return Promise.resolve(Response.json({ items: [], total: 0 }))
+    })
+    vi.stubGlobal('fetch', fetch)
+    render(
+      createElement(DocumentQuestion, {
+        id: 'document-a',
+        documentStatus: 'embedded',
+      }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Suggest questions' }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'What is the deadline?' }),
+    )
+    expect(
+      (screen.getByLabelText('Your question') as HTMLTextAreaElement).value,
+    ).toBe('What is the deadline?')
+    expect(
+      fetch.mock.calls.some(([url]) => String(url).endsWith('/messages')),
+    ).toBe(false)
+    vi.unstubAllGlobals()
+  })
+
+  it('shows a readable message when suggestions are unavailable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        Promise.resolve(
+          url.endsWith('/suggested-questions')
+            ? new Response('{}', { status: 409 })
+            : Response.json({ items: [], total: 0 }),
+        ),
+      ),
+    )
+    render(
+      createElement(DocumentQuestion, {
+        id: 'document-b',
+        documentStatus: 'embedded',
+      }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Suggest questions' }),
+    )
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      expect.stringContaining('summary or insights first'),
+    )
+    vi.unstubAllGlobals()
+  })
+})
