@@ -413,3 +413,13 @@ When a worker starts it also re-queues every abandoned document, so a crash or r
 ## Query efficiency
 
 Extracted pages and insights can be megabytes per document. Listing, retrieving, and searching documents defer those columns, and summary or insight routes load only the column they use, so metadata lookups no longer transfer document text.
+
+## Automatic summary and insights
+
+When a document finishes embedding, the same worker job generates its summary and key insights, so a freshly processed document already has an overview and takeaways with page evidence. This follows `ENABLE_EMBEDDINGS` unless `AUTO_GENERATE_CONTENT` is set to `true` or `false`.
+
+- **Never fails the document.** Generation runs after the processing attempt is recorded as succeeded. If it fails (provider error, a document over the 60,000-character limit, and so on), the document stays `embedded`, the worker logs `auto_generation_failed` with a safe reason, and `POST /documents/{id}/summary` or `/insights` still work on demand.
+- **Independent.** A failing summary does not stop insights from being generated, and the reverse.
+- **No duplicate cost.** Existing saved content is reused, and a user clicking Generate while the worker is still running at worst triggers one extra call; the first saved result wins.
+- **Cost.** One extra call each for the summary and insights; for the 4-page case study that was about 1,600 and 1,900 input tokens (under $0.002). Both appear as `ai_call` log events. Their tokens are not stored in the database, so `/metrics/ai-usage` does not include them.
+- **Timing.** Status becomes `embedded` (Search ready) first, so chat is available a few seconds before the summary and insights appear; the document view's refresh buttons pick them up. These calls run inside the same 5-minute job timeout, and the processing duration metric excludes them.

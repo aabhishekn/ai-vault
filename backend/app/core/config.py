@@ -67,6 +67,13 @@ def get_api_key() -> str:
     return api_key
 
 
+def auto_generate_content_enabled() -> bool:
+    """Generate a summary and insights after processing; follows embeddings unless set."""
+    if not os.getenv("AUTO_GENERATE_CONTENT", "").strip():
+        return embeddings_enabled()
+    return _bool_setting("AUTO_GENERATE_CONTENT", "false")
+
+
 def _bool_setting(name: str, default: str) -> bool:
     value = os.getenv(name, default).strip().lower()
     if value not in ("true", "false"):

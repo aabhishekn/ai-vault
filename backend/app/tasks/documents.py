@@ -11,12 +11,15 @@ from sqlalchemy import delete, update
 from sqlalchemy.orm import Session
 
 from app.ai.embeddings import EMBEDDING_MODEL, MAX_BATCH_SIZE, generate_embeddings
-from app.core.config import REPOSITORY_ROOT, embeddings_enabled
+from app.core.config import REPOSITORY_ROOT, auto_generate_content_enabled, embeddings_enabled
+from app.core.errors import AppError
 from app.db.database import engine
 from app.db.models import Document, DocumentChunk, ProcessingAttempt
 from app.db.queries import lightweight
 from app.processing.chunking import TextChunk, chunk_pages
 from app.processing.pdf_extraction import ExtractedPage, PDFExtractionError, extract_pdf
+from app.services.insights import create_insights
+from app.services.summaries import create_summary
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +167,32 @@ def _record_failure(context: ProcessingContext, error: Exception) -> None:
         session.commit()
 
 
+def _generate_content(document_id: UUID) -> dict[str, str]:
+    """Best effort: a summary and insights are conveniences, never a reason to fail a document.
+
+    The document is already searchable when this runs, and anything that fails here can still be
+    generated on demand from the API. Results that already exist are reused, not regenerated.
+    """
+    outcomes = {}
+    for name, create in (("summary", create_summary), ("insights", create_insights)):
+        started = perf_counter()
+        try:
+            create(document_id)
+            outcomes[name] = "saved"
+        except Exception as error:
+            outcomes[name] = "failed"
+            logger.warning(
+                "auto_generation_failed",
+                extra={
+                    "document_id": str(document_id),
+                    "content": name,
+                    "reason": error.detail if isinstance(error, AppError) else type(error).__name__,
+                    "duration_ms": round((perf_counter() - started) * 1000),
+                },
+            )
+    return outcomes
+
+
 def extract_document(document_id: str) -> dict:
     """Process one queued document; configuration controls whether embeddings run."""
     context = ProcessingContext(document_id=UUID(document_id))
@@ -196,7 +225,7 @@ def extract_document(document_id: str) -> dict:
                 "duration_ms": round((perf_counter() - context.started) * 1000),
             },
         )
-        return {
+        result = {
             "document_id": document_id,
             "status": "embedded" if should_embed else "extracted",
             "page_count": len(pages),
@@ -215,3 +244,11 @@ def extract_document(document_id: str) -> dict:
         )
         _record_failure(context, error)
         raise
+    # Reached only on success: the attempt is already recorded, so nothing below can fail it.
+    if should_embed and auto_generate_content_enabled():
+        result["generated"] = _generate_content(UUID(document_id))
+        logger.info(
+            "auto_generation_finished",
+            extra={"document_id": document_id, **result["generated"]},
+        )
+    return result

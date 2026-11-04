@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
 from app.ai.embeddings import EMBEDDING_MODEL, EmbeddingBatch
+from app.core.errors import ConflictError
 from app.db.database import engine
 from app.db.models import Document, DocumentChunk, ProcessingAttempt
 from app.processing.chunking import TextChunk
@@ -240,3 +241,67 @@ class DocumentJobTests(unittest.TestCase):
             self.assertTrue(
                 all((chunk.embedding is None and chunk.embedding_model is None for chunk in saved))
             )
+
+    def run_embedded_job(self, *, env=None):
+        batch = EmbeddingBatch([[1.0] + [0.0] * 1535], EMBEDDING_MODEL, 3)
+        settings = {"ENABLE_EMBEDDINGS": "true", **(env or {})}
+        with patch.dict(os.environ, settings):
+            with patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "Text")]):
+                with patch.object(jobs, "generate_embeddings", return_value=batch):
+                    return jobs.extract_document(str(self.identifier))
+
+    def test_summary_and_insights_are_generated_after_embedding(self):
+        with (
+            patch.object(jobs, "create_summary") as summary,
+            patch.object(jobs, "create_insights") as insights,
+        ):
+            result = self.run_embedded_job(env={"AUTO_GENERATE_CONTENT": "true"})
+        summary.assert_called_once_with(self.identifier)
+        insights.assert_called_once_with(self.identifier)
+        self.assertEqual(result["status"], "embedded")
+        self.assertEqual(result["generated"], {"summary": "saved", "insights": "saved"})
+
+    def test_generation_failure_never_fails_the_processed_document(self):
+        with (
+            patch.object(jobs, "create_summary", side_effect=ConflictError("not ready")),
+            patch.object(jobs, "create_insights", side_effect=TimeoutError("private details")),
+            self.assertLogs("app.tasks.documents", "WARNING") as logs,
+        ):
+            result = self.run_embedded_job(env={"AUTO_GENERATE_CONTENT": "true"})
+        self.assertEqual(result["generated"], {"summary": "failed", "insights": "failed"})
+        self.assertNotIn("private details", "".join(logs.output))
+        with Session(engine) as session:
+            self.assertEqual(session.get(Document, self.identifier).status, "embedded")
+            attempt = session.scalar(
+                select(ProcessingAttempt).where(ProcessingAttempt.document_id == self.identifier)
+            )
+            self.assertEqual(attempt.status, "succeeded")
+            self.assertIsNone(attempt.error_message)
+
+    def test_one_failing_content_type_does_not_block_the_other(self):
+        with (
+            patch.object(jobs, "create_summary", side_effect=ConflictError("no")),
+            patch.object(jobs, "create_insights") as insights,
+        ):
+            result = self.run_embedded_job(env={"AUTO_GENERATE_CONTENT": "true"})
+        insights.assert_called_once()
+        self.assertEqual(result["generated"], {"summary": "failed", "insights": "saved"})
+
+    def test_generation_can_be_switched_off(self):
+        with (
+            patch.object(jobs, "create_summary") as summary,
+            patch.object(jobs, "create_insights") as insights,
+        ):
+            result = self.run_embedded_job(env={"AUTO_GENERATE_CONTENT": "false"})
+        summary.assert_not_called()
+        insights.assert_not_called()
+        self.assertNotIn("generated", result)
+
+    def test_extraction_only_processing_generates_nothing(self):
+        with (
+            patch.object(jobs, "create_summary") as summary,
+            patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "Text")]),
+            patch.dict(os.environ, {"AUTO_GENERATE_CONTENT": "true"}),
+        ):
+            jobs.extract_document(str(self.identifier))
+        summary.assert_not_called()

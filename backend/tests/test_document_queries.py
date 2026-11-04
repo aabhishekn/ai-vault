@@ -6,7 +6,7 @@ from uuid import uuid4
 from sqlalchemy import delete, inspect
 from sqlalchemy.orm import Session
 
-from app.core.config import embeddings_enabled
+from app.core.config import auto_generate_content_enabled, embeddings_enabled
 from app.core.errors import ConfigurationError
 from app.db.database import engine
 from app.db.models import Document
@@ -84,3 +84,25 @@ class EmbeddingDefaultTests(unittest.TestCase):
     def test_invalid_flag_is_rejected(self):
         with self.assertRaises(ConfigurationError):
             self.enabled(ENABLE_EMBEDDINGS="maybe")
+
+
+class AutoGenerationDefaultTests(unittest.TestCase):
+    def enabled(self, **env):
+        with patch.dict(os.environ, env, clear=False):
+            for name in ("AUTO_GENERATE_CONTENT", "ENABLE_EMBEDDINGS", "OPENAI_API_KEY"):
+                if name not in env:
+                    os.environ.pop(name, None)
+            return auto_generate_content_enabled()
+
+    def test_unset_setting_follows_embeddings(self):
+        self.assertTrue(self.enabled(OPENAI_API_KEY="sk-test"))
+        self.assertFalse(self.enabled())
+        self.assertFalse(self.enabled(OPENAI_API_KEY="sk-test", ENABLE_EMBEDDINGS="false"))
+
+    def test_explicit_setting_wins(self):
+        self.assertFalse(self.enabled(AUTO_GENERATE_CONTENT="false", OPENAI_API_KEY="sk-test"))
+        self.assertTrue(self.enabled(AUTO_GENERATE_CONTENT="true"))
+
+    def test_invalid_setting_is_rejected(self):
+        with self.assertRaises(ConfigurationError):
+            self.enabled(AUTO_GENERATE_CONTENT="sometimes")
