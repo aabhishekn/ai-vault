@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from openai import APIError
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -15,9 +15,12 @@ from app.core.errors import (
 )
 from app.db.database import engine
 from app.db.models import Conversation, ConversationTurn
+from app.db.queries import get_document_or_raise
 from app.schemas.chat import (
     ConversationHistoryResponse,
+    ConversationListResponse,
     ConversationResponse,
+    ConversationSummary,
     ConversationTurnResponse,
     SearchRequest,
 )
@@ -36,6 +39,34 @@ def create_conversation(document_id: UUID) -> ConversationResponse:
             response = ConversationResponse.model_validate(conversation)
             session.commit()
             return response
+    except SQLAlchemyError:
+        raise DependencyUnavailableError("Conversation database unavailable") from None
+
+
+def list_conversations(
+    document_id: UUID, limit: int = 20, offset: int = 0, has_turns: bool = False
+) -> ConversationListResponse:
+    """A document's conversations, newest first; `has_turns` skips ones never answered."""
+    try:
+        with Session(engine) as session:
+            get_document_or_raise(session, document_id)
+            filters = [Conversation.document_id == document_id]
+            if has_turns:
+                filters.append(Conversation.turn_count > 0)
+            total = session.scalar(select(func.count()).select_from(Conversation).where(*filters))
+            conversations = session.scalars(
+                select(Conversation)
+                .where(*filters)
+                .order_by(Conversation.created_at.desc(), Conversation.id.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
+            return ConversationListResponse(
+                items=[ConversationSummary.model_validate(item) for item in conversations],
+                total=total,
+                limit=limit,
+                offset=offset,
+            )
     except SQLAlchemyError:
         raise DependencyUnavailableError("Conversation database unavailable") from None
 

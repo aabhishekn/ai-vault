@@ -13,17 +13,22 @@ export function DocumentQuestion({
   documentStatus: DocumentStatus
 }) {
   const [question, setQuestion] = useState('')
-  const { turns, pendingQuestion, error, send } = useDocumentChat(
-    id,
-    documentStatus,
-  )
+  const {
+    turns,
+    pendingQuestion,
+    error,
+    restoring,
+    send,
+    startNewConversation,
+  } = useDocumentChat(id, documentStatus)
   const input = useRef<HTMLTextAreaElement>(null)
   const busy = pendingQuestion !== null
+  const locked = busy || restoring
   const eligible = canAskDocument(documentStatus)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!eligible || busy) return
+    if (!eligible || locked) return
     if (await send(question)) setQuestion('')
   }
 
@@ -51,6 +56,11 @@ export function DocumentQuestion({
           ? 'Ask a question, then ask follow-ups. Each answer is supported by cited passages from this document.'
           : 'Questions need indexed document text. Refresh document details once processing finishes and the document is search ready.'}
       </p>
+      {restoring && (
+        <p className="mb-4 text-[13px] leading-[1.8] text-muted" role="status">
+          Loading your previous conversation…
+        </p>
+      )}
       <div role="log" aria-label="Conversation" aria-live="polite">
         <ol className="grid list-none gap-6">
           {turns.map((turn) => (
@@ -92,7 +102,7 @@ export function DocumentQuestion({
           maxLength={MAX_QUESTION_LENGTH}
           required
           value={question}
-          disabled={busy || !eligible}
+          disabled={locked || !eligible}
           aria-describedby="question-help question-cost question-context"
           className="w-full resize-y rounded-lg border border-panel-border bg-surface px-3 py-2 text-[13px] leading-[1.8] disabled:opacity-60"
           onChange={(event) => setQuestion(event.currentTarget.value)}
@@ -105,16 +115,28 @@ export function DocumentQuestion({
           id="question-context"
           className="mt-2 text-xs leading-[1.8] text-muted"
         >
-          The conversation is saved on the server. Closing details clears this
-          view.
+          The conversation is saved on the server and restored when you reopen
+          this document.
         </p>
         <Button
           type="submit"
           className="mt-4"
-          aria-disabled={busy || !eligible}
+          aria-disabled={locked || !eligible}
         >
           {busy ? 'Finding an answer…' : 'Ask question'}
         </Button>
+        {turns.length > 0 && !busy && (
+          <Button
+            className="mt-4 ml-2"
+            onClick={() => {
+              startNewConversation()
+              setQuestion('')
+              input.current?.focus()
+            }}
+          >
+            New conversation
+          </Button>
+        )}
       </form>
     </section>
   )

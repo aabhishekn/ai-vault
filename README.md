@@ -40,7 +40,7 @@ npm ci
 npm run dev
 ```
 
-Open [the frontend](http://localhost:5173). Choose a PDF up to 10 MB and select **Upload PDF**; the form saves it and refreshes the list. It lists documents with status, size, upload time, and pagination. **Refresh** reloads the list. Select a filename to see document details, read its saved summary and insights with page references and evidence, and refresh its processing status. Viewing summaries and insights reads saved content without calling the AI provider. If none exists, **Generate summary** or **Generate insights** creates and saves the result using AI when extracted text is available; API charges may apply. Generation blocks repeated submissions, and an unconfirmed request requires checking for a saved result before trying again. **Ask this document** holds a saved conversation for search-ready documents: ask a question, then follow-ups, with expandable sources and page citations for each answer. Questions use AI and may incur charges; the view clears when details close. Close or press Escape to return to the list. The **Workspace overview** below the list shows document statistics (counts, storage, pages, searchable chunks, status breakdown) and processing metrics (attempts, success rate, average and slowest time, embedding tokens); **Refresh overview** reloads both without calling the AI provider. Expand **Service connection** to check backend health. Listing documents and checking health do not use the AI API. Uploads queue background processing, which uses the AI API when embeddings are enabled. The Python server must be running on port 8000.
+Open [the frontend](http://localhost:5173). Choose a PDF up to 10 MB and select **Upload PDF**; the form saves it and refreshes the list. It lists documents with status, size, upload time, and pagination. **Refresh** reloads the list. Select a filename to see document details, read its saved summary and insights with page references and evidence, and refresh its processing status. Viewing summaries and insights reads saved content without calling the AI provider. If none exists, **Generate summary** or **Generate insights** creates and saves the result using AI when extracted text is available; API charges may apply. Generation blocks repeated submissions, and an unconfirmed request requires checking for a saved result before trying again. **Ask this document** holds a saved conversation for search-ready documents: ask a question, then follow-ups, with expandable sources and page citations for each answer. Questions use AI and may incur charges; the view clears when details close. Close or press Escape to return to the list. The **Workspace overview** below the list shows document statistics (counts, storage, pages, searchable chunks, status breakdown) and processing metrics (attempts, success rate, average and slowest time, embedding tokens); **Refresh overview** reloads both without calling the AI provider. Closing a document's details does not lose the chat: reopening it restores its latest conversation (**New conversation** starts a fresh one). Expand **Service connection** to check backend health. Listing documents and checking health do not use the AI API. Uploads queue background processing, which uses the AI API when embeddings are enabled. The Python server must be running on port 8000.
 
 Frontend code is grouped under `src/app`, `src/features`, `src/components`, and `src/lib`. Requests, validation, loading state, and presentation have separate modules. TypeScript strict mode, lint, formatting, API contract tests, and build checks are enabled. See the [frontend guide](frontend/README.md) for commands and proxy behavior. Production API routing is not configured yet.
 
@@ -82,12 +82,13 @@ Routes delegate to services. Services coordinate database access and provider ad
 | Retry processing | `POST /documents/{id}/reprocess` |
 | Semantic search | `POST /documents/{id}/search` |
 | One question with citations | `POST /documents/{id}/ask` |
-| Saved conversations | `POST /documents/{id}/conversations`, `POST /conversations/{id}/messages`, `GET /conversations/{id}` |
+| Saved conversations | `POST` / `GET /documents/{id}/conversations`, `POST /conversations/{id}/messages`, `GET /conversations/{id}` |
 | Saved summaries | `POST` / `GET /documents/{id}/summary` |
 | Saved insights | `POST` / `GET /documents/{id}/insights` |
 | Document statistics | `GET /stats/documents` |
 | Processing metrics | `GET /metrics/processing` |
 | AI token usage and estimated cost | `GET /metrics/ai-usage` |
+| API request latency per route | `GET /metrics/api` |
 
 See [API and operations](docs/api.md) for request examples, status/error behavior, caching, limits, and recovery commands.
 

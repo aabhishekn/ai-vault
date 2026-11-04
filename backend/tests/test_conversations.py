@@ -180,3 +180,30 @@ class ConversationTests(unittest.TestCase):
                 ).all(),
                 [],
             )
+
+    def test_documents_list_their_conversations_newest_first_with_turn_counts(self):
+        newer = conversations.create_conversation(self.document_id)
+        with patch.object(conversations, "search_document", side_effect=self.retrieve):
+            with patch.object(conversations, "generate_answer", side_effect=self.answer):
+                self.send("Which backend framework?")
+        listing = conversations.list_conversations(self.document_id)
+        self.assertEqual(listing.total, 2)
+        self.assertEqual([item.id for item in listing.items], [newer.id, self.conversation.id])
+        self.assertEqual([item.turn_count for item in listing.items], [0, 1])
+        page = conversations.list_conversations(self.document_id, limit=1, offset=1)
+        self.assertEqual([item.id for item in page.items], [self.conversation.id])
+        self.assertEqual((page.total, page.limit, page.offset), (2, 1, 1))
+
+    def test_has_turns_skips_conversations_that_were_never_answered(self):
+        conversations.create_conversation(self.document_id)
+        with patch.object(conversations, "search_document", side_effect=self.retrieve):
+            with patch.object(conversations, "generate_answer", side_effect=self.answer):
+                self.send("Which backend framework?")
+        listing = conversations.list_conversations(self.document_id, has_turns=True)
+        self.assertEqual(listing.total, 1)
+        self.assertEqual(listing.items[0].id, self.conversation.id)
+
+    def test_listing_an_unknown_document_is_not_found(self):
+        with self.assertRaises(AppError) as error:
+            conversations.list_conversations(uuid4())
+        self.assertEqual(error.exception.status_code, 404)

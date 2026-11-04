@@ -32,10 +32,57 @@ function answerFor(documentId: string, asked: string, text = 'Python') {
   }
 }
 
-// Routes the two conversation endpoints; `message` supplies each turn's response.
-function mockApi(message: (asked: string, call: number) => Promise<Response>) {
+type Saved = { id: string; turns: { question: string; text: string }[] }
+type ApiOptions = { saved?: Saved; restoreStatus?: number }
+
+// Routes the conversation endpoints; `message` supplies each new turn's response.
+function mockApi(
+  message: (asked: string, call: number) => Promise<Response>,
+  { saved, restoreStatus }: ApiOptions = {},
+) {
   let calls = 0
   const fetch = vi.fn((url: string, init?: RequestInit) => {
+    const isPost = init?.method === 'POST'
+    const list = /documents\/([^/]+)\/conversations\?/.exec(url)
+    if (list) {
+      if (restoreStatus)
+        return Promise.resolve(Response.json({}, { status: restoreStatus }))
+      return Promise.resolve(
+        Response.json({
+          items: saved
+            ? [
+                {
+                  id: saved.id,
+                  document_id: list[1],
+                  turn_count: saved.turns.length,
+                  created_at: '2026-11-04T00:00:00Z',
+                },
+              ]
+            : [],
+          total: saved ? 1 : 0,
+          limit: 1,
+          offset: 0,
+        }),
+      )
+    }
+    const history = /conversations\/([^/?]+)\?/.exec(url)
+    if (history && !isPost && saved)
+      return Promise.resolve(
+        Response.json({
+          id: saved.id,
+          document_id: 'a',
+          turns: saved.turns.map((turn, index) => ({
+            id: `saved-${index}`,
+            conversation_id: saved.id,
+            turn_number: index + 1,
+            response: answerFor('a', turn.question, turn.text),
+            created_at: '2026-11-04T00:00:00Z',
+          })),
+          total: saved.turns.length,
+          limit: 100,
+          offset: 0,
+        }),
+      )
     const created = /documents\/([^/]+)\/conversations$/.exec(url)
     if (created)
       return Promise.resolve(
@@ -49,10 +96,20 @@ function mockApi(message: (asked: string, call: number) => Promise<Response>) {
   return fetch
 }
 
-function turnResponse(documentId: string, asked: string, number = 1) {
+const posts = (fetch: ReturnType<typeof vi.fn>) =>
+  fetch.mock.calls
+    .filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
+    .map(([url]) => url as string)
+
+function turnResponse(
+  documentId: string,
+  asked: string,
+  number = 1,
+  conversationId = 'c1',
+) {
   return Response.json({
     id: `t${number}`,
-    conversation_id: 'c1',
+    conversation_id: conversationId,
     turn_number: number,
     response: answerFor(documentId, asked, number === 1 ? 'Python' : 'SQL'),
   })
@@ -66,11 +123,17 @@ function ask() {
   fireEvent.click(screen.getByRole('button', { name: 'Ask question' }))
 }
 
-function renderChat(
+async function renderChat(
   id = 'a',
   documentStatus: 'embedded' | 'extracted' = 'embedded',
 ) {
-  return render(createElement(DocumentQuestion, { id, documentStatus }))
+  const view = render(createElement(DocumentQuestion, { id, documentStatus }))
+  // Searchable documents first look for a saved conversation; wait until typing is allowed.
+  if (documentStatus === 'embedded')
+    await waitFor(() =>
+      expect(screen.getByRole('textbox').hasAttribute('disabled')).toBe(false),
+    )
+  return view
 }
 
 describe('document conversation UI', () => {
@@ -82,14 +145,14 @@ describe('document conversation UI', () => {
           resolve = done
         }),
     )
-    renderChat()
-    expect(fetch).not.toHaveBeenCalled()
+    await renderChat()
+    expect(posts(fetch)).toEqual([])
     expect(screen.getByText(/API charges may apply/)).toBeTruthy()
     enter(question)
     const submit = screen.getByRole('button', { name: 'Ask question' })
     fireEvent.click(submit)
     fireEvent.click(submit)
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(posts(fetch)).toHaveLength(2))
     expect(screen.getByRole('textbox').hasAttribute('disabled')).toBe(true)
     expect(
       screen
@@ -105,13 +168,13 @@ describe('document conversation UI', () => {
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByRole('textbox')),
     )
-    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(posts(fetch)).toHaveLength(2)
   })
   it('creates one conversation and sends follow-ups to it, keeping every turn', async () => {
     const fetch = mockApi((asked, call) =>
       Promise.resolve(turnResponse('a', asked, call)),
     )
-    renderChat()
+    await renderChat()
     enter(question)
     ask()
     expect(await screen.findByText('Python is required [1].')).toBeTruthy()
@@ -121,8 +184,7 @@ describe('document conversation UI', () => {
     ask()
     expect(await screen.findByText('SQL is required [1].')).toBeTruthy()
     expect(screen.getByText('Python is required [1].')).toBeTruthy()
-    const urls = fetch.mock.calls.map(([url]) => url)
-    expect(urls).toEqual([
+    expect(posts(fetch)).toEqual([
       '/api/documents/a/conversations',
       '/api/conversations/c1/messages',
       '/api/conversations/c1/messages',
@@ -134,7 +196,7 @@ describe('document conversation UI', () => {
         ? Promise.resolve(Response.json({}, { status: 503 }))
         : Promise.resolve(turnResponse('a', asked, call === 3 ? 2 : call)),
     )
-    renderChat()
+    await renderChat()
     enter(question)
     ask()
     await screen.findByText('Python is required [1].')
@@ -151,23 +213,22 @@ describe('document conversation UI', () => {
     expect(await screen.findByText('SQL is required [1].')).toBeTruthy()
     expect(screen.queryByRole('alert')).toBeNull()
   })
-  it('explains and blocks questions when text is not indexed', () => {
+  it('explains and blocks questions when text is not indexed, without looking for history', async () => {
     const fetch = mockApi(() => Promise.reject(new Error('unexpected')))
-    renderChat('a', 'extracted')
+    await renderChat('a', 'extracted')
     expect(screen.getByText(/Questions need indexed/)).toBeTruthy()
     ask()
     expect(fetch).not.toHaveBeenCalled()
   })
   it('rejects whitespace locally and never retries a failed request automatically', async () => {
-    const fetch = vi.fn().mockRejectedValue(new TypeError('Disconnected'))
-    vi.stubGlobal('fetch', fetch)
-    renderChat()
+    const fetch = mockApi(() => Promise.reject(new TypeError('Disconnected')))
+    await renderChat()
     ask()
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
       'Enter a question about this document.',
     )
-    expect(fetch).not.toHaveBeenCalled()
+    expect(posts(fetch)).toEqual([])
     enter(question)
     ask()
     await waitFor(() =>
@@ -175,7 +236,7 @@ describe('document conversation UI', () => {
         'couldn’t complete',
       ),
     )
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(posts(fetch)).toHaveLength(2)
   })
   it('shows insufficient evidence without implying supporting citations exist', async () => {
     mockApi((asked) =>
@@ -193,7 +254,7 @@ describe('document conversation UI', () => {
         }),
       ),
     )
-    renderChat()
+    await renderChat()
     enter(question)
     ask()
     expect(
@@ -201,13 +262,16 @@ describe('document conversation UI', () => {
     ).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Sources' })).toBeNull()
   })
-  it('aborts pending work when the conversation unmounts', () => {
-    const fetch = vi.fn().mockReturnValue(new Promise(() => {}))
-    vi.stubGlobal('fetch', fetch)
-    const { unmount } = renderChat()
+  it('aborts pending work when the conversation unmounts', async () => {
+    const fetch = mockApi(() => new Promise(() => {}))
+    const { unmount } = await renderChat()
     enter(question)
     ask()
-    const signal = fetch.mock.calls[0]![1].signal as AbortSignal
+    await waitFor(() => expect(posts(fetch)).toHaveLength(2))
+    const messageCall = fetch.mock.calls.find(([url]) =>
+      String(url).endsWith('/messages'),
+    )!
+    const signal = messageCall[1]!.signal as AbortSignal
     unmount()
     expect(signal.aborted).toBe(true)
   })
@@ -219,11 +283,14 @@ describe('document conversation UI', () => {
           resolve = done
         }),
     )
-    const { rerender } = renderChat('a')
+    const { rerender } = await renderChat('a')
     enter(question)
     ask()
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
-    const signal = fetch.mock.calls[1]![1]?.signal as AbortSignal
+    await waitFor(() => expect(posts(fetch)).toHaveLength(2))
+    const messageCall = fetch.mock.calls.find(([url]) =>
+      String(url).endsWith('/messages'),
+    )!
+    const signal = messageCall[1]!.signal as AbortSignal
     rerender(
       createElement(DocumentQuestion, {
         key: 'b',
@@ -236,6 +303,99 @@ describe('document conversation UI', () => {
       resolve(turnResponse('a', question))
     })
     expect(screen.queryByText('Python is required [1].')).toBeNull()
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('textbox') as HTMLTextAreaElement).hasAttribute(
+          'disabled',
+        ),
+      ).toBe(false),
+    )
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('')
+  })
+})
+
+describe('restoring a saved conversation', () => {
+  const saved = {
+    id: 'c0',
+    turns: [
+      { question: 'Earlier question?', text: 'Earlier answer' },
+      { question: 'Earlier follow-up?', text: 'Second answer' },
+    ],
+  }
+
+  it('shows saved turns on open and sends the next question to the same conversation', async () => {
+    const fetch = mockApi(
+      (asked) => Promise.resolve(turnResponse('a', asked, 3, 'c0')),
+      { saved },
+    )
+    render(
+      createElement(DocumentQuestion, { id: 'a', documentStatus: 'embedded' }),
+    )
+    expect(screen.getByText('Loading your previous conversation…')).toBeTruthy()
+    expect(screen.getByRole('textbox').hasAttribute('disabled')).toBe(true)
+    expect(
+      await screen.findByText('Earlier answer is required [1].'),
+    ).toBeTruthy()
+    expect(screen.getByText('Second answer is required [1].')).toBeTruthy()
+    expect(screen.queryByText('Loading your previous conversation…')).toBeNull()
+    expect(screen.getByText('Your follow-up question')).toBeTruthy()
+    enter(followUp)
+    ask()
+    await screen.findByText('SQL is required [1].')
+    expect(posts(fetch)).toEqual(['/api/conversations/c0/messages'])
+  })
+  it('starts a fresh conversation on request while the old one stays saved', async () => {
+    const fetch = mockApi(
+      (asked) => Promise.resolve(turnResponse('a', asked, 1)),
+      { saved },
+    )
+    render(
+      createElement(DocumentQuestion, { id: 'a', documentStatus: 'embedded' }),
+    )
+    await screen.findByText('Earlier answer is required [1].')
+    fireEvent.click(screen.getByRole('button', { name: 'New conversation' }))
+    expect(screen.queryByText('Earlier answer is required [1].')).toBeNull()
+    expect(screen.getByText('Your question')).toBeTruthy()
+    expect(
+      screen.queryByRole('button', { name: 'New conversation' }),
+    ).toBeNull()
+    enter(question)
+    ask()
+    await screen.findByText('Python is required [1].')
+    expect(posts(fetch)).toEqual([
+      '/api/documents/a/conversations',
+      '/api/conversations/c1/messages',
+    ])
+  })
+  it('lets you ask a new question when nothing is saved or restoring fails', async () => {
+    mockApi((asked) => Promise.resolve(turnResponse('a', asked)), {
+      restoreStatus: 503,
+    })
+    await renderChat()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'New conversation' }),
+    ).toBeNull()
+    enter(question)
+    ask()
+    expect(await screen.findByText('Python is required [1].')).toBeTruthy()
+  })
+  it('loads history only once per open document', async () => {
+    const fetch = mockApi(
+      (asked) => Promise.resolve(turnResponse('a', asked)),
+      {
+        saved,
+      },
+    )
+    const { rerender } = render(
+      createElement(DocumentQuestion, { id: 'a', documentStatus: 'embedded' }),
+    )
+    await screen.findByText('Earlier answer is required [1].')
+    const reads = fetch.mock.calls.length
+    rerender(
+      createElement(DocumentQuestion, { id: 'a', documentStatus: 'ready' }),
+    )
+    expect(screen.getByText('Earlier answer is required [1].')).toBeTruthy()
+    expect(fetch.mock.calls.length).toBe(reads)
   })
 })

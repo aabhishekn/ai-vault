@@ -1,4 +1,4 @@
-import { ApiError, requestJson } from '../../lib/api'
+import { ApiError, getJson, requestJson } from '../../lib/api'
 import {
   parseAnswer,
   toAnswerError,
@@ -71,5 +71,68 @@ export async function sendMessage(
     }
   } catch (error: unknown) {
     throw toAnswerError(error)
+  }
+}
+
+// The history endpoint pages at 100 turns; the newest turns are the ones worth showing.
+const HISTORY_PAGE_SIZE = 100
+
+export type SavedConversation = { id: string; turns: ChatTurn[] }
+
+function parseSavedTurn(data: unknown, documentId: string): ChatTurn {
+  if (
+    !isRecord(data) ||
+    typeof data.id !== 'string' ||
+    !Number.isSafeInteger(data.turn_number) ||
+    !isRecord(data.response) ||
+    typeof data.response.question !== 'string'
+  )
+    throw new ApiError(INVALID_RESPONSE)
+  return {
+    id: data.id,
+    turnNumber: Number(data.turn_number),
+    answer: parseAnswer(data.response, documentId, data.response.question),
+  }
+}
+
+/** The document's most recent answered conversation, or null when it has none. */
+export async function getLatestConversation(
+  documentId: string,
+  signal: AbortSignal,
+): Promise<SavedConversation | null> {
+  const encoded = encodeURIComponent(documentId)
+  const list = await getJson(
+    `/documents/${encoded}/conversations?limit=1&has_turns=true`,
+    signal,
+  )
+  if (!isRecord(list) || !Array.isArray(list.items))
+    throw new ApiError(INVALID_RESPONSE)
+  if (list.items.length === 0) return null
+  const summary: unknown = list.items[0]
+  if (
+    !isRecord(summary) ||
+    typeof summary.id !== 'string' ||
+    !summary.id.trim() ||
+    summary.document_id !== documentId ||
+    !Number.isSafeInteger(summary.turn_count) ||
+    Number(summary.turn_count) < 1
+  )
+    throw new ApiError(INVALID_RESPONSE)
+  const offset = Math.max(0, Number(summary.turn_count) - HISTORY_PAGE_SIZE)
+  const history = await getJson(
+    `/conversations/${encodeURIComponent(summary.id)}?limit=${HISTORY_PAGE_SIZE}&offset=${offset}`,
+    signal,
+  )
+  if (
+    !isRecord(history) ||
+    history.id !== summary.id ||
+    !Array.isArray(history.turns)
+  )
+    throw new ApiError(INVALID_RESPONSE)
+  return {
+    id: summary.id,
+    turns: history.turns.map((turn: unknown) =>
+      parseSavedTurn(turn, documentId),
+    ),
   }
 }

@@ -49,6 +49,17 @@ class ConversationResponse(BaseModel):
     created_at: datetime
 
 
+class ConversationSummary(ConversationResponse):
+    turn_count: int
+
+
+class ConversationListResponse(BaseModel):
+    items: list[ConversationSummary]
+    total: int
+    limit: int
+    offset: int
+
+
 class ConversationTurnResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID

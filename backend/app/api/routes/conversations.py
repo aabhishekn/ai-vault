@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query
 from app.api.rate_limit import limit
 from app.schemas.chat import (
     ConversationHistoryResponse,
+    ConversationListResponse,
     ConversationResponse,
     ConversationTurnResponse,
     SearchRequest,
@@ -19,6 +20,16 @@ router = APIRouter(tags=["conversations"])
 )
 def create_conversation(document_id: UUID) -> ConversationResponse:
     return service.create_conversation(document_id)
+
+
+@router.get("/documents/{document_id}/conversations", response_model=ConversationListResponse)
+def list_conversations(
+    document_id: UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    has_turns: bool = False,
+) -> ConversationListResponse:
+    return service.list_conversations(document_id, limit, offset, has_turns)
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationHistoryResponse)

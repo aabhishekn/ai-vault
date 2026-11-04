@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createConversation, sendMessage } from './conversations'
+import {
+  createConversation,
+  getLatestConversation,
+  sendMessage,
+} from './conversations'
 
 const documentId = 'document-a'
 const conversationId = 'conversation-a'
@@ -154,4 +158,85 @@ describe('conversation API', () => {
       expect(fetch).not.toHaveBeenCalled()
     },
   )
+})
+
+describe('latest saved conversation', () => {
+  const summary = {
+    id: conversationId,
+    document_id: documentId,
+    turn_count: 2,
+    created_at: '2026-11-04T00:00:00Z',
+  }
+  const history = (turns: unknown[]) => ({
+    id: conversationId,
+    document_id: documentId,
+    turns,
+  })
+  const savedTurn = (number: number, extra = {}) => ({
+    id: `turn-${number}`,
+    conversation_id: conversationId,
+    turn_number: number,
+    response: { ...answer, ...extra },
+  })
+  const respond = (...bodies: unknown[]) => {
+    const fetch = vi.fn()
+    for (const body of bodies) fetch.mockResolvedValueOnce(Response.json(body))
+    vi.stubGlobal('fetch', fetch)
+    return fetch
+  }
+
+  it('returns null when the document has no answered conversations', async () => {
+    const fetch = respond({ items: [], total: 0, limit: 1, offset: 0 })
+    await expect(
+      getLatestConversation(documentId, signal()),
+    ).resolves.toBeNull()
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      `/api/documents/${documentId}/conversations?limit=1&has_turns=true`,
+      expect.objectContaining({ headers: { Accept: 'application/json' } }),
+    )
+  })
+  it('loads the newest conversation with its validated turns', async () => {
+    const fetch = respond(
+      { items: [summary], total: 1, limit: 1, offset: 0 },
+      history([savedTurn(1), savedTurn(2)]),
+    )
+    const result = await getLatestConversation(documentId, signal())
+    expect(result?.id).toBe(conversationId)
+    expect(result?.turns.map((turn) => turn.turnNumber)).toEqual([1, 2])
+    expect(result?.turns[0]?.answer).toEqual(answer)
+    expect(fetch.mock.calls[1]?.[0]).toBe(
+      `/api/conversations/${conversationId}?limit=100&offset=0`,
+    )
+  })
+  it('requests the last page when a conversation has more than 100 turns', async () => {
+    const fetch = respond(
+      { items: [{ ...summary, turn_count: 130 }] },
+      history([savedTurn(31)]),
+    )
+    await getLatestConversation(documentId, signal())
+    expect(fetch.mock.calls[1]?.[0]).toContain('offset=30')
+  })
+  it.each([
+    [null],
+    [{}],
+    [{ items: [{ ...summary, document_id: 'another-document' }] }],
+    [{ items: [{ ...summary, turn_count: 0 }] }],
+    [{ items: [{ ...summary, id: ' ' }] }],
+  ])('rejects a malformed conversation list', async (list) => {
+    respond(list)
+    await expect(getLatestConversation(documentId, signal())).rejects.toThrow(
+      'invalid conversation response',
+    )
+  })
+  it.each([
+    [null],
+    [{ ...history([]), id: 'another-conversation' }],
+    [{ id: conversationId }],
+    [history([{ ...savedTurn(1), response: null }])],
+    [history([savedTurn(1, { citations: [] })])],
+    [history([savedTurn(1, { document_id: 'another-document' })])],
+  ])('rejects malformed saved history', async (body) => {
+    respond({ items: [summary] }, body)
+    await expect(getLatestConversation(documentId, signal())).rejects.toThrow()
+  })
 })

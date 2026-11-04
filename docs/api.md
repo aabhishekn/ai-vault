@@ -423,3 +423,13 @@ When a document finishes embedding, the same worker job generates its summary an
 - **No duplicate cost.** Existing saved content is reused, and a user clicking Generate while the worker is still running at worst triggers one extra call; the first saved result wins.
 - **Cost.** One extra call each for the summary and insights; for the 4-page case study that was about 1,600 and 1,900 input tokens (under $0.002). Both appear as `ai_call` log events. Their tokens are not stored in the database, so `/metrics/ai-usage` does not include them.
 - **Timing.** Status becomes `embedded` (Search ready) first, so chat is available a few seconds before the summary and insights appear; the document view's refresh buttons pick them up. These calls run inside the same 5-minute job timeout, and the processing duration metric excludes them.
+
+## List a document's conversations
+
+`GET /documents/{document_id}/conversations?limit=20&offset=0&has_turns=false` returns the document's conversations newest first with `id`, `document_id`, `created_at` and `turn_count`, plus `total`, `limit` and `offset`. Pass `has_turns=true` to skip conversations that were created but never answered. An unknown document returns 404. The endpoint reads PostgreSQL only and never calls the AI provider. The frontend uses `limit=1&has_turns=true` to restore the latest conversation when a document is opened; fetch its turns with `GET /conversations/{id}`.
+
+## API latency metrics
+
+`GET /metrics/api` returns request counts and latency per route for the API process since it started: `since`, `total_requests`, `server_error_rate` (5xx share, `null` before any request) and a `routes` list sorted by traffic. Each route has `method`, `route`, `requests`, `server_errors`, `average_ms`, `p95_ms` and `max_ms`.
+
+Routes are grouped by template (`/documents/{document_id}`) rather than the raw path, and unmatched paths share one `unmatched` entry, so memory stays bounded however many URLs are requested. The 95th percentile uses nearest rank over each route's most recent 1,000 requests; counts, averages and the maximum cover every request. Statistics live in memory, so they reset when the API restarts and each API process reports only its own traffic. The JSON request log (`request` events with `duration_ms`) is the durable record, and job durations are stored in `processing_attempts` (see `/metrics/processing`).

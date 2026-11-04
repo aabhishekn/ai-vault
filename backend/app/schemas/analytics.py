@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -53,3 +55,20 @@ class AIUsageResponse(BaseModel):
     estimated_total_cost_usd: float
     unpriced_models: list[str]
     not_persisted: list[str]
+
+
+class RouteMetrics(BaseModel):
+    method: str
+    route: str
+    requests: int
+    server_errors: int
+    average_ms: float
+    p95_ms: float
+    max_ms: float
+
+
+class ApiMetricsResponse(BaseModel):
+    since: datetime
+    total_requests: int
+    server_error_rate: float | None
+    routes: list[RouteMetrics]

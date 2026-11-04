@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError } from '../../lib/api'
 import { canAskDocument, validateQuestion } from './answers'
-import { createConversation, sendMessage, type ChatTurn } from './conversations'
+import {
+  createConversation,
+  getLatestConversation,
+  sendMessage,
+  type ChatTurn,
+} from './conversations'
 import type { DocumentStatus } from './types'
 
 const REQUEST_TIMEOUT_MS = 120_000
+const RESTORE_TIMEOUT_MS = 15_000
 
 type ChatState = {
   turns: ChatTurn[]
@@ -12,15 +18,41 @@ type ChatState = {
   error: string | null
 }
 
-// Owns one conversation per mounted document view; render it with key={id}.
+// Owns the open conversation for one mounted document view; render it with key={id}.
+// A document's latest saved conversation is restored once, so closing details loses nothing.
 export function useDocumentChat(id: string, documentStatus: DocumentStatus) {
   const [state, setState] = useState<ChatState>({
     turns: [],
     pendingQuestion: null,
     error: null,
   })
+  const [restored, setRestored] = useState(false)
   const activeRequest = useRef<AbortController | null>(null)
   const conversationId = useRef<string | null>(null)
+  const eligible = canAskDocument(documentStatus)
+  const restoring = eligible && !restored
+
+  useEffect(() => {
+    if (!eligible || restored) return
+    const controller = new AbortController()
+    const signal = AbortSignal.any([
+      controller.signal,
+      AbortSignal.timeout(RESTORE_TIMEOUT_MS),
+    ])
+    getLatestConversation(id, signal)
+      .then((saved) => {
+        if (controller.signal.aborted || !saved || conversationId.current)
+          return
+        conversationId.current = saved.id
+        setState({ turns: saved.turns, pendingQuestion: null, error: null })
+      })
+      // Restoring is a convenience: if it fails, asking a new question still works.
+      .catch(() => {})
+      .finally(() => {
+        if (!controller.signal.aborted) setRestored(true)
+      })
+    return () => controller.abort()
+  }, [id, eligible, restored])
 
   useEffect(
     () => () => {
@@ -81,5 +113,12 @@ export function useDocumentChat(id: string, documentStatus: DocumentStatus) {
     }
   }
 
-  return { ...state, send }
+  // Forget the open conversation; the next question starts a fresh one. Saved turns stay saved.
+  function startNewConversation() {
+    if (activeRequest.current) return
+    conversationId.current = null
+    setState({ turns: [], pendingQuestion: null, error: null })
+  }
+
+  return { ...state, restoring, send, startNewConversation }
 }
