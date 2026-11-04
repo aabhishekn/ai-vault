@@ -1,411 +1,96 @@
 # AI Vault
 
-A document management application for uploading documents, generating AI insights, and asking questions with source citations.
+A local document vault with PDF uploads, background text extraction, semantic search, source-cited answers, saved conversations, summaries, insights, and processing metrics.
 
-## Project status
+Built with Python 3.12, FastAPI, SQLAlchemy, PostgreSQL + pgvector, Redis/RQ, and OpenAI. The React/TypeScript frontend is the next development phase.
 
-Minimal FastAPI backend with a health endpoint and local PostgreSQL via Docker Compose. FastAPI connects to PostgreSQL through SQLAlchemy and Psycopg.
+## Run locally
 
-## Planned stack
-
-- Frontend: React, TypeScript, Vite
-- Backend: Python, FastAPI
-- Database: PostgreSQL with pgvector
-- Background processing: RQ and Redis
-- Document parsing: pdfplumber
-- Storage: local filesystem for development
-
-## Development approach
-
-Build and verify one small feature at a time, starting with a health endpoint, then database access, uploads, background processing, and document chat.
-
-Keep credentials in local environment files. Never commit API keys or uploaded documents.
-
-## Run the backend
-
-Requires Python 3.12. From the repository root:
+Start Docker Desktop. From the repository root, create `.env` from `.env.example` if it does not exist and set `POSTGRES_PASSWORD`. Keep `.env` out of Git.
 
 ```bash
+docker compose up -d --wait
 cd backend
 python3.12 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m uvicorn main:app --reload
-```
-
-Visit http://localhost:8000/health for the liveness response and http://localhost:8000/docs for interactive API documentation. The health endpoint checks only that the API is running. Stop the server with Ctrl+C.
-
-## Local database
-
-Start Docker Desktop. From the repository root, copy `.env.example` to `.env` if you do not already have one and replace its placeholder password. The local `.env` is ignored by Git.
-
-```bash
-docker compose up -d --wait db
-docker compose ps
-```
-
-PostgreSQL is available at `127.0.0.1:5433`, with database/user `ai_vault`. The image includes pgvector for later document search; the extension will be enabled in a migration.
-
-`postgres_data` is a named volume that retains database files across container restarts. Use `docker compose stop db` to stop it. `docker compose down` also retains the volume; adding `-v` deletes stored database data.
-
-After starting the database, run the backend and visit `http://localhost:8000/health/db`. A successful `SELECT 1` returns `{"status":"ok","database":"connected"}`. Database connection failures return HTTP 503 with a generic error. `/health` remains an API liveness check.
-
-The backend loads the root `.env` independently of the current working directory. Optional `POSTGRES_HOST` and `POSTGRES_PORT` default to `127.0.0.1` and `5433`. Environment variables take precedence. The SQLAlchemy engine manages a connection pool, checks connections before reuse, and disposes the pool at shutdown. The `documents` table is managed through Alembic migrations.
-
-## Database migrations
-
-From `backend/`, with the virtual environment active:
-
-```bash
+python -m pip install -r requirements-dev.txt
 python -m alembic upgrade head
-python -m alembic current
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+In a second terminal, from `backend/` with the same virtual environment active:
+
+```bash
+python -m app.worker
+```
+
+Open [Swagger](http://localhost:8000/docs), [health](http://localhost:8000/health), or [database health](http://localhost:8000/health/db). PostgreSQL binds to localhost:5433 and Redis to localhost:6379.
+
+Extraction works without an API key. To enable document embeddings, set `OPENAI_API_KEY` and `ENABLE_EMBEDDINGS=true` in the root `.env`, then restart the API and worker. Search, answers, summaries, and insights also use the key. Generated results send text to the provider and can incur charges. Fresh clones default to embeddings disabled.
+
+## Code structure
+
+```text
+backend/
+  app/
+    api/routes/       HTTP validation and endpoint declarations
+    services/         Document, search, chat, content and analytics workflows
+    ai/               Provider adapters, prompts and output validation
+    processing/       PDF extraction and text chunking
+    tasks/            Redis queue and background processing orchestration
+    db/               SQLAlchemy engine, models and shared lookups
+    schemas/          Request/response models grouped by feature
+    core/             Configuration, shared constants and service errors
+    cli/              Manual enqueue and learning utilities
+    main.py           Application construction and resource lifecycle
+    worker.py         Worker entry point
+  migrations/         Versioned database changes
+  tests/              Unit, HTTP, architecture and database integration tests
+docs/
+  architecture.md     Boundaries, transaction design and extension guide
+  api.md              Endpoint behavior, operations and current limitations
+  backend-review.md   Review findings, changes and verification
+```
+
+Routes delegate to services. Services coordinate database access and provider adapters; they do not import FastAPI. AI adapters do not access the database. The worker reuses processing and AI helpers and owns its transaction boundaries. Applied migrations are preserved.
+
+## Main endpoints
+
+| Workflow | Endpoint |
+| --- | --- |
+| Upload/list/get | `POST /documents`, `GET /documents`, `GET /documents/{id}` |
+| Semantic search | `POST /documents/{id}/search` |
+| One question with citations | `POST /documents/{id}/ask` |
+| Saved conversations | `POST /documents/{id}/conversations`, `POST /conversations/{id}/messages`, `GET /conversations/{id}` |
+| Saved summaries | `POST` / `GET /documents/{id}/summary` |
+| Saved insights | `POST` / `GET /documents/{id}/insights` |
+| Document statistics | `GET /stats/documents` |
+| Processing metrics | `GET /metrics/processing` |
+
+See [API and operations](docs/api.md) for request examples, status/error behavior, caching, limits, and recovery commands.
+
+## Development checks
+
+From `backend/` with `.venv` active:
+
+```bash
+python -m ruff check .
+python -m ruff format --check .
+python -m unittest discover -s tests -v
+RUN_INTEGRATION_TESTS=1 python -m unittest discover -s tests -v
 python -m alembic check
 ```
 
-`models.py` describes the desired table structure. `migrations/versions/` records the versioned changes used to build that structure. Alembic reads the same database configuration as the application; credentials stay in `.env`. After editing models, generate a migration with `python -m alembic revision --autogenerate -m "Describe the change"`, review it, and apply it with `upgrade head`.
+Database integration tests require local PostgreSQL with migrations applied and use their own records or temporary tables. Tests mock paid provider requests. GitHub Actions runs formatting, lint, migration replay and the complete test suite against PostgreSQL/pgvector and Redis. To format an edit, run `python -m ruff format .`.
 
-The first migration creates `documents`: UUID ID, filename, unique storage path, content type, positive byte size, processing status, optional summary/error, and a timezone-aware creation timestamp. Valid statuses are `queued`, `processing`, `extracted`, `embedded`, `ready`, and `failed`. Original file bytes will live in local file storage. UUIDs are generated by the Python model on insert.
-
-A migration contains `upgrade()` to apply changes and `downgrade()` to reverse them. The first migration's downgrade drops the table and its data; do not run it against data you want to keep.
-
-## Upload a PDF
-
-Open http://localhost:8000/docs, expand `POST /documents`, click **Try it out**, and choose a PDF. Or from the repository root:
+For the queue demo or recovery of a saved queued/failed upload:
 
 ```bash
-curl -F "file=@/absolute/path/to/document.pdf" http://localhost:8000/documents
+python -m app.cli.enqueue_demo
+python -m app.cli.enqueue_document DOCUMENT_UUID
+python -m app.worker --burst
 ```
 
-Uploads return HTTP 201 with a document ID, original filename, type, byte size, status, and creation timestamp. Files are stored under `storage/documents/` using generated UUID filenames; file paths are not exposed in the response. Metadata is stored in PostgreSQL.
+Drain old queued work before updating from the former flat module layout; newly enqueued jobs use the `app.tasks.documents` import path. CLI commands and the server now run as package modules. The database, stored files, and existing API request/response shapes stay compatible.
 
-This first version accepts `.pdf` files with a `%PDF-` header, limited to 10 MiB. This is a basic signature check, not full PDF parsing. The processing worker will validate readability later. Empty files return 400, unsupported types/headers return 415, and oversized files return 413. Files are removed if saving their database record fails. A process crash between saving the file and committing metadata can still leave an orphan file; reconciliation can be added later.
-
-`queued` means awaiting background extraction. A successful upload automatically queues an RQ job after the file and metadata are saved. Start `python worker.py` from `backend/` (with `.venv` active) to process jobs. AI calls are disabled by default; set `ENABLE_EMBEDDINGS=true` to enable the embedding stage.
-
-Run upload validation and failure-cleanup tests from `backend/`:
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-## Retrieve a document
-
-Use the ID returned by upload to fetch its metadata:
-
-```bash
-curl http://localhost:8000/documents/YOUR_DOCUMENT_UUID
-```
-
-`GET /documents/{document_id}` returns HTTP 200 with the same metadata fields as upload. An unknown UUID returns 404; an invalid UUID returns FastAPI's 422 validation response. Database errors return a generic 503. This endpoint retrieves metadata and processing status; it does not return the PDF bytes.
-
-## List documents
-
-`GET /documents?limit=20&offset=0` returns `items`, `total`, `limit`, and `offset`. Results are ordered newest first, with UUID as a deterministic tie-breaker. `limit` defaults to 20 (allowed range 1–100); `offset` defaults to 0 and must be nonnegative. Invalid query values return 422. An offset beyond the last row returns an empty `items` list while preserving the total count. Database errors return a generic 503.
-
-```bash
-curl 'http://localhost:8000/documents?limit=10&offset=0'
-```
-
-This is offset pagination: the next page uses `offset + limit`. Concurrent uploads can shift page boundaries; cursor pagination can be introduced if needed at scale.
-
-## Local Redis
-
-Start Redis from the repository root:
-
-```bash
-docker compose up -d --wait redis
-docker compose exec -T redis redis-cli ping
-```
-
-The response should be `PONG`. Redis is bound to `127.0.0.1:6379` for local development. RQ uses Redis to store waiting jobs and worker state. PostgreSQL remains the source of document metadata. Uploads automatically submit extraction jobs to the `documents` queue.
-
-Redis uses append-only persistence in the `redis_data` volume and `noeviction` to avoid silently evicting queue data. The default append-only fsync policy can lose roughly the last second of writes on a crash; this is development persistence, not an exactly-once job guarantee.
-
-To start both supporting services, use `docker compose up -d --wait`. To stop them, use `docker compose stop`. Avoid `docker compose down -v` unless you intend to delete both database and Redis data.
-
-## Run the first background job
-
-With Redis running, open a terminal in `backend/` and activate `.venv`:
-
-```bash
-source .venv/bin/activate
-python enqueue_demo.py
-```
-
-This puts `jobs.greet("Abhishek")` on the `documents` queue and prints its job ID. It does not execute the function in that terminal. Start the worker in another terminal from `backend/`, also with the virtual environment active:
-
-```bash
-python worker.py
-```
-
-The worker executes the queued function and logs a successful completion. Leave it running to pick up more jobs, or stop it with Ctrl+C. For a one-off check, `python worker.py --burst` processes waiting jobs and exits.
-
-To inspect the result within one hour, replace the placeholder with the printed ID:
-
-```bash
-python - <<'PY'
-from rq.job import Job
-from rq.serializers import JSONSerializer
-from task_queue import redis_connection
-
-job = Job.fetch("YOUR_JOB_ID", connection=redis_connection, serializer=JSONSerializer)
-print(job.get_status())
-print(job.return_value())
-PY
-```
-
-The completed job returns `Hello, Abhishek! Your background worker is running.` Its result expires after one hour. This demo does not process documents, change document statuses, or call an AI API.
-
-`task_queue.py` shares the Redis connection and queue between producers and workers. Set `REDIS_URL` in the root `.env` to override the local default. Jobs use JSON serialization on both sides. The worker uses RQ's `SpawnWorker`, which avoids unsafe forking on macOS; see the [RQ worker documentation](https://python-rq.org/docs/workers/#spawnworker). Restart the worker after changing its code.
-
-## Extract PDF text locally
-
-From `backend/` with `.venv` active:
-
-```bash
-python pdf_extraction.py "/absolute/path/to/document.pdf"
-```
-
-The command prints the page count, extracted character count, and a short text preview per page. It reads the existing file without saving extracted text or changing any document records. No API key or network request is involved.
-
-`extract_pdf(Path(...))` returns a list of `ExtractedPage` objects, each containing `page_number` and `text`. Page numbers start at 1; blank pages remain in the list so later citations refer to the original PDF pages. Encrypted PDFs, unreadable PDFs, and PDFs with no readable text are rejected. A document with both text and blank/image pages keeps the empty pages; images are not transcribed.
-
-This uses [pypdf text extraction](https://pypdf.readthedocs.io/en/stable/user/extract-text.html), not OCR. Complex layouts may have imperfect reading order, and scanned image-only documents need a future OCR step. The upload worker also calls this helper to extract stored PDFs. The current helper has no page-count or decompressed-memory limit; the 10 MiB upload limit does not bound parsing memory.
-
-Run extraction and upload tests with `python -m unittest discover -s tests -v`.
-
-## Extract an uploaded document in the worker
-
-Apply the latest migration from `backend/` with the virtual environment active:
-
-```bash
-python -m alembic upgrade head
-python enqueue_document.py YOUR_DOCUMENT_UUID
-python worker.py --burst
-```
-
-New uploads are queued automatically. For older uploads or recovery, use a document ID returned by `POST /documents`. The manual enqueue command submits extraction in Redis; the worker then reads the stored PDF and writes its pages to PostgreSQL. Alternatively, leave `python worker.py` running in another terminal. Check `GET /documents/{document_id}` for the resulting status.
-
-With embeddings disabled, the lifecycle is `queued → processing → extracted`. With embeddings enabled, it is `queued → processing → embedded`. Invalid or unreadable documents become `failed`; the worker stores an error message and raises the error so RQ also records the failed job. A failed document can be queued again with the same command. `extracted` means text is available; `ready` is reserved for the later AI pipeline.
-
-The `extracted_pages` JSONB column stores objects with `page_number` and `text`, including blank pages. This internal content is not returned by the metadata endpoints. A conditional database update claims each document before reading it, so duplicate jobs skip documents already processing or extracted. Unexpected worker termination can leave a document in `processing`; automatic recovery and retries are not implemented yet. Keep the worker running for new uploads to process automatically.
-
-To run the database integration tests alongside the unit tests (requires local PostgreSQL and migrations):
-
-```bash
-RUN_INTEGRATION_TESTS=1 python -m unittest discover -s tests -v
-```
-
-Integration tests create and delete their own document records and temporary files. Without the environment flag, these thirty-five tests are skipped. Downgrading the extraction migration discards extracted page data and changes `extracted` documents back to `queued`.
-
-## Automatic queueing and queue failures
-
-`POST /documents` saves the file, commits metadata in PostgreSQL, then enqueues extraction in Redis. The worker can therefore see the document as soon as it receives the job. HTTP 201 returns the initial `queued` metadata; poll `GET /documents/{document_id}` to see `processing`, `extracted`, `embedded`, or `failed`. With no worker running, jobs wait in Redis.
-
-If Redis does not confirm enqueueing, the API returns HTTP 503 with `detail.message` and `detail.document_id`. The file and database record are preserved. The job may have been accepted before the connection failed, so check the returned document ID before retrying. If it remains `queued` after checking the worker, run `python enqueue_document.py DOCUMENT_ID` instead of uploading another copy. Duplicate execution is guarded by the worker's database claim.
-
-PostgreSQL and Redis do not share a transaction: an API crash after the database commit but before enqueueing can leave a saved document waiting without a job. The manual command is the current recovery path; a transactional outbox can close this gap later.
-
-## Preview text chunks
-
-From `backend/` with `.venv` active:
-
-```bash
-python chunking.py "/absolute/path/to/document.pdf"
-```
-
-`chunk_pages(pages)` splits extracted pages into windows of at most 200 whitespace-separated words, with 40 words of overlap between adjacent chunks on the same page. These are word counts, not model token counts. Both sizes are configurable in Python. Overlap retains some context around window boundaries. Each chunk contains a zero-based `chunk_index`, the original one-based `page_number`, and `text`.
-
-Chunks never cross pages. Blank pages produce no chunks, while subsequent chunks retain their original page numbers. Whitespace is collapsed to single spaces; words and punctuation are otherwise preserved. This simple first version can split sentences and does not reconstruct table structure. A final window that already reaches the end of a page does not produce redundant trailing windows.
-
-The worker calls this helper and saves chunks alongside extracted pages. The preview command only prints chunks; it does not save them or make AI requests. The worker can optionally embed saved chunks.
-
-## Stored document chunks
-
-Apply the latest migration from `backend/` using `python -m alembic upgrade head`, then restart the worker. New uploads now extract pages, split them into chunks, and save both. Without embeddings, processing finishes at `extracted`; with embeddings enabled it continues to `embedded`.
-
-`document_chunks` stores a UUID ID, document ID, zero-based chunk index, one-based page number, and chunk text. A foreign key links each chunk to its document and deletes associated chunks when the document is deleted. A unique constraint prevents duplicate positions within a document; its index also supports retrieving chunks for a document. Queries must explicitly order by `chunk_index` to reconstruct the original sequence.
-
-The worker replaces any previous chunks on a retry. The replacement and extracted pages commit together, along with `extracted` when embeddings are disabled or `processing` when embedding continues. If saving fails, that transaction rolls back and the worker separately records `failed`. Previously saved content survives a failed replacement. Search will need to check document status before using stored chunks.
-
-Documents already marked `extracted` before this migration are preserved without backfilling chunks. A fresh upload exercises the full pipeline; automatic backfill and a reprocessing endpoint are not implemented yet. The metadata API still returns the same fields. Embeddings are optional as described below; document similarity search is available as described below.
-
-Downgrading this migration deletes the chunk table and its contents while preserving document records and extracted pages.
-
-## Embedding client
-
-`embeddings.generate_embeddings(texts)` sends a list of text strings to OpenAI and returns an `EmbeddingBatch` containing `vectors` in the original input order, the returned model name, and the input token count. It uses `text-embedding-3-small` with 1,536 dimensions. See the [official OpenAI embeddings guide](https://developers.openai.com/api/docs/guides/embeddings).
-
-For future live use, set `OPENAI_API_KEY` in the repository root `.env` (ignored by Git). No key is needed to start the API, extract PDFs, create chunks, or run the mocked embedding tests. The supplied assignment key is configured only in the ignored local `.env`; repository clones must supply their own key.
-
-The helper accepts up to 64 texts per request, rejects blank inputs, and returns an empty batch without an API request for empty input. It checks response positions, vector dimensions, and finite values before returning. Requests have a 30-second SDK timeout and up to two SDK retries. Provider errors propagate to the caller for handling by the later pipeline integration.
-
-These limits count texts, not tokens; input token limits are still enforced by the provider. The caller will need to split larger batches and handle texts exceeding the model token limit. Word-based chunks do not guarantee a token bound. Importing the module makes no API request; calling the helper with nonempty text does send that text to the provider and may incur charges.
-
-The worker can call this helper and store vectors when explicitly enabled. All embedding tests mock the SDK: `python -m unittest discover -s tests -v` makes no OpenAI requests. A separate live SDK smoke check succeeded with `text-embedding-3-small`: one short synthetic input, 1,536 dimensions, and 5 input tokens. A subsequent live upload also verified the full worker pipeline: 4 extracted pages, 6 chunks, and 6 saved vectors, with 1,240 input tokens reported by the completed job.
-
-## Vector storage with pgvector
-
-The vector-storage migration enables the PostgreSQL `vector` extension and adds nullable `embedding vector(1536)` and `embedding_model` columns to `document_chunks`. Apply it from `backend/` with `python -m alembic upgrade head`. The existing Docker image already includes the extension binaries; enabling the extension installs its SQL types and operators in this database. The migration needs a database role permitted to create the extension; the local Compose database owner has that access.
-
-A chunk without an embedding has both new columns set to NULL, so existing documents and the extraction worker continue to work. When storing a vector, its model name must be stored with it. PostgreSQL enforces 1,536 dimensions, and a check constraint enforces the vector/model pair. Future search must use the same embedding model and dimensions for document chunks and query text.
-
-The Python `pgvector` package provides SQLAlchemy's `VECTOR` type and distance operations. The integration tests verify round-trip storage, cosine-distance ordering, dimension enforcement, and vector/model consistency using synthetic vectors. These tests roll back their fixture transactions and make no AI calls. See the [official pgvector Python integration](https://github.com/pgvector/pgvector-python#sqlalchemy).
-
-No approximate vector index is added yet; initial similarity queries can use exact scans for this small local dataset. The worker generates embeddings only when enabled; this migration does not backfill vectors. Downgrading removes the two columns and their check constraint, preserving chunk text and leaving the shared vector extension installed.
-
-## Optional embeddings in the background worker
-
-Apply migrations with `python -m alembic upgrade head`. By default, `ENABLE_EMBEDDINGS=false` (including when unset), and uploaded documents finish at `extracted` without any AI calls. To enable the embedding stage for future uploads, configure the root `.env`:
-
-```dotenv
-OPENAI_API_KEY=your_key_here
-ENABLE_EMBEDDINGS=true
-```
-
-Restart the worker after changing configuration. Do not commit `.env`. Enabled processing sends chunk text to OpenAI and can incur charges. The supplied assignment key was configured locally and verified with one small live embedding request. Automatic embedding generation is now enabled in the local `.env` after a successful end-to-end check; `.env.example` continues to default to `false` for fresh clones. Automated tests still use mocks only.
-
-The worker commits extracted pages and chunks first, keeping status `processing`. It then requests embeddings in batches of at most 64 chunks, outside database transactions. After all batches succeed, it writes all vectors with their model names and sets `embedded` in a single transaction. A provider or vector-save failure marks the document `failed`; extracted text remains saved and no partial vector updates are committed. Missing credentials with embeddings enabled also fail processing.
-
-`embedded` means vectors are stored; it does not mean a summary or chat answer exists. `ready` remains reserved for the later complete pipeline. The RQ result includes `embedding_input_tokens` from successful batches; this is temporary job-result data. New processing attempts also persist observed token usage as described below; neither is a complete billing ledger or accounts for all failed requests and SDK retries.
-
-A manual retry of a failed document re-extracts and replaces its chunks, then repeats embedding requests if enabled. Successful provider batches can therefore be charged again after a later failure. Existing `extracted` documents are not automatically reprocessed or embedded; the current path for testing the new pipeline is a fresh upload. Worker termination/timeouts still need automatic recovery in a later step.
-
-## Live pipeline verification
-
-One upload of the four-page case study completed through the HTTP upload endpoint, Redis queue, RQ worker, OpenAI embedding API, and PostgreSQL. Verification checked the API status `embedded`, all six chunk vectors having 1,536 dimensions, the model `text-embedding-3-small`, and preserved source page numbers `[1, 2, 2, 3, 3, 4]`. The completed job reported 1,240 embedding input tokens. The local document and vectors were retained for the upcoming search step.
-
-This live check used the supplied key from the ignored local `.env`; no credential or uploaded PDF is committed. Local `ENABLE_EMBEDDINGS=true` means new uploads send chunk text to OpenAI. Set it to `false` and restart the worker to return to extraction-only processing. Automated tests continue to use mocked provider responses and synthetic vectors.
-
-## Search a document by meaning
-
-`POST /documents/{document_id}/search` accepts a question and returns the closest stored chunks for that document. The document must be `embedded` or `ready`, with vectors generated by the supported embedding model. Use the ID returned by a live-enabled upload.
-
-```bash
-curl -X POST "http://localhost:8000/documents/YOUR_DOCUMENT_UUID/search" \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Which libraries are recommended for document chat and embeddings?","top_k":3}'
-```
-
-You can also use the **search** section at `http://localhost:8000/docs`. The question is trimmed, must contain 1–2,000 characters, and `top_k` defaults to 3 (allowed range 1–10). Each match includes `chunk_id`, `chunk_index`, `page_number`, `text`, and `cosine_distance`. Results are sorted by increasing distance, with chunk index breaking ties. Lower distance means a closer vector match; it is not a probability or confidence score.
-
-The endpoint checks document readiness before making an API call, embeds the question once, then compares it with compatible vectors from the selected document. The query and stored chunks must use the same model. No database transaction remains open during the provider call. Missing documents return 404, unavailable/incompatible embeddings return 409, and invalid inputs return 422. Database or provider availability problems return generic 503 responses; an invalid embedding response returns 502.
-
-Search makes a paid embedding request for the question; it does not re-embed the document or generate an answer. It returns up to `top_k` nearest chunks even if the question is unrelated—there is no relevance threshold yet. Retrieval quality, answer grounding, and abstention need ongoing evaluation as the answer endpoint is expanded. Similarity queries currently use exact vector scans rather than an approximate index.
-
-A live check against the embedded case study returned HTTP 200 and ranked a relevant page 3 chunk first for the example question. All automated search tests use synthetic vectors and mocked question embeddings; tests cover document/model filtering, ranking, limits, readiness, and safe errors.
-
-## Ask a document with source citations
-
-`POST /documents/{document_id}/ask` accepts the same request as search:
-
-```json
-{
-  "question": "Which libraries are recommended for document chat and embeddings?",
-  "top_k": 3
-}
-```
-
-Use an embedded document ID in the **answers** section of Swagger at `http://localhost:8000/docs`. The endpoint embeds the question, retrieves relevant chunks, and sends those chunks to an answer model. It returns `answer`, `insufficient_evidence`, `citations`, the actual answer model name, and generation input/output token usage. Each citation has a `source_number` matching an inline label such as `[1]`, plus a stored chunk ID, original page number, and source text.
-
-Answer generation defaults to `gpt-4.1-mini`; set `ANSWER_MODEL` in the root `.env` and restart the API to override it with a compatible model available to the supplied key. It uses the [OpenAI Responses API with structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs), a maximum of 800 output tokens, a 30-second SDK timeout, up to two SDK retries, and `store=False`. This setting is not a claim of zero provider retention. Each question incurs a query-embedding request and an answer-generation request. Returned usage covers generation only, excluding query embedding and retries; it is not a durable billing record.
-
-The model is instructed to use only provided sources, treat document text and questions as untrusted data rather than instructions, and decline when sources do not support an answer. The server validates that inline citation numbers match the declared source list and refer to retrieved chunks; citation IDs, pages, and text are filled from retrieval rather than generated metadata. Invalid, incomplete, or refused structured output returns a generic 502. Provider/configuration failures return 503. Search readiness/validation errors retain their existing status codes.
-
-When the model reports insufficient evidence, the server returns a fixed explanatory answer with no citations. These checks validate citation references, not whether every claim is entailed by its source. Prompt injection resistance, retrieval coverage, and unsupported-claim detection still require broader evaluation. In particular, retrieval may omit relevant information elsewhere in the document.
-
-A live question about recommended document-chat and embedding libraries returned a citation to page 3. A live question about an exact company revenue figure absent from the document returned insufficient evidence without citations. Automated tests use mocked provider output and verify citation mapping, invalid citation rejection, incomplete responses, abstention, and safe API errors. The `/ask` endpoint remains stateless and does not change document processing status. Use the conversation endpoints below for persisted follow-up context.
-
-## Saved document conversations
-
-Apply the latest migration from `backend/` with `python -m alembic upgrade head`, then restart the API. Use these routes in the **conversations** section of Swagger:
-
-1. `POST /documents/{document_id}/conversations` creates an empty conversation for a searchable document (HTTP 201); save its returned `id`.
-2. `POST /conversations/{conversation_id}/messages` sends a question with `{"question":"Which libraries are recommended?","top_k":3}` and returns a saved turn (HTTP 201).
-3. Send a follow-up to the same messages endpoint, such as `{"question":"Which of those are for document chat?"}`.
-4. `GET /conversations/{conversation_id}?limit=20&offset=0` retrieves persisted turns in order, with `total`, `limit`, and `offset`. Limit allows 1–100; offset must be nonnegative.
-
-A conversation belongs to one document. A turn stores the complete question/answer response, including citation snapshots, model name, and generation token usage. Question and answer are stored as one paired turn; unsuccessful generation does not leave a partial user message. PostgreSQL saves each turn and updates its conversation count in the same transaction. Deleting a document cascades through its conversations and turns.
-
-For each follow-up, the server loads the latest three turns, in chronological order, clipping each historical question to 1,000 characters and answer to 2,000. All turns remain stored, but only this bounded context is sent to the answer model. Retrieval combines the current question with up to 800 characters of the latest prior question and 500 of its answer, capped at 2,000 characters with the current question first. This simple approach avoids an extra model request for question rewriting; complex follow-ups or references to older turns may require a better rewrite or memory strategy later.
-
-History is provided as untrusted context to resolve references, not as factual evidence. New answers must cite currently retrieved document chunks; prior answers and their citation labels cannot supply evidence. Each message still makes query-embedding and generation requests, and the bounded history increases generation input usage.
-
-No database transaction is held open during AI requests. An optimistic version check detects simultaneous messages based on the same history; one request succeeds and a conflicting request returns 409 without appending a stale answer. The conflicting request may already have incurred provider usage. Fetch history before retrying; request-ID deduplication is not implemented yet. Database persistence errors return 503, and provider/answer validation errors preserve the existing safe error behavior.
-
-A live two-turn conversation verified that a follow-up referring to “those” used the previous turn and returned a page 3 citation. Both completed turns were fetched from PostgreSQL through the history route. Automated tests mock provider calls and cover persistence, context limits, failure cleanup, concurrent-update conflicts, and cascading deletion. Downgrading the conversation migration deletes conversation history while preserving document records.
-
-## Generate and read a saved summary
-
-Use the **summaries** section in Swagger:
-
-- `POST /documents/{document_id}/summary` generates a short summary of the extracted text and stores it in the existing `documents.summary` column. If a summary already exists, it returns that value without another provider request.
-- `GET /documents/{document_id}/summary` reads the saved summary without making an AI request. A missing document or a summary not yet generated returns 404.
-
-Both routes return `document_id` and `summary`. Summary generation requires extracted pages and status `extracted`, `embedded`, or `ready`; unavailable text returns 409. This feature does not change document processing status or automatically run on upload. No new migration is needed because the initial document table already included the summary column.
-
-The generator uses the complete extracted text, normalizes whitespace, and retains page labels in the prompt. It rejects input exceeding 60,000 characters with 413 instead of silently truncating it. Larger documents will need a later multi-stage summarization strategy. The model is instructed to summarize only the supplied text, treat embedded instructions as untrusted data, and write one concise paragraph covering the document's purpose and key information. Outputs must be completed, nonblank, and no longer than 4,000 characters; invalid/incomplete/refused responses return 502.
-
-Generation uses `ANSWER_MODEL` (default `gpt-4.1-mini`), structured output, at most 800 output tokens, a 30-second SDK timeout, up to two SDK retries, and `store=False`. It sends document text to OpenAI and may incur charges. The saved summary is plain text without citations or persisted generation-usage metadata. Factual accuracy still requires evaluation; generation is not proof that every statement is supported.
-
-No database transaction stays open during the provider call. If two requests generate concurrently, the first stored summary is preserved and returned to both; both requests may incur provider usage. Generation failures do not clear an existing summary or change document status. Provider/configuration failures return 503. There is no forced-regeneration endpoint yet.
-
-A live check generated a summary for the embedded case study, verified it in PostgreSQL, and confirmed identical results from GET and a repeated POST. Automated tests use a mocked provider and cover persistence, caching, unavailable text, input/output limits, failure handling, and concurrent-save behavior.
-
-## Document statistics
-
-`GET /stats/documents` (the **statistics** section in Swagger) returns:
-
-- `total_documents` and a `by_status` count for each supported status, including zeros.
-- `total_storage_bytes`: sum of the recorded original PDF upload sizes.
-- `documents_with_summary`: documents with a stored non-NULL summary.
-- `total_extracted_pages`: number of stored extracted page entries, including blank pages.
-- `total_chunks` and `chunks_with_embeddings`: stored chunk rows and rows with non-NULL vectors.
-
-```bash
-curl http://localhost:8000/stats/documents
-```
-
-All values come from one PostgreSQL SELECT so they share a statement snapshot. Separate scalar chunk subqueries avoid multiplying document counts or byte totals when a document has several chunks. An empty dataset returns zeros, and database failures return a generic 503. This endpoint makes no Redis or AI requests and requires no migration.
-
-Storage bytes are metadata totals, not a filesystem scan or the total disk space used by PostgreSQL, vectors, extracted text, Redis, or orphan files. Page/chunk/vector totals include retained content on failed documents and are not counts of searchable content. The status counts describe current document state rather than historical job attempts; processing duration metrics are available from the endpoint below.
-
-The live local check returned 3 documents, 388,410 recorded PDF bytes, 8 extracted pages, 6 chunks, 6 vectors, and 1 summary. Statistics tests use temporary PostgreSQL tables to test empty and populated datasets without deleting or modifying user documents.
-
-## Processing attempt metrics
-
-Apply migrations with `python -m alembic upgrade head` from `backend/`, then restart the API and worker. `GET /metrics/processing` aggregates retained processing attempts:
-
-- `total_attempts`, `processing`, `succeeded`, and `failed`.
-- `success_rate`: succeeded divided by completed attempts, from 0 to 1; null when none have completed.
-- `average_duration_ms`, averages for success/failure separately, and `max_duration_ms`; null when no matching duration exists.
-- `observed_embedding_input_tokens`: sum of usage returned by successful embedding batches and persisted when attempts finish, including batches preceding a later failure.
-
-```bash
-curl http://localhost:8000/metrics/processing
-```
-
-The worker creates a `processing_attempts` row in the transaction that claims a queued/failed document. Duplicate jobs that skip processing do not create attempts. Each retry gets a separate row, so one document can have both failed and successful attempts. Successful completion and final document state commit together; ordinary failures record a safe error and failed outcome together. Completion constraints require a nonnegative duration and finish timestamp for terminal outcomes. The RQ result includes the attempt UUID for tracing.
-
-Durations use Python's monotonic performance clock from the start of the handler through its completion-record update, rounded to milliseconds. They exclude time waiting in Redis and do not measure upload, search, chat, summary generation, or the final database commit acknowledgment. A successful extraction-only job counts as succeeded, as does successful processing with embeddings. The live extraction-only check recorded one succeeded attempt at 129 ms with zero embedding tokens; this is a functional check, not a performance benchmark.
-
-Metrics begin with this migration and worker update; earlier jobs are not backfilled. A force-killed worker or unavailable database can leave an attempt marked `processing`, just as it can leave the document processing state unfinished. Automatic reconciliation is not implemented. Observed token usage is not an invoice: it omits unknown provider usage, failed request/retry charges, and other API features; active attempts are not updated incrementally. Deleting a document cascades to its attempts, so aggregates describe retained history. Downgrading removes attempt history without deleting documents.
-
-This metrics endpoint performs one aggregate PostgreSQL query and makes no AI requests. Tests verify successful and failed runs, retry history, duplicate skips, observed batch usage, empty aggregates, duration calculations, completion constraints, and safe database errors.
-
-## Generate and read key insights
-
-Apply the latest migration with `python -m alembic upgrade head` from `backend/`, then restart the API. Use the **insights** section in Swagger:
-
-- `POST /documents/{document_id}/insights` generates and saves key takeaways. A previously saved result is returned without another AI request.
-- `GET /documents/{document_id}/insights` reads the saved takeaways without an AI request; missing documents or ungenerated insights return 404.
-
-Each result contains `document_id` and an `insights` list. An insight contains `text`, its original `page_number`, and an `evidence` excerpt. Results are stored in the document's nullable JSONB `insights` column. Generation requires extracted text and status `extracted`, `embedded`, or `ready`; otherwise it returns 409. This endpoint does not run automatically on upload or change document status.
-
-The server normalizes extracted whitespace and creates numbered source excerpts of at most 240 characters, splitting at spaces when possible and retaining original page numbers. Blank pages produce no excerpts. The model proposes short insights and selects a supporting excerpt ID; it does not generate the quote or page metadata. The server rejects invalid IDs, empty/oversized insight text, incomplete responses, or result counts outside 1–6, then copies the source excerpt and page directly into the response. The prompt requests 3–5 distinct takeaways when supported.
-
-The serialized full excerpt input is limited to 60,000 characters, including source metadata. Larger inputs return 413 without an API call or silent truncation; long-document insight extraction remains a future extension. Requests use `ANSWER_MODEL` (default `gpt-4.1-mini`), structured output, at most 1,200 output tokens, a 30-second SDK timeout, up to two SDK retries, and `store=False`. Generation sends text to OpenAI and may incur charges. Repeated reads are cached; simultaneous first-generation requests can both incur usage, but the first saved result is preserved. Usage metadata is not persisted for this feature yet.
-
-Source IDs ensure excerpts and page references are real; they do not prove that the insight's entire claim is entailed by that excerpt. Factual entailment, extraction boundaries, and prompt-injection resistance need ongoing evaluation. Generation errors preserve stored document state and return safe 502/503 responses. No database transaction remains open during the AI request.
-
-A live check generated five insights for the case study, verified that every excerpt occurs on its referenced page, and confirmed cached GET and POST results. Automated tests cover source-ID mapping, text coverage across excerpt windows, invalid output, limits, caching, failure cleanup, and concurrent-save behavior. Downgrading removes stored insights while preserving documents, summaries, chunks, and chat history.
+Stop services with `docker compose stop` from the repository root. `docker compose down -v` deletes local database and Redis volumes.

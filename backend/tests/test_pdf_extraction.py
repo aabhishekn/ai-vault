@@ -5,23 +5,25 @@ from pathlib import Path
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
-from pdf_extraction import PDFExtractionError, extract_pdf
+from app.processing.pdf_extraction import PDFExtractionError, extract_pdf
 
 
 class PDFExtractionTests(unittest.TestCase):
     def write_pdf(self, path, texts, password=None):
         writer = PdfWriter()
-        font = DictionaryObject({
-            NameObject("/Type"): NameObject("/Font"),
-            NameObject("/Subtype"): NameObject("/Type1"),
-            NameObject("/BaseFont"): NameObject("/Helvetica"),
-        })
+        font = DictionaryObject(
+            {
+                NameObject("/Type"): NameObject("/Font"),
+                NameObject("/Subtype"): NameObject("/Type1"),
+                NameObject("/BaseFont"): NameObject("/Helvetica"),
+            }
+        )
         for text in texts:
             page = writer.add_blank_page(width=612, height=792)
             if text:
-                page[NameObject("/Resources")] = DictionaryObject({
-                    NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})
-                })
+                page[NameObject("/Resources")] = DictionaryObject(
+                    {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
+                )
                 stream = DecodedStreamObject()
                 stream.set_data(f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode("ascii"))
                 page[NameObject("/Contents")] = writer._add_object(stream)

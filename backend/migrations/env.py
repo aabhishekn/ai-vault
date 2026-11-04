@@ -2,20 +2,21 @@ from logging.config import fileConfig
 
 from alembic import context
 
-from database import engine, url
-from models import Base
+from app.db.database import engine, url
+from app.db.models import Base
 
 config = context.config
 if config.config_file_name:
     fileConfig(config.config_file_name)
-
 target_metadata = Base.metadata
 
 
 def run_migrations_offline():
     context.configure(
-        url=url, target_metadata=target_metadata,
-        literal_binds=True, dialect_opts={"paramstyle": "named"},
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
         compare_server_default=True,
     )
     with context.begin_transaction():
@@ -25,8 +26,7 @@ def run_migrations_offline():
 def run_migrations_online():
     with engine.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata,
-            compare_server_default=True,
+            connection=connection, target_metadata=target_metadata, compare_server_default=True
         )
         with context.begin_transaction():
             context.run_migrations()
