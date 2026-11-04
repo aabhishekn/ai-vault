@@ -1,6 +1,6 @@
 # AI Vault frontend
 
-React + Vite + Tailwind CSS (plain JavaScript). The workspace uploads PDFs and lists documents with processing status, size, upload time, and pagination.
+React + Vite + Tailwind CSS (plain JavaScript). The look is a warm cream canvas with a terracotta accent. Source Serif 4 sets headings and the model-written text (answers, summaries, insights, comparisons) and Inter sets the interface; both are self-hosted through `@fontsource-variable` packages, so nothing loads from a CDN. Colors live in the `@theme` block of `src/styles.css`. The workspace uploads PDFs and lists documents with processing status, size, upload time, and pagination.
 
 From this directory:
 

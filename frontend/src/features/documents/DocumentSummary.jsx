@@ -96,7 +96,7 @@ export function DocumentSummary({ id, documentStatus }) {
         </p>
       )}
       {state.status === 'success' && (
-        <p className="text-[13px] leading-[1.9] wrap-anywhere whitespace-pre-wrap">
+        <p className="font-serif text-base leading-[1.75] wrap-anywhere whitespace-pre-wrap">
           {state.data.summary}
         </p>
       )}

@@ -29,7 +29,7 @@ export function DocumentList({
           <h2 id="documents-heading">All documents</h2>
           {live && (
             <span
-              className="shrink-0 rounded-[7px] bg-[#e4ead9] px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-[#3e4a37]"
+              className="shrink-0 rounded-[7px] bg-success-soft px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-[#3f6338]"
               title="Status changes appear here as they happen"
             >
               ● Live
@@ -37,7 +37,7 @@ export function DocumentList({
           )}
           {page && (
             <span
-              className="grid h-6 min-w-6 shrink-0 place-items-center rounded-[7px] bg-[#f0f1e9] px-[7px] text-[11px] text-[#58634f]"
+              className="grid h-6 min-w-6 shrink-0 place-items-center rounded-[7px] bg-[#f0eee6] px-[7px] text-[11px] text-[#5f5e57]"
               aria-label={`${page.total} documents`}
             >
               {page.total}
@@ -74,7 +74,7 @@ export function DocumentList({
           role="status"
         >
           <span
-            className="inline-block size-[22px] animate-spin rounded-full border-2 border-[#e1e5d8] border-t-[#71816a] motion-reduce:animate-none"
+            className="inline-block size-[22px] animate-spin rounded-full border-2 border-[#e6e2d6] border-t-[#7f7d75] motion-reduce:animate-none"
             aria-hidden="true"
           />
           <h3>Gathering your documents…</h3>
@@ -101,7 +101,7 @@ export function DocumentList({
           role="status"
         >
           <span
-            className="inline-grid size-10 place-items-center rounded-full bg-[#f0f2e8] text-[26px] font-normal text-[#738364]"
+            className="inline-grid size-10 place-items-center rounded-full bg-[#f0eee6] text-[26px] font-normal text-[#7f7d75]"
             aria-hidden="true"
           >
             +
@@ -133,7 +133,7 @@ export function DocumentList({
               />
             ))}
           </ul>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule bg-panel-footer px-[26px] py-4 max-[600px]:p-[18px] [&_nav]:flex [&_nav]:gap-2 [&_p]:text-[11px] [&_p]:text-muted [&_strong]:font-[550] [&_strong]:text-[#3e4a37]">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule bg-panel-footer px-[26px] py-4 max-[600px]:p-[18px] [&_nav]:flex [&_nav]:gap-2 [&_p]:text-[11px] [&_p]:text-muted [&_strong]:font-[550] [&_strong]:text-[#3d3d3a]">
             <p>
               Showing{' '}
               <strong>

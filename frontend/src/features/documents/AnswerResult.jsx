@@ -8,7 +8,7 @@ export function AnswerResult({ result }) {
       <h4 className="mb-2 text-sm font-semibold">
         {result.insufficient_evidence ? 'Not enough evidence' : 'Answer'}
       </h4>
-      <p className="text-[13px] leading-[1.9] whitespace-pre-wrap">
+      <p className="font-serif text-base leading-[1.75] whitespace-pre-wrap">
         {result.answer}
       </p>
       {result.citations.length > 0 && (
@@ -17,13 +17,13 @@ export function AnswerResult({ result }) {
           <ol className="grid list-none gap-3">
             {result.citations.map((citation) => (
               <li key={citation.source_number}>
-                <details className="rounded-[10px] border border-evidence-border bg-[#f7f8f1] p-4">
-                  <summary className="cursor-pointer py-1.5 text-xs font-semibold text-success">
+                <details className="rounded-[10px] border border-evidence-border bg-[#f7f5ee] p-4">
+                  <summary className="cursor-pointer py-1.5 text-xs font-semibold text-earth">
                     [{citation.source_number}]
                     {citation.filename ? ` · ${citation.filename}` : ''} · Page{' '}
                     {citation.page_number}
                   </summary>
-                  <blockquote className="mt-3 border-l-2 border-[#bdcbb0] pl-3 text-xs leading-[1.8] whitespace-pre-wrap text-muted">
+                  <blockquote className="mt-3 border-l-2 border-[#ddd9ca] pl-3 text-xs leading-[1.8] whitespace-pre-wrap text-muted">
                     {citation.text}
                   </blockquote>
                 </details>

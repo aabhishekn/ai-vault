@@ -87,15 +87,15 @@ export function DocumentInsights({ id, documentStatus }) {
           {saved.insights.map((insight, index) => (
             <li
               key={index}
-              className="rounded-[10px] border border-evidence-border bg-[#f7f8f1] p-[18px] wrap-anywhere"
+              className="rounded-[10px] border border-evidence-border bg-[#f7f5ee] p-[18px] wrap-anywhere"
             >
-              <p className="text-[13px] leading-[1.9] whitespace-pre-wrap">
+              <p className="font-serif text-[15px] leading-[1.75] whitespace-pre-wrap">
                 {insight.text}
               </p>
-              <p className="mt-3.5 mb-2.5 text-[11px] font-semibold text-success">
+              <p className="mt-3.5 mb-2.5 text-[11px] font-semibold text-earth">
                 Page {insight.page_number}
               </p>
-              <blockquote className="border-l-2 border-[#bdcbb0] pl-3 [&_p]:text-xs [&_p]:leading-[1.8] [&_p]:whitespace-pre-wrap [&_p]:text-muted">
+              <blockquote className="border-l-2 border-[#ddd9ca] pl-3 [&_p]:text-xs [&_p]:leading-[1.8] [&_p]:whitespace-pre-wrap [&_p]:text-muted">
                 <p>{insight.evidence}</p>
               </blockquote>
             </li>

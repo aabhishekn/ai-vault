@@ -22,11 +22,11 @@ export function DocumentUpload({ onUploaded }) {
 
   return (
     <section
-      className="mb-6 rounded-[18px] border border-[#dce2d3] bg-[#eff2e8] p-[26px] max-[600px]:px-[18px] max-[600px]:py-[22px]"
+      className="mb-6 rounded-[18px] border border-[#e1ddcf] bg-[#f3f1e9] p-[26px] max-[600px]:px-[18px] max-[600px]:py-[22px]"
       aria-labelledby="upload-heading"
     >
       <div>
-        <p className="mb-3 text-[10px] font-[650] tracking-[1.6px] text-[#657156]">
+        <p className="mb-3 text-[10px] font-[650] tracking-[1.6px] text-[#9a4a2c]">
           ADD TO YOUR VAULT
         </p>
         <h2
@@ -52,7 +52,7 @@ export function DocumentUpload({ onUploaded }) {
               PDF document
             </label>
             <input
-              className="w-full text-xs text-[#4f584b] file:mr-3 file:cursor-pointer file:rounded-[7px] file:border file:border-[#c9d1bd] file:bg-surface file:px-3 file:py-2.5 file:text-inherit file:[font:inherit]"
+              className="w-full text-xs text-[#4a4943] file:mr-3 file:cursor-pointer file:rounded-[7px] file:border file:border-[#d6d2c4] file:bg-surface file:px-3 file:py-2.5 file:text-inherit file:[font:inherit]"
               ref={input}
               id="document-file"
               type="file"

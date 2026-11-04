@@ -12,7 +12,7 @@ export default function App() {
           aria-label="AI Vault home"
         >
           <span
-            className="grid size-[38px] place-items-center rounded-[11px] bg-brand text-[#f6f6ed] [&_svg]:size-7"
+            className="grid size-[38px] place-items-center rounded-[11px] bg-brand text-[#fffaf5] [&_svg]:size-7"
             aria-hidden="true"
           >
             <svg
@@ -30,7 +30,7 @@ export default function App() {
         </a>
         <span className="inline-flex items-center gap-2 text-xs font-medium text-muted max-[600px]:text-[11px]">
           <span
-            className="size-1.5 rounded-full bg-[#a0aa93]"
+            className="size-1.5 rounded-full bg-[#d97757]"
             aria-hidden="true"
           />
           Local workspace
@@ -41,7 +41,7 @@ export default function App() {
         <p className="mb-[18px] text-[11px] font-[650] tracking-[2.3px] text-earth">
           AI DOCUMENT VAULT
         </p>
-        <h1 className="font-serif text-[clamp(46px,6vw,68px)] leading-[1.08] font-normal tracking-[-2.8px] max-[600px]:tracking-[-1.8px]">
+        <h1 className="font-serif text-[clamp(46px,6vw,68px)] leading-[1.1] font-normal tracking-[-0.03em] max-[600px]:tracking-[-0.025em]">
           Ask your
           <br />
           documents.

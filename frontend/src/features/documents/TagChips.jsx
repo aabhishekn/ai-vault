@@ -7,14 +7,14 @@ export function TagChips({ category, tags, max }) {
       aria-label="Category and tags"
     >
       {category && (
-        <li className="rounded-[7px] bg-[#e4ead9] px-2 py-0.5 text-[11px] font-semibold text-[#3e4a37]">
+        <li className="rounded-[7px] bg-[#f3e3d9] px-2 py-0.5 text-[11px] font-semibold text-[#3d3d3a]">
           {category}
         </li>
       )}
       {shown.map((tag) => (
         <li
           key={tag}
-          className="rounded-[7px] bg-[#f0f1e9] px-2 py-0.5 text-[11px] text-[#58634f]"
+          className="rounded-[7px] bg-[#f0eee6] px-2 py-0.5 text-[11px] text-[#5f5e57]"
         >
           {tag}
         </li>

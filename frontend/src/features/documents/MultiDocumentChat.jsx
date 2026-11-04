@@ -33,7 +33,7 @@ export function MultiDocumentChat({ documents, onClose }) {
   return (
     <dialog
       ref={dialog}
-      className="m-auto max-h-[calc(100svh-40px)] w-[min(620px,calc(100%-32px))] overflow-auto rounded-[18px] border border-panel-border bg-surface p-0 text-ink shadow-[0_24px_100px_#13251c33] backdrop:bg-[#17291dcc]"
+      className="m-auto max-h-[calc(100svh-40px)] w-[min(620px,calc(100%-32px))] overflow-auto rounded-[18px] border border-panel-border bg-surface p-0 text-ink shadow-[0_24px_100px_#14141326] backdrop:bg-[#141413b3]"
       aria-labelledby="multi-heading"
       onCancel={onClose}
     >
@@ -56,7 +56,7 @@ export function MultiDocumentChat({ documents, onClose }) {
           {[...documents].map(([id, name]) => (
             <li
               key={id}
-              className="rounded-[7px] bg-[#e4ead9] px-2 py-1 text-[11px] font-semibold wrap-anywhere text-[#3e4a37]"
+              className="rounded-[7px] bg-[#f3e3d9] px-2 py-1 text-[11px] font-semibold wrap-anywhere text-[#3d3d3a]"
             >
               {name}
             </li>

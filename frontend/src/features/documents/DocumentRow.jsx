@@ -7,7 +7,7 @@ export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
   return (
     <li className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-4 px-[26px] py-6 not-first:border-t not-first:border-rule max-[600px]:grid-cols-[34px_minmax(0,1fr)] max-[600px]:items-start max-[600px]:gap-3 max-[600px]:px-[18px] max-[600px]:py-[22px]">
       <span
-        className="grid h-12 w-[42px] place-items-center rounded-lg border border-evidence-border bg-[#f2f4ec] text-[#71816a] max-[600px]:h-10 max-[600px]:w-[34px] [&_svg]:size-[23px]"
+        className="grid h-12 w-[42px] place-items-center rounded-lg border border-evidence-border bg-[#f0eee6] text-[#7f7d75] max-[600px]:h-10 max-[600px]:w-[34px] [&_svg]:size-[23px]"
         aria-hidden="true"
       >
         <svg
@@ -24,7 +24,7 @@ export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
         <h3>
           <button
             type="button"
-            className="cursor-pointer border-0 bg-transparent p-0 text-left wrap-anywhere text-inherit underline decoration-[#b9c4ae] underline-offset-4 [font:inherit] hover:text-success hover:decoration-current"
+            className="cursor-pointer border-0 bg-transparent p-0 text-left wrap-anywhere text-inherit underline decoration-[#d6d2c4] underline-offset-4 [font:inherit] hover:text-earth hover:decoration-current"
             aria-haspopup="dialog"
             onClick={(event) => {
               event.currentTarget.focus()
@@ -34,7 +34,7 @@ export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
             {document.filename}
           </button>
           {(document.version_number ?? 1) > 1 && (
-            <span className="ml-2 rounded-[7px] bg-[#e4ead9] px-1.5 py-0.5 align-middle text-[10px] font-semibold text-[#3e4a37]">
+            <span className="ml-2 rounded-[7px] bg-[#f3e3d9] px-1.5 py-0.5 align-middle text-[10px] font-semibold text-[#3d3d3a]">
               v{document.version_number}
             </span>
           )}

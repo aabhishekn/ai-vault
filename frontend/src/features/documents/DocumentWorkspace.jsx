@@ -74,7 +74,7 @@ export function DocumentWorkspace() {
       <WorkerNotice health={queue} />
       {chosen.size > 0 && (
         <div
-          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-evidence-border bg-[#f7f8f1] px-4 py-3 text-[13px]"
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-evidence-border bg-[#f7f5ee] px-4 py-3 text-[13px]"
           role="status"
         >
           <span>

@@ -1,22 +1,23 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-serif: Georgia, 'Times New Roman', serif;
+  --font-sans:
+    'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif: 'Source Serif 4 Variable', Georgia, 'Times New Roman', serif;
   --font-mono: ui-monospace, monospace;
-  --color-canvas: #f7f7f2;
-  --color-ink: #222922;
-  --color-surface: #fffefa;
-  --color-brand: #263c31;
-  --color-brand-hover: #35523f;
-  --color-muted: #66705f;
-  --color-earth: #786447;
-  --color-focus: #b46d36;
-  --color-divider: #e4e5dc;
-  --color-rule: #eeeee6;
-  --color-panel-border: #dedfd4;
-  --color-panel-footer: #fafaf5;
-  --color-evidence-border: #e4e9dc;
+  --color-canvas: #faf9f5;
+  --color-ink: #141413;
+  --color-surface: #ffffff;
+  --color-brand: #b4532f;
+  --color-brand-hover: #9c4527;
+  --color-muted: #6b6a64;
+  --color-earth: #9a4a2c;
+  --color-focus: #c6613f;
+  --color-divider: #e8e6dc;
+  --color-rule: #efede4;
+  --color-panel-border: #e5e2d6;
+  --color-panel-footer: #f7f6f0;
+  --color-evidence-border: #e8e6dc;
   --color-success: #527347;
   --color-success-soft: #eef3e9;
   --color-error: #8e3f2d;
@@ -24,7 +25,7 @@
   --color-danger-soft: #f9ece7;
   --color-warning: #947548;
   --color-warning-soft: #f6efe2;
-  --shadow-panel: 0 5px 22px #25322704;
+  --shadow-panel: 0 5px 22px #14141405;
 }
 
 @layer base {
@@ -53,6 +54,6 @@
     outline-offset: 5px;
   }
   ::selection {
-    background: #e9dfcb;
+    background: #ecd7c8;
   }
 }

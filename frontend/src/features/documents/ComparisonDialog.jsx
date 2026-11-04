@@ -55,7 +55,7 @@ export function ComparisonDialog({ documents, onClose }) {
   return (
     <dialog
       ref={dialog}
-      className="m-auto max-h-[calc(100svh-40px)] w-[min(760px,calc(100%-32px))] overflow-auto rounded-[18px] border border-panel-border bg-surface p-0 text-ink shadow-[0_24px_100px_#13251c33] backdrop:bg-[#17291dcc]"
+      className="m-auto max-h-[calc(100svh-40px)] w-[min(760px,calc(100%-32px))] overflow-auto rounded-[18px] border border-panel-border bg-surface p-0 text-ink shadow-[0_24px_100px_#14141326] backdrop:bg-[#141413b3]"
       aria-labelledby="comparison-heading"
       onCancel={onClose}
     >
@@ -78,7 +78,7 @@ export function ComparisonDialog({ documents, onClose }) {
           {[...documents].map(([id, name]) => (
             <li
               key={id}
-              className="rounded-[7px] bg-[#e4ead9] px-2 py-1 text-[11px] font-semibold wrap-anywhere text-[#3e4a37]"
+              className="rounded-[7px] bg-[#f3e3d9] px-2 py-1 text-[11px] font-semibold wrap-anywhere text-[#3d3d3a]"
             >
               {name}
             </li>
@@ -117,13 +117,15 @@ export function ComparisonDialog({ documents, onClose }) {
         )}
         {result && (
           <div className="mt-6 wrap-anywhere" aria-live="polite">
-            <p className="text-[13px] leading-[1.9]">{result.overview}</p>
+            <p className="font-serif text-base leading-[1.75]">
+              {result.overview}
+            </p>
             {result.similarities.length > 0 && (
               <>
                 <h3 className="mt-5 mb-2 text-sm font-semibold">
                   What they share
                 </h3>
-                <ul className="grid list-disc gap-1.5 pl-5 text-[13px] leading-[1.8]">
+                <ul className="grid list-disc gap-1.5 pl-5 font-serif text-[15px] leading-[1.7]">
                   {result.similarities.map((point) => (
                     <li key={point}>{point}</li>
                   ))}
@@ -139,12 +141,12 @@ export function ComparisonDialog({ documents, onClose }) {
                   {result.differences.map((difference) => (
                     <section
                       key={difference.topic}
-                      className="rounded-[10px] border border-evidence-border bg-[#f7f8f1] p-4"
+                      className="rounded-[10px] border border-evidence-border bg-[#f7f5ee] p-4"
                     >
                       <h4 className="mb-2 text-xs font-semibold">
                         {difference.topic}
                       </h4>
-                      <dl className="grid gap-2 text-[13px] leading-[1.8]">
+                      <dl className="grid gap-2 font-serif text-[15px] leading-[1.7] [&_dt]:font-sans">
                         {difference.positions.map((position) => (
                           <div key={position.document_id}>
                             <dt className="text-[11px] font-semibold text-muted">
