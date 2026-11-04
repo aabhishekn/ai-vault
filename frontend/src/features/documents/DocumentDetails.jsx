@@ -116,12 +116,12 @@ export function DocumentDetails({
               <DocumentQuestion key={id} id={id} documentStatus={status} />
             </div>
             <DocumentSummary
-              key={contentRevision}
+              key={`summary:${contentRevision}`}
               id={id}
               documentStatus={status}
             />
             <DocumentInsights
-              key={contentRevision}
+              key={`insights:${contentRevision}`}
               id={id}
               documentStatus={status}
             />
@@ -155,13 +155,13 @@ export function DocumentDetails({
               </dl>
             </details>
             <DocumentVersions
-              key={id}
+              key={`versions:${id}`}
               id={id}
               onOpen={onOpen}
               onVersionAdded={onVersionAdded}
             />
             <DocumentActions
-              key={id}
+              key={`actions:${id}`}
               status={status}
               onDelete={() => onDelete(id, state.data.filename)}
               onReprocess={reprocess}

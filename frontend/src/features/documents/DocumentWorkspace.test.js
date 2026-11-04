@@ -187,6 +187,18 @@ describe('optimistic changes', () => {
 
   const refusal = (status) => Response.json({ detail: 'no' }, { status })
 
+  // Sibling components in the dialog once shared one key, which React warns about
+  // (and may answer by dropping or duplicating one of them).
+  it('opens a document without duplicate-key warnings', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    serveVault([documentNamed('a')], {})
+    render(createElement(DocumentWorkspace))
+    await openDocument('a.pdf')
+    expect(
+      error.mock.calls.filter(([message]) => /same key/.test(String(message))),
+    ).toEqual([])
+  })
+
   describe('delete', () => {
     it('removes the row as soon as it is confirmed', async () => {
       const items = [documentNamed('a'), documentNamed('b')]
