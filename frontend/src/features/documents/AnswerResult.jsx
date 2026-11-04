@@ -18,7 +18,7 @@ export function AnswerResult({ result }) {
             {result.citations.map((citation) => (
               <li key={citation.source_number}>
                 <details className="rounded-[10px] border border-evidence-border bg-[#f7f8f1] p-4">
-                  <summary className="cursor-pointer text-xs font-semibold text-success">
+                  <summary className="cursor-pointer py-1.5 text-xs font-semibold text-success">
                     [{citation.source_number}]
                     {citation.filename ? ` · ${citation.filename}` : ''} · Page{' '}
                     {citation.page_number}

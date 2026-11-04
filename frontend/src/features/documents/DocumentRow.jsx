@@ -52,9 +52,10 @@ export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
       </div>
       <div className="flex items-center gap-3 max-[600px]:col-start-2">
         {onChoose && canAskDocument(document.status) && (
-          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted">
+          <label className="flex min-h-8 cursor-pointer items-center gap-2 text-[11px] text-muted">
             <input
               type="checkbox"
+              className="size-[18px] cursor-pointer"
               checked={chosen}
               onChange={() => onChoose(document)}
               aria-label={`Select for comparison or multi-document questions: ${document.filename}`}

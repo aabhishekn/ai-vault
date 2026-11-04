@@ -82,7 +82,7 @@ export function DocumentWorkspace() {
             {chosen.size < 2 ? ' · choose at least two to ask across them' : ''}
             {chosen.size === MAX_CHOSEN ? ` · limit of ${MAX_CHOSEN}` : ''}
           </span>
-          <span className="flex gap-2">
+          <span className="flex flex-wrap gap-2">
             <Button onClick={() => setChosen(new Map())}>Clear</Button>
             <Button
               onClick={() => setComparing(true)}

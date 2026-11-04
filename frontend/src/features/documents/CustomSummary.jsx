@@ -23,7 +23,7 @@ export function CustomSummary({ id }) {
 
   return (
     <details className="mt-5 rounded-[10px] border border-panel-border p-4">
-      <summary className="cursor-pointer text-xs font-semibold">
+      <summary className="cursor-pointer py-2 text-xs font-semibold">
         Customize the summary
       </summary>
       <form

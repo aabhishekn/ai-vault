@@ -116,7 +116,7 @@ export function DocumentDetails({
               documentStatus={state.data.status}
             />
             <details className="border-t border-rule py-5">
-              <summary className="cursor-pointer text-[15px] font-semibold select-none">
+              <summary className="cursor-pointer py-1 text-[15px] font-semibold select-none">
                 File details
               </summary>
               <dl className="mt-5 grid grid-cols-2 gap-[22px] max-[600px]:grid-cols-1 [&_dd]:leading-[1.6] [&_dd]:wrap-anywhere [&_dt]:mb-2 [&_dt]:text-[11px] [&_dt]:text-muted">

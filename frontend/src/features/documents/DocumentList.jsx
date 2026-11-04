@@ -29,7 +29,7 @@ export function DocumentList({
           <h2 id="documents-heading">All documents</h2>
           {live && (
             <span
-              className="rounded-[7px] bg-[#e4ead9] px-1.5 py-0.5 text-[10px] font-semibold text-[#3e4a37]"
+              className="shrink-0 rounded-[7px] bg-[#e4ead9] px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-[#3e4a37]"
               title="Status changes appear here as they happen"
             >
               ● Live
@@ -37,7 +37,7 @@ export function DocumentList({
           )}
           {page && (
             <span
-              className="grid h-6 min-w-6 place-items-center rounded-[7px] bg-[#f0f1e9] px-[7px] text-[11px] text-[#58634f]"
+              className="grid h-6 min-w-6 shrink-0 place-items-center rounded-[7px] bg-[#f0f1e9] px-[7px] text-[11px] text-[#58634f]"
               aria-label={`${page.total} documents`}
             >
               {page.total}
