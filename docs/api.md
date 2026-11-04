@@ -359,3 +359,40 @@ The serialized full excerpt input is limited to 60,000 characters, including sou
 Source IDs ensure excerpts and page references are real; they do not prove that the insight's entire claim is entailed by that excerpt. Factual entailment, extraction boundaries, and prompt-injection resistance need ongoing evaluation. Generation errors preserve stored document state and return safe 502/503 responses. No database transaction remains open during the AI request.
 
 A live check generated five insights for the case study, verified that every excerpt occurs on its referenced page, and confirmed cached GET and POST results. Automated tests cover source-ID mapping, text coverage across excerpt windows, invalid output, limits, caching, failure cleanup, and concurrent-save behavior. Downgrading removes stored insights while preserving documents, summaries, chunks, and chat history.
+
+## AI usage and estimated cost
+
+`GET /metrics/ai-usage` (the **metrics** section in Swagger) returns token usage and an estimated cost in US dollars:
+
+- `chat`: one row per answer model, summed from the `model`, `input_tokens` and `output_tokens` saved with every conversation turn.
+- `embeddings`: input tokens summed from processing attempts, priced for `text-embedding-3-small`.
+- `estimated_total_cost_usd`: sum of every priced row. Models without a known price appear in `unpriced_models` and are left out of the total.
+- `not_persisted`: usage that is not stored in the database (summaries, insights, stateless `/ask` answers, and query embeddings).
+
+Prices live in `backend/app/core/pricing.py` as per-million-token estimates and match dated model snapshots such as `gpt-4.1-mini-2025-04-14`. They are estimates, not billing data; check them against the provider's price list. The endpoint reads only PostgreSQL and never calls the AI provider.
+
+Cost optimization already in place: embeddings are sent in batches of 64 chunks, summaries and insights are generated once and reused, chat sends only the retrieved chunks plus the latest three turns, and answers use a small model with an output-token cap.
+
+## Rate limits and quotas
+
+Endpoints that spend provider money are limited per client IP with fixed-window counters in Redis:
+
+| Scope | Endpoints | Default |
+| --- | --- | --- |
+| `ai` | `POST /documents/{id}/ask`, `POST /conversations/{id}/messages`, `POST /documents/{id}/summary`, `POST /documents/{id}/insights` | 20 per minute and 500 per day |
+| `upload` | `POST /documents` | 10 per minute |
+
+An exceeded limit returns HTTP 429 with a `Retry-After` header (seconds until the window resets) and a message naming the rule. Rejected requests still count toward the window. Configure with `AI_RATE_LIMIT_PER_MINUTE`, `AI_DAILY_QUOTA` and `UPLOAD_RATE_LIMIT_PER_MINUTE` (0 disables a rule) or turn everything off with `RATE_LIMIT_ENABLED=false`; restart the API after changing them. Reads, health checks, statistics and metrics are not limited.
+
+Design choices: the limiter fails open and logs `rate_limiter_unavailable` if Redis is down, because a limiter outage should not take the API offline. Clients are identified by the direct peer address, so behind a reverse proxy the proxy address would be shared by everyone; trusting `X-Forwarded-For` needs a known proxy and is not enabled. Counters are per client, not per user, because the app has no accounts.
+
+## Logging and observability
+
+Every process logs JSON lines to stderr (set `LOG_LEVEL` to `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`). Events:
+
+- `request` / `request_failed`: method, path, status, duration and client. Each response carries an `X-Request-ID` header; a safe client-supplied ID is reused, otherwise one is generated, and every log line written while handling that request includes it.
+- `ai_call`: operation (`embeddings`, `answer`, `summary`, `insights`), model, input and output tokens, duration. This is where summary and insight usage can be audited, since it is not stored in the database.
+- `document_processing_started` / `_finished` / `_failed` / `_skipped` from the worker, with document and attempt IDs, page and chunk counts, tokens, duration, and the traceback for failures.
+- `rate_limit_exceeded` and `rate_limiter_unavailable`.
+
+Logs contain identifiers, sizes, durations, token counts and outcomes, not document text, questions or answers. Failure tracebacks can include provider error text, so keep logs private. For monitoring, `/health`, `/health/db`, `/stats/documents`, `/metrics/processing` and `/metrics/ai-usage` cover liveness, database reachability, document pipeline state, job timings and spend. Run uvicorn with `--no-access-log` to avoid duplicate request lines.

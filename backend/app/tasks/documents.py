@@ -1,5 +1,6 @@
 """RQ entry point and explicit database boundaries for document processing."""
 
+import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +16,8 @@ from app.db.database import engine
 from app.db.models import Document, DocumentChunk, ProcessingAttempt
 from app.processing.chunking import TextChunk, chunk_pages
 from app.processing.pdf_extraction import ExtractedPage, PDFExtractionError, extract_pdf
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -165,7 +168,15 @@ def extract_document(document_id: str) -> dict:
     context = ProcessingContext(document_id=UUID(document_id))
     storage_path, current_status = _claim_document(context)
     if storage_path is None:
+        logger.info(
+            "document_processing_skipped",
+            extra={"document_id": document_id, "status": current_status},
+        )
         return {"document_id": document_id, "status": current_status, "skipped": True}
+    logger.info(
+        "document_processing_started",
+        extra={"document_id": document_id, "attempt_id": str(context.attempt_id)},
+    )
     try:
         pages = extract_pdf(_stored_pdf_path(storage_path))
         chunks = chunk_pages(pages)
@@ -173,6 +184,17 @@ def extract_document(document_id: str) -> dict:
         _save_extracted_content(context, pages, chunks, continue_with_embeddings=should_embed)
         if should_embed:
             _save_embeddings(context, _embed_chunks(context, chunks))
+        logger.info(
+            "document_processing_finished",
+            extra={
+                "document_id": document_id,
+                "attempt_id": str(context.attempt_id),
+                "pages": len(pages),
+                "chunks": len(chunks),
+                "embedding_input_tokens": context.input_tokens,
+                "duration_ms": round((perf_counter() - context.started) * 1000),
+            },
+        )
         return {
             "document_id": document_id,
             "status": "embedded" if should_embed else "extracted",
@@ -182,5 +204,13 @@ def extract_document(document_id: str) -> dict:
             "processing_attempt_id": str(context.attempt_id),
         }
     except Exception as error:
+        logger.exception(
+            "document_processing_failed",
+            extra={
+                "document_id": document_id,
+                "attempt_id": str(context.attempt_id),
+                "duration_ms": round((perf_counter() - context.started) * 1000),
+            },
+        )
         _record_failure(context, error)
         raise

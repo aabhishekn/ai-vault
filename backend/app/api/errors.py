@@ -7,4 +7,8 @@ from app.core.errors import AppError
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_service_error(request: Request, error: AppError) -> JSONResponse:
-        return JSONResponse(status_code=error.status_code, content={"detail": error.detail})
+        return JSONResponse(
+            status_code=error.status_code,
+            content={"detail": error.detail},
+            headers=error.headers,
+        )

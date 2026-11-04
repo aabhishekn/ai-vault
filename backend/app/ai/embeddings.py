@@ -1,9 +1,11 @@
 import math
 from dataclasses import dataclass
+from time import perf_counter
 
 from app.ai.client import create_client
 from app.core.config import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL
 from app.core.config import MAX_EMBEDDING_BATCH_SIZE as MAX_BATCH_SIZE
+from app.core.logging import log_ai_call
 
 
 @dataclass(frozen=True)
@@ -21,6 +23,7 @@ def generate_embeddings(texts: list[str]) -> EmbeddingBatch:
         raise ValueError(f"Send at most {MAX_BATCH_SIZE} texts per batch")
     if any((not text.strip() for text in texts)):
         raise ValueError("Embedding input must not contain blank text")
+    started = perf_counter()
     with create_client() as client:
         response = client.embeddings.create(
             model=EMBEDDING_MODEL,
@@ -28,6 +31,7 @@ def generate_embeddings(texts: list[str]) -> EmbeddingBatch:
             dimensions=EMBEDDING_DIMENSIONS,
             encoding_format="float",
         )
+    log_ai_call("embeddings", response.model, started, input_tokens=response.usage.prompt_tokens)
     items = sorted(response.data, key=lambda item: item.index)
     if [item.index for item in items] != list(range(len(texts))):
         raise ValueError("Embedding response does not match the input texts")

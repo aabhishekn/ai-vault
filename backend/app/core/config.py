@@ -1,6 +1,7 @@
 """Local configuration and paths shared by API, workers, CLI and migrations."""
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -61,3 +62,61 @@ def get_api_key() -> str:
     if not api_key:
         raise ConfigurationError("Set OPENAI_API_KEY in the repository root .env file")
     return api_key
+
+
+def _bool_setting(name: str, default: str) -> bool:
+    value = os.getenv(name, default).strip().lower()
+    if value not in ("true", "false"):
+        raise ConfigurationError(f"{name} must be true or false")
+    return value == "true"
+
+
+def _count_setting(name: str, default: int) -> int:
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ConfigurationError(f"{name} must be a whole number") from None
+    if value < 0:
+        raise ConfigurationError(f"{name} must not be negative")
+    return value
+
+
+@dataclass(frozen=True)
+class RateLimitRule:
+    name: str
+    window_seconds: int
+    limit: int
+    label: str
+
+
+# scope -> (rule name, window seconds, environment variable, default limit, wording)
+_RATE_LIMITS = {
+    # Endpoints that call the paid AI provider: burst limit plus a daily quota.
+    "ai": (
+        ("minute", 60, "AI_RATE_LIMIT_PER_MINUTE", 20, "requests per minute"),
+        ("day", 86_400, "AI_DAILY_QUOTA", 500, "requests per day"),
+    ),
+    # Uploads queue embedding work, which also costs money.
+    "upload": (("minute", 60, "UPLOAD_RATE_LIMIT_PER_MINUTE", 10, "uploads per minute"),),
+}
+
+
+def rate_limiting_enabled() -> bool:
+    return _bool_setting("RATE_LIMIT_ENABLED", "true")
+
+
+def rate_limit_rules(scope: str) -> list[RateLimitRule]:
+    """Active rules for a scope; a limit of 0 disables that rule."""
+    rules = [
+        RateLimitRule(name, window, _count_setting(variable, default), label)
+        for name, window, variable, default, label in _RATE_LIMITS[scope]
+    ]
+    return [rule for rule in rules if rule.limit > 0]
+
+
+def log_level() -> str:
+    level = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+    if level not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+        raise ConfigurationError("LOG_LEVEL must be DEBUG, INFO, WARNING, ERROR or CRITICAL")
+    return level

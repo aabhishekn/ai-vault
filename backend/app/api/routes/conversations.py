@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
+from app.api.rate_limit import limit
 from app.schemas.chat import (
     ConversationHistoryResponse,
     ConversationResponse,
@@ -33,6 +34,7 @@ def get_conversation(
     "/conversations/{conversation_id}/messages",
     response_model=ConversationTurnResponse,
     status_code=201,
+    dependencies=[limit("ai")],
 )
 def send_message(conversation_id: UUID, request: SearchRequest) -> ConversationTurnResponse:
     return service.send_message(conversation_id, request)

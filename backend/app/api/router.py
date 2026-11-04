@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    ai_usage,
     answers,
     conversations,
     document_stats,
@@ -21,6 +22,7 @@ router.include_router(summaries.router)
 router.include_router(insights.router)
 router.include_router(document_stats.router)
 router.include_router(processing_metrics.router)
+router.include_router(ai_usage.router)
 
 
 router.include_router(health.router)

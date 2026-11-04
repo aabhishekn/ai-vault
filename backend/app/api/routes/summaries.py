@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
+from app.api.rate_limit import limit
 from app.schemas.documents import (
     SummaryResponse,
 )
@@ -15,6 +16,6 @@ def get_summary(document_id: UUID) -> SummaryResponse:
     return service.get_summary(document_id)
 
 
-@router.post("/{document_id}/summary", response_model=SummaryResponse)
+@router.post("/{document_id}/summary", response_model=SummaryResponse, dependencies=[limit("ai")])
 def create_summary(document_id: UUID) -> SummaryResponse:
     return service.create_summary(document_id)

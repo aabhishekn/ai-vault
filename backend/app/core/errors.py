@@ -3,6 +3,7 @@
 
 class AppError(Exception):
     status_code = 500
+    headers: dict[str, str] = {}
 
     def __init__(self, detail: str | dict):
         self.detail = detail
@@ -19,6 +20,14 @@ class NotFoundError(AppError):
 
 class ConflictError(AppError):
     status_code = 409
+
+
+class RateLimitExceededError(AppError):
+    status_code = 429
+
+    def __init__(self, detail: str, retry_after_seconds: int):
+        super().__init__(detail)
+        self.headers = {"Retry-After": str(retry_after_seconds)}
 
 
 class ContentTooLargeError(AppError):

@@ -1,10 +1,12 @@
 import json
 import re
+from time import perf_counter
 
 from pydantic import BaseModel
 
 from app.ai.client import create_client
 from app.core.config import get_answer_model
+from app.core.logging import log_ai_call
 from app.schemas.chat import AnswerCitation, AnswerResponse, SearchResponse
 
 INSUFFICIENT_ANSWER = (
@@ -59,6 +61,7 @@ def generate_answer(
         {"source_number": number, "text": match.text}
         for number, match in enumerate(retrieval.matches, start=1)
     ]
+    started = perf_counter()
     with create_client() as client:
         response = client.responses.parse(
             model=get_answer_model(),
@@ -69,6 +72,14 @@ def generate_answer(
             text_format=AnswerDraft,
             max_output_tokens=800,
             store=False,
+        )
+    if response.usage is not None:
+        log_ai_call(
+            "answer",
+            response.model,
+            started,
+            response.usage.input_tokens,
+            response.usage.output_tokens,
         )
     draft = response.output_parsed
     if response.status != "completed" or draft is None or response.usage is None:

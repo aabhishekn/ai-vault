@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, UploadFile
 
+from app.api.rate_limit import limit
 from app.schemas.documents import (
     DocumentListResponse,
     DocumentResponse,
@@ -11,7 +12,7 @@ from app.services import documents as service
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
-@router.post("", response_model=DocumentResponse, status_code=201)
+@router.post("", response_model=DocumentResponse, status_code=201, dependencies=[limit("upload")])
 def upload_document(file: UploadFile) -> DocumentResponse:
     return service.upload_document(file.filename, file.file)
 

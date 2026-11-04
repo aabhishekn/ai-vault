@@ -1,9 +1,11 @@
 import json
+from time import perf_counter
 
 from pydantic import BaseModel
 
 from app.ai.client import create_client
 from app.core.config import get_answer_model
+from app.core.logging import log_ai_call
 from app.schemas.documents import DocumentInsight
 
 MAX_INSIGHT_CHARACTERS = 60000
@@ -71,6 +73,7 @@ def prepare_source(pages: list[dict]) -> str:
 def generate_insights(pages: list[dict]) -> list[DocumentInsight]:
     source = prepare_source(pages)
     source_excerpts = {item["evidence_id"]: item for item in json.loads(source)}
+    started = perf_counter()
     with create_client() as client:
         response = client.responses.parse(
             model=get_answer_model(),
@@ -79,6 +82,15 @@ def generate_insights(pages: list[dict]) -> list[DocumentInsight]:
             text_format=InsightsDraft,
             max_output_tokens=1200,
             store=False,
+        )
+    usage = getattr(response, "usage", None)
+    if usage is not None:
+        log_ai_call(
+            "insights",
+            response.model,
+            started,
+            usage.input_tokens,
+            usage.output_tokens,
         )
     if response.status != "completed" or response.output_parsed is None:
         raise ValueError("Insight generation did not complete")

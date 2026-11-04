@@ -31,3 +31,25 @@ class ProcessingMetricsResponse(BaseModel):
     average_failure_duration_ms: float | None
     max_duration_ms: int | None
     observed_embedding_input_tokens: int
+
+
+class ChatModelUsage(BaseModel):
+    model: str
+    turns: int
+    input_tokens: int
+    output_tokens: int
+    estimated_cost_usd: float | None
+
+
+class EmbeddingUsage(BaseModel):
+    model: str
+    input_tokens: int
+    estimated_cost_usd: float | None
+
+
+class AIUsageResponse(BaseModel):
+    chat: list[ChatModelUsage]
+    embeddings: EmbeddingUsage
+    estimated_total_cost_usd: float
+    unpriced_models: list[str]
+    not_persisted: list[str]

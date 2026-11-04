@@ -84,6 +84,7 @@ Routes delegate to services. Services coordinate database access and provider ad
 | Saved insights | `POST` / `GET /documents/{id}/insights` |
 | Document statistics | `GET /stats/documents` |
 | Processing metrics | `GET /metrics/processing` |
+| AI token usage and estimated cost | `GET /metrics/ai-usage` |
 
 See [API and operations](docs/api.md) for request examples, status/error behavior, caching, limits, and recovery commands.
 

@@ -41,6 +41,7 @@ class APIContractTests(unittest.TestCase):
             ("POST", "/conversations/{conversation_id}/messages"),
             ("GET", "/stats/documents"),
             ("GET", "/metrics/processing"),
+            ("GET", "/metrics/ai-usage"),
         }
         schema = self.client.get("/openapi.json").json()
         actual = {
