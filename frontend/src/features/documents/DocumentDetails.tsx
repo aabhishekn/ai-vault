@@ -3,6 +3,7 @@ import { Button } from '../../components/Button'
 import { formatFileSize, formatUploadDate } from '../../lib/format'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
 import { DocumentSummary } from './DocumentSummary'
+import { DocumentInsights } from './DocumentInsights'
 import { DOCUMENT_STATUS_DESCRIPTIONS } from './status'
 import { useDocument } from './useDocument'
 import './DocumentDetails.css'
@@ -55,34 +56,35 @@ export function DocumentDetails({
         )}
         {state.status === 'success' && (
           <>
-            <h3 className="details-filename">{state.document.filename}</h3>
-            <DocumentStatusBadge status={state.document.status} />
+            <h3 className="details-filename">{state.data.filename}</h3>
+            <DocumentStatusBadge status={state.data.status} />
             <p className="details-status-description">
-              {DOCUMENT_STATUS_DESCRIPTIONS[state.document.status]}
+              {DOCUMENT_STATUS_DESCRIPTIONS[state.data.status]}
             </p>
             <dl className="details-metadata">
               <div>
                 <dt>File size</dt>
-                <dd>{formatFileSize(state.document.size_bytes)}</dd>
+                <dd>{formatFileSize(state.data.size_bytes)}</dd>
               </div>
               <div>
                 <dt>File type</dt>
-                <dd>{state.document.content_type}</dd>
+                <dd>{state.data.content_type}</dd>
               </div>
               <div>
                 <dt>Uploaded</dt>
                 <dd>
-                  <time dateTime={state.document.created_at}>
-                    {formatUploadDate(state.document.created_at)}
+                  <time dateTime={state.data.created_at}>
+                    {formatUploadDate(state.data.created_at)}
                   </time>
                 </dd>
               </div>
               <div className="details-id">
                 <dt>Document ID</dt>
-                <dd>{state.document.id}</dd>
+                <dd>{state.data.id}</dd>
               </div>
             </dl>
-            <DocumentSummary id={id} documentStatus={state.document.status} />
+            <DocumentSummary id={id} documentStatus={state.data.status} />
+            <DocumentInsights id={id} />
           </>
         )}
         <div className="details-footer">

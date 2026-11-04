@@ -35,6 +35,12 @@ When no saved summary exists, **Generate summary** is available for documents wh
 
 The summary hook owns both reading and generation. A request ref prevents repeated submissions, refresh is unavailable while generation runs, and generation has a two-minute browser timeout. A failed or unconfirmed generation must be followed by **Check saved summary** before the UI allows another attempt. No frontend generation request is automatically retried. Closing or refreshing document details cancels the browser request; the server may still finish saving the result. Concurrent requests from other tabs can still generate more than once before a cache entry exists; backend deduplication is not implemented here.
 
+## Saved insights
+
+Document details include **Saved insights**, loaded independently from metadata and the summary. Each card displays the insight, source page number, and quoted evidence as plain text. **Refresh insights** reads the saved result without calling the AI provider. No saved insights, a saved empty result, malformed data, and service failures are handled separately. Generation of insights is a subsequent step.
+
+The insights API validates the selected document ID, nonempty insight/evidence text, and positive integer page numbers. It shares the missing-content lookup with summaries so a deleted document is not presented as simply missing generated content. Page labels are references, not PDF navigation links; PDF preview is not implemented.
+
 ## Structure
 
 - `src/app/`: application layout.
@@ -42,7 +48,11 @@ The summary hook owns both reading and generation. A request ref prevents repeat
 - `src/features/documents/summary.ts`: validated read/generation requests, processing-status eligibility, and safe API errors.
 - `src/features/documents/useDocumentSummary.ts`: summary loading, generation, cancellation, refresh, and submission guard.
 - `src/features/documents/DocumentSummary.tsx`: summary, empty state, and retry UI.
-- `src/features/documents/useDocument.ts`: selected-document request lifecycle and refresh.
+- `src/features/documents/useDocument.ts`: metadata loading through the shared resource hook.
+- `src/features/documents/insights.ts`: saved-insights validation and API requests.
+- `src/features/documents/DocumentInsights.tsx`: independent insight cards, empty states, and retry.
+- `src/features/documents/savedContent.ts`: shared summary/insights missing-content handling.
+- `src/hooks/useResource.ts`: read-only loading, timeout, cancellation, key isolation, and refresh for metadata and insights.
 - `src/features/documents/DocumentDetails.tsx`: metadata dialog and focus lifecycle.
 - `src/features/documents/upload.ts`: upload validation and multipart API request.
 - `src/features/documents/useUploadDocument.ts`: upload lifecycle, timeout, duplicate-submit guard, and cancellation.

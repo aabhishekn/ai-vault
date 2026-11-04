@@ -1,5 +1,5 @@
-import { ApiError, getJson, requestJson } from '../../lib/api'
-import { getDocument } from './api'
+import { ApiError, requestJson } from '../../lib/api'
+import { getSavedDocumentContent } from './savedContent'
 import type { DocumentStatus } from './types'
 
 export type SavedSummary = { document_id: string; summary: string }
@@ -8,16 +8,8 @@ export async function getSavedSummary(
   id: string,
   signal: AbortSignal,
 ): Promise<SavedSummary | null> {
-  let data: unknown
-  try {
-    data = await getJson(`/documents/${encodeURIComponent(id)}/summary`, signal)
-  } catch (error: unknown) {
-    if (!(error instanceof ApiError) || error.status !== 404) throw error
-    // The API uses 404 both for a missing document and for an absent summary.
-    // Confirm the document still exists before presenting an empty state.
-    await getDocument(id, signal)
-    return null
-  }
+  const data = await getSavedDocumentContent(id, 'summary', signal)
+  if (data === undefined) return null
   return parseSummary(data, id)
 }
 
