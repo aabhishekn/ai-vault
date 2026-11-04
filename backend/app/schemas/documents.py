@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DocumentResponse(BaseModel):
@@ -24,6 +25,27 @@ class DocumentListResponse(BaseModel):
 class SummaryResponse(BaseModel):
     document_id: UUID
     summary: str
+
+
+class SummaryOptions(BaseModel):
+    """How a custom summary should read; the defaults match the saved summary."""
+
+    length: Literal["short", "medium", "long"] = "medium"
+    tone: Literal["neutral", "formal", "casual", "executive"] = "neutral"
+    focus: str | None = Field(default=None, max_length=200)
+
+    @field_validator("focus")
+    @classmethod
+    def blank_focus_means_none(cls, value: str | None) -> str | None:
+        value = " ".join(value.split()) if value else None
+        return value or None
+
+
+class CustomSummaryResponse(BaseModel):
+    document_id: UUID
+    summary: str
+    options: SummaryOptions
+    cached: bool
 
 
 class DocumentInsight(BaseModel):

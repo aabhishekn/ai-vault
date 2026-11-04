@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { Button } from '../../components/Button'
+import { CustomSummary } from './CustomSummary'
 import { canGenerateSummary } from './summary'
 import type { DocumentStatus } from './types'
 import { useDocumentSummary } from './useDocumentSummary'
@@ -105,6 +106,7 @@ export function DocumentSummary({
           {state.data.summary}
         </p>
       )}
+      {canGenerate && <CustomSummary id={id} />}
     </section>
   )
 }

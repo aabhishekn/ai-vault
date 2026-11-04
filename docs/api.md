@@ -459,3 +459,15 @@ Implementation: the model returns structured JSON with `answer` first, and the s
 ## Citation validation
 
 The server requires at least one `[n]` label in the answer text, each within the retrieved sources; the labels written in the text decide which sources are attached as citations (their page and quote come from the stored chunks, never from the model). If the model returns no usable label the request is retried once; a streamed answer falls back to a regular request. A second failure returns 502 and nothing is saved. In a live comparison on a sample document this took successful answers from 1 of 8 to 8 of 8, because the previous prompt and strict cross-check often rejected valid answers.
+
+## Custom summaries
+
+`POST /documents/{document_id}/summary/custom` writes a summary in a chosen style. Body (all fields optional):
+
+| Field | Values | Default |
+| --- | --- | --- |
+| `length` | `short` (at most 3 sentences), `medium` (one paragraph), `long` (two or three short paragraphs) | `medium` |
+| `tone` | `neutral`, `formal`, `casual`, `executive` | `neutral` |
+| `focus` | free text up to 200 characters, such as `deadlines and costs` | none |
+
+The response has `summary`, the `options` used and `cached`. A custom summary is **not saved on the document**: the document keeps one default summary (`/summary`). Variants are cached in Redis for 7 days under a hash of the model and options, so repeating a style returns `cached: true` without a provider call. The `focus` text is sent as data next to the document, never inside the instructions, and the prompt tells the model to treat it as a preference only and to say so briefly when the document has little on the topic. Uses the `ai` rate limit; returns 409 until text is extracted.
