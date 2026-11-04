@@ -99,40 +99,32 @@ export function OverviewPanel() {
   const { statistics, metrics, refresh } = useOverview()
   const busy = statistics.status === 'loading' || metrics.status === 'loading'
   return (
-    <details className="mt-10 rounded-2xl border border-panel-border bg-surface shadow-panel">
-      <summary className="cursor-pointer px-6 py-4 text-sm font-semibold select-none">
-        Workspace metrics
-      </summary>
-      <section
-        className="border-t border-rule p-6"
-        aria-labelledby="overview-heading"
-      >
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <h2 id="overview-heading" className="text-base font-semibold">
-            Workspace overview
-          </h2>
-          <Button
-            onClick={() => {
-              if (!busy) refresh()
-            }}
-            aria-disabled={busy}
-          >
-            Refresh overview
-          </Button>
-        </div>
-        <div className="grid gap-6">
-          <Group title="Documents" state={statistics}>
-            {(data) => <DocumentStats data={data} />}
-          </Group>
-          <Group title="Processing" state={metrics}>
-            {(data) => <ProcessingStats data={data} />}
-          </Group>
-        </div>
-        <p className="mt-5 text-xs leading-[1.8] text-muted">
-          Reading these numbers never calls the AI provider. Processing metrics
-          count attempts since metrics were introduced.
-        </p>
-      </section>
-    </details>
+    <section aria-labelledby="overview-heading">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 pr-10">
+        <h2 id="overview-heading" className="text-base font-semibold">
+          Workspace overview
+        </h2>
+        <Button
+          onClick={() => {
+            if (!busy) refresh()
+          }}
+          aria-disabled={busy}
+        >
+          Refresh overview
+        </Button>
+      </div>
+      <div className="grid gap-6">
+        <Group title="Documents" state={statistics}>
+          {(data) => <DocumentStats data={data} />}
+        </Group>
+        <Group title="Processing" state={metrics}>
+          {(data) => <ProcessingStats data={data} />}
+        </Group>
+      </div>
+      <p className="mt-5 text-xs leading-[1.8] text-muted">
+        Reading these numbers never calls the AI provider. Processing metrics
+        count attempts since metrics were introduced.
+      </p>
+    </section>
   )
 }

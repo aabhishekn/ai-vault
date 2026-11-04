@@ -52,21 +52,55 @@ describe('selecting documents', () => {
     vi.stubGlobal('WebSocket', IdleSocket)
   })
 
-  it('shows a selection bar once a document is chosen', async () => {
-    serve([documentNamed('a'), documentNamed('b')])
+  const asking = () => screen.getByRole('group', { name: 'Asking' })
+
+  it('asks every ready document until some are ticked, then only those', async () => {
+    serve([documentNamed('a'), documentNamed('b'), documentNamed('c')])
     render(createElement(DocumentWorkspace))
-    await screen.findByText('a')
-    expect(screen.queryByText(/selected/)).toBeNull()
-    fireEvent.click(screen.getAllByRole('checkbox')[0])
-    await waitFor(() => expect(screen.getByText(/1 selected/)).toBeTruthy())
+    await screen.findByRole('button', { name: 'a' })
+    expect(asking().textContent).toContain('All documents (3)')
+    expect(screen.queryByRole('button', { name: 'Compare' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ask about a' }))
+    expect(asking().textContent).not.toContain('All documents')
+    expect(
+      screen.getByRole('button', { name: 'Stop asking about a' }),
+    ).toBeTruthy()
+    // One document is a conversation of its own, so there is nothing to compare.
+    expect(screen.queryByRole('button', { name: 'Compare' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ask about b' }))
     expect(screen.getByRole('button', { name: 'Compare' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop asking about b' }))
+    expect(
+      screen.queryByRole('button', { name: 'Stop asking about b' }),
+    ).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Use all documents' }))
+    expect(asking().textContent).toContain('All documents (3)')
   })
 
-  it('only offers Select on documents that can be asked about', async () => {
+  it('only offers a tick box on documents that can be asked about', async () => {
     serve([documentNamed('a'), documentNamed('b', 'queued')])
     render(createElement(DocumentWorkspace))
-    await screen.findByText('a')
+    await screen.findByRole('button', { name: 'a' })
     expect(screen.getAllByRole('checkbox')).toHaveLength(1)
+  })
+
+  it('invites an upload when the vault is empty', async () => {
+    serve([])
+    render(createElement(DocumentWorkspace))
+    expect(await screen.findByText(/Upload a PDF to start/)).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('says documents are processing when none can be asked about yet', async () => {
+    serve([documentNamed('a', 'queued'), documentNamed('b', 'processing')])
+    render(createElement(DocumentWorkspace))
+    expect(
+      await screen.findByText(/2 documents are still being processed/),
+    ).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
   })
 })
 
@@ -94,14 +128,14 @@ describe('background worker notice', () => {
   it('stays quiet when a worker is running', async () => {
     serve([documentNamed('a')])
     render(createElement(DocumentWorkspace))
-    await screen.findByText('a')
+    await screen.findByRole('button', { name: 'a' })
     expect(screen.queryByText(notice)).toBeNull()
   })
 
   it('never warns when the check itself fails', async () => {
     serve([documentNamed('a')], null)
     render(createElement(DocumentWorkspace))
-    await screen.findByText('a')
+    await screen.findByRole('button', { name: 'a' })
     expect(screen.queryByText(notice)).toBeNull()
   })
 })
@@ -331,12 +365,12 @@ describe('optimistic changes', () => {
         .filter((tab) => tab.getAttribute('aria-selected') === 'true')
         .map((tab) => tab.textContent)
 
-    it('opens on Ask for a document that can be asked about', async () => {
+    it('opens on Summary for a document that can be asked about', async () => {
       serveVault([documentNamed('a', 'embedded')], {})
       render(createElement(DocumentWorkspace))
       await openDocument('a')
-      expect(selected()).toEqual(['Ask'])
-      expect(screen.getByRole('tabpanel', { name: 'Ask' })).toBeTruthy()
+      expect(selected()).toEqual(['Summary'])
+      expect(screen.getByRole('tabpanel', { name: 'Summary' })).toBeTruthy()
       // The other sections are not on screen until their tab is chosen.
       expect(
         screen.queryByRole('button', { name: /Delete document/ }),
@@ -354,6 +388,10 @@ describe('optimistic changes', () => {
       expect(
         screen.getByRole('button', { name: /Delete document/ }),
       ).toBeTruthy()
+      // Nothing to ask about yet, so there is no shortcut to the chat.
+      expect(
+        screen.queryByRole('button', { name: 'Ask about this document' }),
+      ).toBeNull()
     })
 
     it('says nothing extra about a document that is ready to use', async () => {
@@ -369,32 +407,41 @@ describe('optimistic changes', () => {
       serveVault([documentNamed('a')], {})
       render(createElement(DocumentWorkspace))
       await openDocument('a')
-      const ask = screen.getByRole('tab', { name: 'Ask' })
-      fireEvent.keyDown(ask, { key: 'ArrowRight' })
+      fireEvent.keyDown(screen.getByRole('tab', { name: 'Summary' }), {
+        key: 'ArrowRight',
+      })
+      expect(selected()).toEqual(['Details'])
+      expect(globalThis.document.activeElement.textContent).toBe('Details')
+      fireEvent.keyDown(globalThis.document.activeElement, { key: 'Home' })
       expect(selected()).toEqual(['Summary'])
-      expect(globalThis.document.activeElement.textContent).toBe('Summary')
       fireEvent.keyDown(globalThis.document.activeElement, { key: 'End' })
       expect(selected()).toEqual(['Details'])
       fireEvent.keyDown(globalThis.document.activeElement, {
         key: 'ArrowRight',
       })
-      expect(selected()).toEqual(['Ask'])
+      expect(selected()).toEqual(['Summary'])
     })
 
-    it('keeps a half-typed question when switching tabs', async () => {
-      serveVault([documentNamed('a')], {})
+    it('points the chat at the document and closes the dialog', async () => {
+      serveVault([documentNamed('a'), documentNamed('b')], {})
       render(createElement(DocumentWorkspace))
       await openDocument('a')
-      const box = () => screen.getByRole('textbox', { name: /Your question/i })
-      fireEvent.change(box(), {
-        target: { value: 'What is the notice period?' },
-      })
-      fireEvent.click(screen.getByRole('tab', { name: 'Summary' }))
       expect(
-        screen.queryByRole('textbox', { name: /Your question/i }),
+        screen.getByRole('group', { name: 'Asking' }).textContent,
+      ).toContain('All documents (2)')
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Ask about this document' }),
+      )
+      expect(screen.queryByRole('tab', { name: 'Details' })).toBeNull()
+      const asking = screen.getByRole('group', { name: 'Asking' })
+      expect(asking.textContent).not.toContain('All documents')
+      expect(
+        screen.getByRole('button', { name: 'Stop asking about a' }),
+      ).toBeTruthy()
+      expect(
+        screen.queryByRole('button', { name: 'Stop asking about b' }),
       ).toBeNull()
-      fireEvent.click(screen.getByRole('tab', { name: 'Ask' }))
-      expect(box().value).toBe('What is the notice period?')
     })
 
     it('goes back to the first tab for the next document', async () => {
@@ -404,7 +451,7 @@ describe('optimistic changes', () => {
       fireEvent.click(screen.getByRole('tab', { name: 'Details' }))
       fireEvent.click(screen.getByRole('button', { name: 'Close' }))
       await openDocument('b')
-      expect(selected()).toEqual(['Ask'])
+      expect(selected()).toEqual(['Summary'])
     })
   })
 
@@ -429,7 +476,7 @@ describe('optimistic changes', () => {
       )
       render(createElement(DocumentWorkspace))
       await openDocument('RAG Vault Design')
-      expect(screen.getAllByText('RAG Vault Design')).toHaveLength(2)
+      expect(screen.getAllByText('RAG Vault Design')).toHaveLength(3)
       expect(screen.getByText(/written by AI/)).toBeTruthy()
       // The exact file name stays available.
       expect(screen.getAllByText('a.pdf').length).toBeGreaterThan(0)
@@ -445,7 +492,7 @@ describe('optimistic changes', () => {
       rename('  Q3 Plan ')
 
       // The server has not answered, yet both places already read the new title.
-      expect(screen.getAllByText('Q3 Plan')).toHaveLength(2)
+      expect(screen.getAllByText('Q3 Plan')).toHaveLength(3)
       expect(screen.getByText('Title set by you.')).toBeTruthy()
 
       items[0] = { ...items[0], title: 'Q3 Plan', title_source: 'user' }
@@ -458,7 +505,7 @@ describe('optimistic changes', () => {
       )
       expect(patches).toHaveLength(1)
       expect(JSON.parse(patches[0][1].body)).toEqual({ title: 'Q3 Plan' })
-      expect(screen.getAllByText('Q3 Plan')).toHaveLength(2)
+      expect(screen.getAllByText('Q3 Plan')).toHaveLength(3)
     })
 
     it('puts the old title back and keeps the text when the server refuses', async () => {
@@ -467,7 +514,7 @@ describe('optimistic changes', () => {
       render(createElement(DocumentWorkspace))
       await openDocument('a')
       rename('Q3 Plan')
-      expect(screen.getAllByText('Q3 Plan')).toHaveLength(2)
+      expect(screen.getAllByText('Q3 Plan')).toHaveLength(3)
 
       gate.resolve(refusal(500))
 
@@ -537,7 +584,7 @@ describe('optimistic changes', () => {
       const gate = deferred()
       serveVault([documentNamed('a')], { onUpload: () => gate.promise })
       render(createElement(DocumentWorkspace))
-      await screen.findByText('a')
+      await screen.findByRole('button', { name: 'a' })
 
       choosePdf()
 
@@ -556,7 +603,7 @@ describe('optimistic changes', () => {
       const gate = deferred()
       serveVault(items, { onUpload: () => gate.promise })
       render(createElement(DocumentWorkspace))
-      await screen.findByText('a')
+      await screen.findByRole('button', { name: 'a' })
       choosePdf()
       await screen.findByText('New')
 
@@ -575,7 +622,7 @@ describe('optimistic changes', () => {
       const gate = deferred()
       serveVault([documentNamed('a')], { onUpload: () => gate.promise })
       render(createElement(DocumentWorkspace))
-      await screen.findByText('a')
+      await screen.findByRole('button', { name: 'a' })
       choosePdf()
       await screen.findByText('New')
 

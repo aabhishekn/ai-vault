@@ -3,7 +3,7 @@ const select =
 
 export function DocumentFilters({ overview, filter, onChange }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-rule px-[26px] py-3 max-[600px]:px-[18px]">
+    <div className="flex flex-wrap items-center gap-3 border-b border-rule px-4 py-3">
       <label className="flex items-center gap-2 text-xs font-semibold">
         Category
         <select

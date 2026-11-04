@@ -12,24 +12,21 @@ export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
   const pending = document.pending === true
   return (
     <li
-      className={`grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-4 px-[26px] py-4 not-first:border-t not-first:border-rule max-[600px]:grid-cols-[34px_minmax(0,1fr)] max-[600px]:items-start max-[600px]:gap-3 max-[600px]:px-[18px] max-[600px]:py-4 ${pending ? 'animate-pulse motion-reduce:animate-none' : ''}`}
+      className={`grid grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-3 px-4 py-3 not-first:border-t not-first:border-rule ${chosen ? 'bg-[#fbf3ec]' : ''} ${pending ? 'animate-pulse motion-reduce:animate-none' : ''}`}
       aria-busy={pending}
     >
-      <span
-        className="grid h-12 w-[42px] place-items-center rounded-lg border border-evidence-border bg-[#f0eee6] text-[#7f7d75] max-[600px]:h-10 max-[600px]:w-[34px] [&_svg]:size-[23px]"
-        aria-hidden="true"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" />
-          <path d="M14 3v5h5M8 13h8m-8 4h5" />
-        </svg>
-      </span>
-      <div className="[&_h3]:mb-[7px] [&_h3]:text-[15px] [&_h3]:leading-snug [&_h3]:font-semibold [&_h3]:tracking-[-0.1px] [&_h3]:wrap-anywhere [&_p]:flex [&_p]:flex-wrap [&_p]:gap-1.5 [&_p]:text-[11px] [&_p]:leading-[1.6] [&_p]:text-muted max-[600px]:[&_p]:text-[10px]">
+      {onChoose && canAskDocument(document.status) ? (
+        <input
+          type="checkbox"
+          className="mt-0.5 size-[18px] cursor-pointer"
+          checked={chosen}
+          onChange={() => onChoose(document)}
+          aria-label={`Ask about ${title}`}
+        />
+      ) : (
+        <span aria-hidden="true" />
+      )}
+      <div className="min-w-0 [&_h3]:mb-1 [&_h3]:text-[14px] [&_h3]:leading-snug [&_h3]:font-semibold [&_h3]:wrap-anywhere [&_p]:flex [&_p]:flex-wrap [&_p]:gap-1.5 [&_p]:text-[11px] [&_p]:leading-[1.6] [&_p]:text-muted">
         <h3>
           {pending ? (
             title
@@ -61,21 +58,7 @@ export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
           </time>
         </p>
       </div>
-      <div className="flex items-center gap-3 max-[600px]:col-start-2">
-        {onChoose && canAskDocument(document.status) && (
-          <label className="flex min-h-8 cursor-pointer items-center gap-2 text-[11px] text-muted">
-            <input
-              type="checkbox"
-              className="size-[18px] cursor-pointer"
-              checked={chosen}
-              onChange={() => onChoose(document)}
-              aria-label={`Select for comparison or multi-document questions: ${title}`}
-            />
-            Select
-          </label>
-        )}
-        <DocumentStatusBadge status={document.status} />
-      </div>
+      <DocumentStatusBadge status={document.status} />
     </li>
   )
 }

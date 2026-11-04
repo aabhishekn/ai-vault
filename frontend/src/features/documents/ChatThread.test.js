@@ -9,7 +9,7 @@ import {
   waitFor,
 } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DocumentQuestion } from './DocumentQuestion'
+import { ChatThread } from './ChatThread'
 
 afterEach(cleanup)
 const question = 'What is required?'
@@ -125,7 +125,7 @@ function ask() {
 }
 
 async function renderChat(id = 'a', documentStatus = 'embedded') {
-  const view = render(createElement(DocumentQuestion, { id, documentStatus }))
+  const view = render(createElement(ChatThread, { id, documentStatus }))
   // Searchable documents first look for a saved conversation; wait until typing is allowed.
   if (documentStatus === 'embedded')
     await waitFor(() =>
@@ -134,7 +134,7 @@ async function renderChat(id = 'a', documentStatus = 'embedded') {
   return view
 }
 
-describe('document conversation UI', () => {
+describe('conversation UI', () => {
   it('only submits on demand, blocks duplicates, renders evidence, and returns focus', async () => {
     let resolve
     const fetch = mockApi(
@@ -288,7 +288,7 @@ describe('document conversation UI', () => {
     )
     const signal = messageCall[1].signal
     rerender(
-      createElement(DocumentQuestion, {
+      createElement(ChatThread, {
         key: 'b',
         id: 'b',
         documentStatus: 'embedded',
@@ -320,9 +320,7 @@ describe('restoring a saved conversation', () => {
       (asked) => Promise.resolve(turnResponse('a', asked, 3, 'c0')),
       { saved },
     )
-    render(
-      createElement(DocumentQuestion, { id: 'a', documentStatus: 'embedded' }),
-    )
+    render(createElement(ChatThread, { id: 'a', documentStatus: 'embedded' }))
     expect(screen.getByText('Loading your previous conversation…')).toBeTruthy()
     expect(screen.getByRole('textbox').hasAttribute('disabled')).toBe(true)
     expect(
@@ -341,9 +339,7 @@ describe('restoring a saved conversation', () => {
       (asked) => Promise.resolve(turnResponse('a', asked, 1)),
       { saved },
     )
-    render(
-      createElement(DocumentQuestion, { id: 'a', documentStatus: 'embedded' }),
-    )
+    render(createElement(ChatThread, { id: 'a', documentStatus: 'embedded' }))
     await screen.findByText('Earlier answer is required [1].')
     fireEvent.click(screen.getByRole('button', { name: 'New conversation' }))
     expect(screen.queryByText('Earlier answer is required [1].')).toBeNull()
@@ -380,13 +376,11 @@ describe('restoring a saved conversation', () => {
       },
     )
     const { rerender } = render(
-      createElement(DocumentQuestion, { id: 'a', documentStatus: 'embedded' }),
+      createElement(ChatThread, { id: 'a', documentStatus: 'embedded' }),
     )
     await screen.findByText('Earlier answer is required [1].')
     const reads = fetch.mock.calls.length
-    rerender(
-      createElement(DocumentQuestion, { id: 'a', documentStatus: 'ready' }),
-    )
+    rerender(createElement(ChatThread, { id: 'a', documentStatus: 'ready' }))
     expect(screen.getByText('Earlier answer is required [1].')).toBeTruthy()
     expect(fetch.mock.calls.length).toBe(reads)
   })
@@ -403,7 +397,7 @@ describe('suggested questions', () => {
     })
     vi.stubGlobal('fetch', fetch)
     render(
-      createElement(DocumentQuestion, {
+      createElement(ChatThread, {
         id: 'document-a',
         documentStatus: 'embedded',
       }),
@@ -437,7 +431,7 @@ describe('suggested questions', () => {
       ),
     )
     render(
-      createElement(DocumentQuestion, {
+      createElement(ChatThread, {
         id: 'document-b',
         documentStatus: 'embedded',
       }),
@@ -497,9 +491,7 @@ describe('streaming answers', () => {
         )
       }),
     )
-    render(
-      createElement(DocumentQuestion, { id: 'a', documentStatus: 'embedded' }),
-    )
+    render(createElement(ChatThread, { id: 'a', documentStatus: 'embedded' }))
     fireEvent.change(await screen.findByLabelText('Your question'), {
       target: { value: question },
     })
@@ -511,5 +503,80 @@ describe('streaming answers', () => {
     expect(screen.getByText('Sources')).toBeTruthy()
     expect(screen.queryByText(/Answering/)).toBeNull()
     vi.unstubAllGlobals()
+  })
+})
+
+describe('across several documents', () => {
+  const starters = ['What do these have in common?']
+
+  function mockMulti() {
+    const fetch = vi.fn((url, init) => {
+      if (/\/multi-conversations$/.test(url))
+        return Promise.resolve(
+          Response.json({ id: 'm1', document_id: null }, { status: 201 }),
+        )
+      const turn = Response.json({
+        id: 't1',
+        conversation_id: 'm1',
+        turn_number: 1,
+        response: {
+          document_id: null,
+          question: JSON.parse(String(init.body)).question,
+          answer: 'Both mention fees [1][2].',
+          insufficient_evidence: false,
+          citations: [1, 2].map((number) => ({
+            source_number: number,
+            filename: number === 1 ? 'lease.pdf' : 'budget.pdf',
+            page_number: number,
+            chunk_id: `chunk-${number}`,
+            text: 'A fee applies.',
+          })),
+        },
+      })
+      return asEventStream(turn)
+    })
+    vi.stubGlobal('fetch', fetch)
+    return fetch
+  }
+
+  it('offers starters that fill the box, then asks one conversation over the documents', async () => {
+    const fetch = mockMulti()
+    render(createElement(ChatThread, { documentIds: ['d1', 'd2'], starters }))
+    // No document of its own, so there is no saved conversation to look for.
+    expect(
+      fetch.mock.calls.filter(([url]) => /conversations\?/.test(url)),
+    ).toHaveLength(0)
+    expect(
+      screen.queryByRole('button', { name: 'Suggest questions' }),
+    ).toBeNull()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'What do these have in common?' }),
+    )
+    expect(screen.getByRole('textbox').value).toBe(
+      'What do these have in common?',
+    )
+    ask()
+
+    expect(await screen.findByText(/Both mention fees/)).toBeTruthy()
+    const created = fetch.mock.calls.find(([url]) =>
+      /multi-conversations$/.test(url),
+    )
+    expect(JSON.parse(created[1].body)).toEqual({ document_ids: ['d1', 'd2'] })
+    // Each source says which document it came from.
+    expect(screen.getAllByText(/lease/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/budget/).length).toBeGreaterThan(0)
+  })
+
+  it('sends Enter as the question and keeps Shift+Enter for a new line', async () => {
+    mockMulti()
+    render(createElement(ChatThread, { documentIds: ['d1', 'd2'], starters }))
+    enter('Anything about fees?')
+    const box = screen.getByRole('textbox')
+    // Shift+Enter is not a submit, so no request has gone out.
+    fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })
+    expect(fetch).not.toHaveBeenCalled()
+    fireEvent.keyDown(box, { key: 'Enter' })
+    expect(await screen.findByText(/Both mention fees/)).toBeTruthy()
   })
 })

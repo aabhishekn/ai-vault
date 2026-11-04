@@ -22,16 +22,19 @@ export function DocumentUpload({ handlers }) {
   }
 
   return (
-    <section className="mb-6" aria-labelledby="upload-heading">
+    <section
+      className="shrink-0 border-b border-rule bg-[#f6f4ec] p-4"
+      aria-labelledby="upload-heading"
+    >
       <h2 className="sr-only" id="upload-heading">
         Add a document
       </h2>
       <form
-        className="rounded-[14px] border border-[#e1ddcf] bg-[#f3f1e9] px-5 py-4"
+        className=""
         onSubmit={(event) => void submit(event)}
         aria-busy={uploading}
       >
-        <div className="flex items-center gap-4 max-[600px]:flex-col max-[600px]:items-stretch">
+        <div className="flex flex-wrap items-center gap-3">
           <label className="sr-only" htmlFor="document-file">
             PDF document
           </label>
@@ -53,7 +56,6 @@ export function DocumentUpload({ handlers }) {
           <Button
             type="submit"
             variant="primary"
-            className="max-[600px]:self-start"
             disabled={!file || Boolean(validationError) || uploading}
           >
             {uploading ? 'Uploading…' : 'Upload PDF'}

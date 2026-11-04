@@ -24,11 +24,11 @@ export function DocumentList({
 
   return (
     <section
-      className="overflow-hidden rounded-[18px] border border-panel-border bg-surface shadow-panel"
+      className="flex min-h-0 flex-1 flex-col bg-surface"
       aria-labelledby="documents-heading"
       aria-busy={loading}
     >
-      <div className="flex items-center justify-between gap-4 border-b border-rule px-[26px] py-[22px] max-[600px]:p-[18px]">
+      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-rule px-4 py-3">
         <div className="flex items-center gap-2.5 [&_h2]:text-sm [&_h2]:font-semibold">
           <h2 id="documents-heading">Documents</h2>
           {page && (
@@ -82,7 +82,7 @@ export function DocumentList({
 
       {loading && (
         <div
-          className="px-[26px] py-[54px] text-center [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-[550] [&_h3]:tracking-[-0.3px] [&_p]:mx-auto [&_p]:max-w-[370px] [&_p]:text-[13px] [&_p]:leading-[1.8] [&_p]:text-muted"
+          className="px-6 py-12 text-center [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-[550] [&_h3]:tracking-[-0.3px] [&_p]:mx-auto [&_p]:max-w-[370px] [&_p]:text-[13px] [&_p]:leading-[1.8] [&_p]:text-muted"
           role="status"
         >
           <span
@@ -96,7 +96,7 @@ export function DocumentList({
 
       {state.status === 'error' && (
         <div
-          className="bg-[#fffaf7] px-[26px] py-[54px] text-center [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-[550] [&_h3]:tracking-[-0.3px] [&_p]:mx-auto [&_p]:max-w-[370px] [&_p]:text-[13px] [&_p]:leading-[1.8] [&_p]:text-muted"
+          className="bg-[#fffaf7] px-6 py-12 text-center [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-[550] [&_h3]:tracking-[-0.3px] [&_p]:mx-auto [&_p]:max-w-[370px] [&_p]:text-[13px] [&_p]:leading-[1.8] [&_p]:text-muted"
           role="alert"
         >
           <h3>We couldn’t load your documents.</h3>
@@ -109,7 +109,7 @@ export function DocumentList({
 
       {page && page.items.length === 0 && page.total > 0 && (
         <p
-          className="px-[26px] py-[54px] text-center text-[13px] text-muted"
+          className="px-6 py-12 text-center text-[13px] text-muted"
           role="status"
         >
           Updating your list…
@@ -118,7 +118,7 @@ export function DocumentList({
 
       {page && page.items.length === 0 && page.total === 0 && (
         <div
-          className="px-[26px] py-[54px] text-center [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-[550] [&_h3]:tracking-[-0.3px] [&_p]:mx-auto [&_p]:max-w-[370px] [&_p]:text-[13px] [&_p]:leading-[1.8] [&_p]:text-muted"
+          className="px-6 py-12 text-center [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-[550] [&_h3]:tracking-[-0.3px] [&_p]:mx-auto [&_p]:max-w-[370px] [&_p]:text-[13px] [&_p]:leading-[1.8] [&_p]:text-muted"
           role="status"
         >
           <span
@@ -143,7 +143,10 @@ export function DocumentList({
 
       {page && page.items.length > 0 && (
         <>
-          <ul className="list-none" aria-label="Uploaded documents">
+          <ul
+            className="min-h-0 flex-1 list-none overflow-y-auto"
+            aria-label="Uploaded documents"
+          >
             {page.items.map((document) => (
               <DocumentRow
                 key={document.id}
@@ -154,7 +157,7 @@ export function DocumentList({
               />
             ))}
           </ul>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule bg-panel-footer px-[26px] py-4 max-[600px]:p-[18px] [&_nav]:flex [&_nav]:gap-2 [&_p]:text-[11px] [&_p]:text-muted [&_strong]:font-[550] [&_strong]:text-[#3d3d3a]">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-rule bg-panel-footer px-4 py-3 [&_nav]:flex [&_nav]:gap-2 [&_p]:text-[11px] [&_p]:text-muted [&_strong]:font-[550] [&_strong]:text-[#3d3d3a]">
             <p>
               Showing{' '}
               <strong>

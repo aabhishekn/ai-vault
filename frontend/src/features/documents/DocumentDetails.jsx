@@ -13,18 +13,17 @@ import { DocumentActions } from './DocumentActions'
 import { DocumentVersions } from './DocumentVersions'
 import { DocumentSummary } from './DocumentSummary'
 import { DocumentInsights } from './DocumentInsights'
-import { DocumentQuestion } from './DocumentQuestion'
 import { canAskDocument } from './answers'
 import { DOCUMENT_STATUS_HINTS } from './status'
 import { useDocument } from './useDocument'
 
 const TABS = [
-  { id: 'ask', label: 'Ask' },
   { id: 'summary', label: 'Summary' },
   { id: 'details', label: 'Details' },
 ]
 
 export function DocumentDetails({
+  onAsk,
   id,
   onClose,
   onOpen,
@@ -64,9 +63,9 @@ export function DocumentDetails({
       : null
     : loaded?.title_source
 
-  // Until a tab is picked: Ask when the document can be asked about, otherwise Details.
+  // Until a tab is picked: the summary once there is something to ask about, else Details.
   const [pickedTab, setPickedTab] = useState(null)
-  const tab = pickedTab ?? (canAskDocument(status) ? 'ask' : 'details')
+  const tab = pickedTab ?? (canAskDocument(status) ? 'summary' : 'details')
 
   async function reprocess() {
     mergeData(await onReprocess(id, state.data.status, title))
@@ -146,6 +145,15 @@ export function DocumentDetails({
                   {DOCUMENT_STATUS_HINTS[status]}
                 </span>
               )}
+              {canAskDocument(status) && (
+                <Button
+                  className="ml-auto"
+                  variant="primary"
+                  onClick={() => onAsk(id, title)}
+                >
+                  Ask about this document
+                </Button>
+              )}
             </div>
             <TabList
               idBase="document"
@@ -155,9 +163,6 @@ export function DocumentDetails({
               onChange={setPickedTab}
             />
             <div className="[&_section:first-child]:border-t-0">
-              <TabPanel idBase="document" tab="ask" active={tab}>
-                <DocumentQuestion key={id} id={id} documentStatus={status} />
-              </TabPanel>
               <TabPanel idBase="document" tab="summary" active={tab}>
                 <DocumentSummary
                   key={`summary:${contentRevision}`}

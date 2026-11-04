@@ -9,7 +9,7 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:5173 with the API running on localhost:8000. The list loads ten documents at a time. **Previous** and **Next** navigate pages; The refresh icon reloads the current page. Empty lists and disappeared last pages are handled. Loading, failure, invalid-response, and timeout states are handled. Requests are cancelled when the component unmounts. No AI request is involved.
+Open http://localhost:5173 with the API running on localhost:8000. The list loads ten documents at a time. **Previous** and **Next** navigate pages; the refresh icon reloads the current page. Empty lists and disappeared last pages are handled. Loading, failure, invalid-response, and timeout states are handled. Requests are cancelled when the component unmounts. No AI request is involved.
 
 ## Upload a PDF
 
@@ -47,7 +47,7 @@ The insights API validates the selected document ID, nonempty insight/evidence t
 
 ## Ask a document
 
-**Ask this document** is a saved multi-turn conversation for `embedded` and `ready` documents. Other statuses show why questions are unavailable. The form validates trimmed, nonempty questions up to 2,000 characters and sends `POST /documents/{id}/conversations` once, on the first question, then `POST /conversations/{id}/messages` as JSON with `top_k: 3` for each question and follow-up. No request runs on mount. Questions use the configured AI provider for retrieval and answer generation; the form explains text sharing and possible charges.
+The chat (`ChatPane` with `ChatThread`) is one persistent pane. `scope.js` decides what it asks: the ticked documents, or every `embedded`/`ready` document (newest ten, the backend's limit) when none is ticked; `useReadyDocuments.js` finds those across pages (the visible page when it holds everything, otherwise one `limit=100` request). One document is a saved multi-turn conversation restored on return; two or more is one multi-document conversation. The "all" scope keeps one key while documents finish processing, so a thread in progress is never reset in the background. Other statuses show why questions are unavailable. The form validates trimmed, nonempty questions up to 2,000 characters and sends `POST /documents/{id}/conversations` once, on the first question, then `POST /conversations/{id}/messages` as JSON with `top_k: 3` for each question and follow-up. No request runs on mount. Questions use the configured AI provider for retrieval and answer generation; the form explains text sharing and possible charges.
 
 Answers show the submitted question, plain-text response, and expandable sources labelled with the same citation numbers and page numbers used in the answer. Citation text is the backend's retrieved passage. The client checks the returned document ID, echoed question, citation fields, uniqueness, and correspondence between answer labels and source numbers before displaying a result. Insufficient evidence has its own state and no invented source links.
 
@@ -56,10 +56,13 @@ The hook prevents duplicate submissions, times out after two minutes, and cancel
 ## Structure
 
 - `src/app/`: application layout.
-- `src/features/documents/DocumentWorkspace.jsx`: composes upload, list, and details; owns list state and selected document ID.
+- `src/features/documents/DocumentWorkspace.jsx`: the two-pane screen (library left, chat right; a **Chat | Documents** switch on narrow screens); owns list state, the ticked documents and the selected document ID.
 - `src/features/documents/answers.js`: question eligibility/validation, JSON requests, and answer/citation validation.
 - `src/features/documents/useDocumentAnswer.js`: explicit submission, request guard, cancellation, and timeout.
-- `src/features/documents/DocumentQuestion.jsx`: question form, cost explanation, loading/error feedback, and focus.
+- `src/features/documents/ChatPane.jsx`: the scope chips, **Use all documents**, **Compare**, and the empty states (empty vault, still processing).
+- `src/features/documents/ChatThread.jsx`: one conversation: thread, starters, question box (Enter sends), cost note, loading/error feedback, and focus.
+- `src/features/documents/scope.js` and `useReadyDocuments.js`: what the chat asks about.
+- `src/features/overview/MetricsDialog.jsx`: the metrics, opened from the header.
 - `src/features/documents/AnswerResult.jsx`: submitted question, answer, and expandable source passages.
 - `src/features/documents/summary.js`: validated read/generation requests, processing-status eligibility, and safe API errors.
 - `src/features/documents/useDocumentSummary.js`: summary lifecycle configuration through the shared generated-content hook.
