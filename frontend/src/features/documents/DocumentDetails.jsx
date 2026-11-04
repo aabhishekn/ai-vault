@@ -3,6 +3,7 @@ import { Button } from '../../components/Button'
 import { formatFileSize, formatUploadDate } from '../../lib/format'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
 import { DocumentTags } from './DocumentTags'
+import { DocumentActions } from './DocumentActions'
 import { DocumentVersions } from './DocumentVersions'
 import { DocumentSummary } from './DocumentSummary'
 import { DocumentInsights } from './DocumentInsights'
@@ -15,6 +16,8 @@ export function DocumentDetails({
   onClose,
   onOpen,
   onVersionAdded,
+  onDeleted,
+  onChanged,
   liveRevision = 0,
   contentRevision = 0,
 }) {
@@ -146,6 +149,16 @@ export function DocumentDetails({
               id={id}
               onOpen={onOpen}
               onVersionAdded={onVersionAdded}
+            />
+            <DocumentActions
+              key={id}
+              id={id}
+              status={state.data.status}
+              onDeleted={onDeleted}
+              onReprocessed={() => {
+                refreshQuietly()
+                onChanged?.()
+              }}
             />
           </>
         )}

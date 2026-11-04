@@ -24,6 +24,8 @@ export async function requestJson(path, signal, options = undefined) {
       response.status,
     )
   }
+  // DELETE answers 204 with no body.
+  if (response.status === 204) return null
   return response.json()
 }
 

@@ -1,6 +1,8 @@
 const variants = {
   secondary:
     'border-[#dddfd4] bg-surface text-[#4f584b] enabled:hover:border-[#bfc7b3] enabled:hover:bg-[#f1f3e9]',
+  danger:
+    'border-[#e6c9c3] bg-surface text-error enabled:hover:border-error enabled:hover:bg-[#fdf1ee]',
   primary:
     'border-brand bg-brand text-surface enabled:hover:border-brand-hover enabled:hover:bg-brand-hover',
 }

@@ -114,6 +114,16 @@ export function DocumentWorkspace() {
           onOpen={setSelectedId}
           liveRevision={live.revision}
           contentRevision={live.content}
+          onDeleted={() => {
+            setChosen((previous) => {
+              const next = new Map(previous)
+              next.delete(selectedId)
+              return next
+            })
+            setSelectedId(null)
+            documents.refreshQuietly()
+          }}
+          onChanged={documents.refreshQuietly}
           onVersionAdded={(newId) => {
             documents.goToPage(0)
             setSelectedId(newId)
