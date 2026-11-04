@@ -6,6 +6,7 @@ from app.api.rate_limit import limit
 from app.schemas.documents import (
     DocumentListResponse,
     DocumentResponse,
+    DocumentVersionsResponse,
 )
 from app.services import documents as service
 
@@ -28,5 +29,21 @@ def list_documents(
     offset: int = Query(default=0, ge=0),
     category: str | None = Query(default=None, max_length=40),
     tag: str | None = Query(default=None, max_length=40),
+    include_old_versions: bool = False,
 ) -> DocumentListResponse:
-    return service.list_documents(limit, offset, category, tag)
+    return service.list_documents(limit, offset, category, tag, include_old_versions)
+
+
+@router.post(
+    "/{document_id}/versions",
+    response_model=DocumentResponse,
+    status_code=201,
+    dependencies=[limit("upload")],
+)
+def upload_new_version(document_id: UUID, file: UploadFile) -> DocumentResponse:
+    return service.upload_new_version(document_id, file.filename, file.file)
+
+
+@router.get("/{document_id}/versions", response_model=DocumentVersionsResponse)
+def list_versions(document_id: UUID) -> DocumentVersionsResponse:
+    return service.list_versions(document_id)

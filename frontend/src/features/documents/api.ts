@@ -24,6 +24,10 @@ export function isDocument(value: unknown): value is VaultDocument {
     isNonnegativeInteger(value.size_bytes) &&
     value.size_bytes > 0 &&
     DOCUMENT_STATUSES.some((status) => status === value.status) &&
+    (value.version_number === undefined ||
+      (isNonnegativeInteger(value.version_number) &&
+        value.version_number >= 1)) &&
+    (value.is_latest === undefined || typeof value.is_latest === 'boolean') &&
     (value.category === undefined ||
       value.category === null ||
       typeof value.category === 'string') &&

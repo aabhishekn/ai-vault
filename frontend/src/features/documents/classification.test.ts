@@ -129,15 +129,13 @@ describe('tag components', () => {
   })
 
   it('shows saved tags, or offers to add them once and shows the result', async () => {
-    const fetch = vi
-      .fn()
-      .mockResolvedValue(
-        Response.json({
-          document_id: 'd',
-          category: 'Finance',
-          tags: ['budget'],
-        }),
-      )
+    const fetch = vi.fn().mockResolvedValue(
+      Response.json({
+        document_id: 'd',
+        category: 'Finance',
+        tags: ['budget'],
+      }),
+    )
     vi.stubGlobal('fetch', fetch)
     render(createElement(DocumentTags, { id: 'd', status: 'embedded' }))
     fireEvent.click(

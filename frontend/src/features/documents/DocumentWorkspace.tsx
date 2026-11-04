@@ -16,6 +16,11 @@ export function DocumentWorkspace() {
           key={selectedId}
           id={selectedId}
           onClose={() => setSelectedId(null)}
+          onOpen={setSelectedId}
+          onVersionAdded={(newId) => {
+            documents.goToPage(0)
+            setSelectedId(newId)
+          }}
         />
       )}
     </>

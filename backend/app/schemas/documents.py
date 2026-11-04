@@ -12,6 +12,9 @@ class DocumentResponse(BaseModel):
     content_type: str
     size_bytes: int
     status: str
+    group_id: UUID | None = None
+    version_number: int = 1
+    is_latest: bool = True
     category: str | None = None
     tags: list[str] = []
     created_at: datetime
@@ -91,3 +94,19 @@ class CategoryCount(BaseModel):
 class TagsOverviewResponse(BaseModel):
     categories: list[CategoryCount]
     tags: list[TagCount]
+
+
+class DocumentVersion(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    version_number: int
+    filename: str
+    size_bytes: int
+    status: str
+    is_latest: bool
+    created_at: datetime
+
+
+class DocumentVersionsResponse(BaseModel):
+    group_id: UUID
+    versions: list[DocumentVersion]

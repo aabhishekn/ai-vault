@@ -2,7 +2,16 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import VECTOR
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    true,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -17,6 +26,8 @@ class Document(Base):
     __tablename__ = "documents"
     __table_args__ = (
         CheckConstraint("size_bytes > 0", name="ck_documents_positive_size"),
+        CheckConstraint("version_number >= 1", name="ck_documents_version_number"),
+        UniqueConstraint("group_id", "version_number", name="uq_documents_group_version"),
         CheckConstraint(
             "status IN ('queued', 'processing', 'extracted', 'embedded', 'ready', 'failed')",
             name="ck_documents_status",
@@ -27,6 +38,13 @@ class Document(Base):
     storage_path: Mapped[str] = mapped_column(Text, unique=True)
     content_type: Mapped[str] = mapped_column(String(100))
     size_bytes: Mapped[int]
+    # Versions of one document share a group; the first version's id names it.
+    group_id: Mapped[UUID] = mapped_column(
+        index=True, default=lambda context: context.get_current_parameters()["id"]
+    )
+    version_number: Mapped[int] = mapped_column(server_default="1")
+    is_latest: Mapped[bool] = mapped_column(server_default=true())
+    content_hash: Mapped[str | None] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(20), server_default="queued")
     extracted_pages: Mapped[list[dict] | None] = mapped_column(JSONB)
     summary: Mapped[str | None] = mapped_column(Text)

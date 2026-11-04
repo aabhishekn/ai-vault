@@ -3,6 +3,7 @@ import { Button } from '../../components/Button'
 import { formatFileSize, formatUploadDate } from '../../lib/format'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
 import { DocumentTags } from './DocumentTags'
+import { DocumentVersions } from './DocumentVersions'
 import { DocumentSummary } from './DocumentSummary'
 import { DocumentInsights } from './DocumentInsights'
 import { DocumentQuestion } from './DocumentQuestion'
@@ -12,9 +13,13 @@ import { useDocument } from './useDocument'
 export function DocumentDetails({
   id,
   onClose,
+  onOpen,
+  onVersionAdded,
 }: {
   id: string
   onClose: () => void
+  onOpen: (id: string) => void
+  onVersionAdded: (id: string) => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const { state, refresh } = useDocument(id)
@@ -118,6 +123,12 @@ export function DocumentDetails({
             />
             <DocumentSummary id={id} documentStatus={state.data.status} />
             <DocumentInsights id={id} documentStatus={state.data.status} />
+            <DocumentVersions
+              key={id}
+              id={id}
+              onOpen={onOpen}
+              onVersionAdded={onVersionAdded}
+            />
           </>
         )}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule pt-5 [&_p]:text-[11px] [&_p]:text-muted">

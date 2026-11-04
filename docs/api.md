@@ -483,3 +483,15 @@ Each document can carry one `category` and 3–6 `tags`, generated once by the m
 - `GET /tags` returns `categories` and `tags` with document counts (most used first, 100 tags at most) for building filters.
 
 Both columns are indexed (a GIN index for tags), so filtering stays fast as the library grows. Migration `b7d3e1a94c20` adds them; existing documents stay unclassified until `POST /classification` is called or they are reprocessed.
+
+## Document versions
+
+A document can have several versions. Each version is a normal document of its own (its own file, processing, embeddings, summary, insights, tags and chats), linked to the others by a shared `group_id`. The first upload is version 1 and its id names the group.
+
+- `POST /documents/{document_id}/versions` takes a PDF as multipart `file` (same rules and `upload` rate limit as `POST /documents`) and creates the next version, returning it with HTTP 201 and queueing processing. The id of any version works.
+- `GET /documents/{document_id}/versions` lists every version, newest first: `id`, `version_number`, `filename`, `size_bytes`, `status`, `is_latest` and `created_at`.
+- Documents carry `group_id`, `version_number` and `is_latest`. `GET /documents` lists **only the latest version** of each document; add `include_old_versions=true` to list them all. Counts in `/stats/documents` include every version.
+- A file with the same SHA-256 as the current latest version is rejected with 409 and stored nowhere, so re-uploading the same file does not create a duplicate version.
+- Version numbers are unique per group; if two uploads race for the same number, one gets 409 and nothing is left behind (the file is removed and the previous latest version stays latest).
+
+Older versions are never deleted or changed, so a conversation always refers to the exact file it was asked about. Migration `c4e8f2b17d35` turns every existing document into version 1 of its own group.

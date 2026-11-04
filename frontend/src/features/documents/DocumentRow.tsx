@@ -39,6 +39,11 @@ export function DocumentRow({
           >
             {document.filename}
           </button>
+          {(document.version_number ?? 1) > 1 && (
+            <span className="ml-2 rounded-[7px] bg-[#e4ead9] px-1.5 py-0.5 align-middle text-[10px] font-semibold text-[#3e4a37]">
+              v{document.version_number}
+            </span>
+          )}
         </h3>
         <p>
           <span>{formatFileSize(document.size_bytes)}</span>
