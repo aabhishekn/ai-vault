@@ -184,8 +184,19 @@ def test_turn_is_saved_only_with_the_final_answer():
     save.assert_called_once_with(cid, 2, final)
 
 
-def test_streamed_answer_without_citations_falls_back_to_a_regular_request():
-    bad = AnswerDraft(answer="No label.", source_numbers=[1], insufficient_evidence=False)
+def test_streamed_answer_without_labels_uses_its_declared_sources():
+    draft = AnswerDraft(answer="Use FastAPI.", source_numbers=[1], insufficient_evidence=False)
+    with patch("app.ai.answer_generation.create_client") as sdk:
+        client = sdk.return_value.__enter__.return_value
+        client.responses.stream.return_value = fake_stream(draft, [draft.model_dump_json()])
+        events = list(stream_answer(retrieval()))
+        client.responses.parse.assert_not_called()
+    assert events[-1][1].answer == "Use FastAPI. [1]"
+    assert [c.source_number for c in events[-1][1].citations] == [1]
+
+
+def test_streamed_answer_with_invalid_citations_falls_back_to_a_regular_request():
+    bad = AnswerDraft(answer="Made up [9].", source_numbers=[9], insufficient_evidence=False)
     good = AnswerDraft(answer="Use FastAPI [1].", source_numbers=[1], insufficient_evidence=False)
     with patch("app.ai.answer_generation.create_client") as sdk:
         client = sdk.return_value.__enter__.return_value

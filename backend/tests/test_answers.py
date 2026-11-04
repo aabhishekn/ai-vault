@@ -95,7 +95,8 @@ class AnswerTests(unittest.TestCase):
 
     def test_missing_or_fabricated_citations_are_rejected(self):
         for answer, numbers in [
-            ("No citation", [1]),
+            ("No citation", [9]),
+            ("No citation", [0]),
             ("Invented [3]", [3]),
             ("Nothing", []),
             ("Bad [0]", [0]),
@@ -107,6 +108,17 @@ class AnswerTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     generate_answer(self.retrieval)
 
+    def test_declared_sources_are_used_when_the_text_has_no_labels(self):
+        self.respond(
+            AnswerDraft(
+                answer="Use FastAPI.", source_numbers=[2, 1, 1], insufficient_evidence=False
+            )
+        )
+        result = generate_answer(self.retrieval)
+        self.assertEqual(result.answer, "Use FastAPI. [1] [2]")
+        self.assertEqual([c.source_number for c in result.citations], [1, 2])
+        self.assertEqual(self.client.responses.parse.call_count, 1)
+
     def test_inline_labels_decide_the_citations(self):
         self.respond(
             AnswerDraft(
@@ -116,7 +128,7 @@ class AnswerTests(unittest.TestCase):
         result = generate_answer(self.retrieval)
         self.assertEqual([c.source_number for c in result.citations], [1])
 
-    def test_missing_citations_are_retried_once(self):
+    def test_invalid_citations_are_retried_once(self):
         def draft(answer):
             return SimpleNamespace(
                 output_parsed=AnswerDraft(
@@ -127,14 +139,17 @@ class AnswerTests(unittest.TestCase):
                 usage=SimpleNamespace(input_tokens=100, output_tokens=20),
             )
 
-        self.client.responses.parse.side_effect = [draft("No label"), draft("Use FastAPI [1].")]
+        self.client.responses.parse.side_effect = [
+            draft("Invented [9]."),
+            draft("Use FastAPI [1]."),
+        ]
         result = generate_answer(self.retrieval)
         self.assertEqual(result.answer, "Use FastAPI [1].")
         self.assertEqual(self.client.responses.parse.call_count, 2)
 
-    def test_missing_citations_give_up_after_one_retry(self):
+    def test_invalid_citations_give_up_after_one_retry(self):
         self.respond(
-            AnswerDraft(answer="No label", source_numbers=[1], insufficient_evidence=False)
+            AnswerDraft(answer="Invented [9].", source_numbers=[9], insufficient_evidence=False)
         )
         with self.assertRaises(ValueError):
             generate_answer(self.retrieval)

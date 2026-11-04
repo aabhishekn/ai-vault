@@ -96,9 +96,16 @@ def _finish(retrieval: SearchResponse, response, started: float) -> AnswerRespon
         return _result(retrieval, INSUFFICIENT_ANSWER, True, [], **usage)
     # The labels written in the answer are the source of truth: the model's separate
     # source_numbers list is sometimes inconsistent with its own text.
+    answer = draft.answer.strip()
     labels = {int(label) for label in re.findall("\\[(\\d+)\\]", draft.answer)}
+    if not labels and answer:
+        # Short factual answers often come back with correct source_numbers but no inline
+        # labels, and asking again rarely changes that. Use the declared sources (still
+        # checked below) and write their labels into the text so the answer shows them.
+        labels = set(draft.source_numbers)
+        answer = f"{answer} {' '.join(f'[{number}]' for number in sorted(labels))}"
     if (
-        not draft.answer.strip()
+        not answer
         or not labels
         or any((number < 1 or number > len(retrieval.matches) for number in labels))
     ):
@@ -114,7 +121,7 @@ def _finish(retrieval: SearchResponse, response, started: float) -> AnswerRespon
         )
         for number in sorted(labels)
     ]
-    return _result(retrieval, draft.answer.strip(), False, citations, **usage)
+    return _result(retrieval, answer, False, citations, **usage)
 
 
 def generate_answer(

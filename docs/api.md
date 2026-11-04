@@ -448,7 +448,7 @@ Implementation: the model returns structured JSON with `answer` first, and the s
 
 ## Citation validation
 
-The server requires at least one `[n]` label in the answer text, each within the retrieved sources; the labels written in the text decide which sources are attached as citations (their page and quote come from the stored chunks, never from the model). If the model returns no usable label the request is retried once; a streamed answer falls back to a regular request. A second failure returns 502 and nothing is saved. In a live comparison on a sample document this took successful answers from 1 of 8 to 8 of 8, because the previous prompt and strict cross-check often rejected valid answers.
+The server requires at least one citation, each within the retrieved sources; the `[n]` labels written in the answer text decide which sources are attached (their page and quote come from the stored chunks, never from the model). When the text has no label at all but the model's `source_numbers` are valid, those are used and their labels are appended to the answer (short factual answers often come back this way, and asking again rarely changes it). If a label or declared source does not exist, or none is given, the request is retried once; a streamed answer falls back to a regular request. A second failure returns 502 and nothing is saved. In a live comparison on a sample document this took successful answers from 1 of 8 to 8 of 8, because the previous prompt and strict cross-check often rejected valid answers.
 
 ## Custom summaries
 
