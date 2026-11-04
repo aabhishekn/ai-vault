@@ -4,10 +4,11 @@ import { formatFileSize } from '../../lib/format'
 import { useUploadDocument } from './useUploadDocument'
 import { validateUpload } from './upload'
 
-export function DocumentUpload({ onUploaded }) {
+// `handlers` ({ onStarted, onUploaded, onFailed }) let the list show the upload at once.
+export function DocumentUpload({ handlers }) {
   const [file, setFile] = useState(null)
   const input = useRef(null)
-  const { state, upload, reset } = useUploadDocument(onUploaded)
+  const { state, upload, reset } = useUploadDocument(handlers)
   const uploading = state.status === 'uploading'
   const validationError = file ? validateUpload(file) : null
 

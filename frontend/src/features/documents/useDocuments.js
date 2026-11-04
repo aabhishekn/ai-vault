@@ -58,6 +58,16 @@ export function useDocuments() {
     setQuery((previous) => ({ ...previous, revision: previous.revision + 1 }))
   }
 
+  // Write a change the server has just confirmed into the page on screen. Does nothing
+  // until a page has loaded; callers follow up with refreshQuietly to reconcile.
+  function changePage(change) {
+    setState((previous) =>
+      previous.status === 'success'
+        ? { status: 'success', page: change(previous.page) }
+        : previous,
+    )
+  }
+
   function goToPage(offset) {
     setState({ status: 'loading' })
     setQuery((previous) => ({ ...previous, offset }))
@@ -73,6 +83,7 @@ export function useDocuments() {
     state,
     refresh,
     refreshQuietly,
+    changePage,
     goToPage,
     filter: query.filter,
     setFilter,

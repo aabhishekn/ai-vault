@@ -9,6 +9,7 @@ import { DocumentUpload } from './DocumentUpload'
 import { MultiDocumentChat } from './MultiDocumentChat'
 
 import { useDocuments } from './useDocuments'
+import { useOptimisticDocuments } from './useOptimisticDocuments'
 import { useQueueHealth } from '../health/useQueueHealth'
 import { WorkerNotice } from '../health/WorkerNotice'
 import { useLiveUpdates } from './useLiveUpdates'
@@ -51,11 +52,13 @@ export function DocumentWorkspace() {
   })
   const live =
     pushed.id === selectedId ? pushed : { id: '', revision: 0, content: 0 }
+  // Upload, delete and "process again" show their result before the server confirms.
+  const optimistic = useOptimisticDocuments(documents, selected)
 
   // Only documents that can be asked about show a Select box.
   const askableCount =
-    documents.state.status === 'success'
-      ? documents.state.page.items.filter((item) => canAskDocument(item.status))
+    optimistic.view.status === 'success'
+      ? optimistic.view.page.items.filter((item) => canAskDocument(item.status))
           .length
       : 0
 
@@ -68,10 +71,29 @@ export function DocumentWorkspace() {
     })
   }
 
+  function deleteOpenDocument(id, filename) {
+    setChosen((previous) => {
+      const next = new Map(previous)
+      next.delete(id)
+      return next
+    })
+    setSelectedId(null)
+    void optimistic.removeDocument(id, filename)
+  }
+
   return (
     <>
-      <DocumentUpload onUploaded={() => documents.goToPage(0)} />
+      <DocumentUpload handlers={optimistic.upload} />
       <WorkerNotice health={queue} />
+      {optimistic.problem && (
+        <div
+          className="sticky top-3 z-10 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-[#e6c9c3] bg-[#fffaf7] px-4 py-3 text-[13px] text-error shadow-panel"
+          role="alert"
+        >
+          <span>{optimistic.problem}</span>
+          <Button onClick={optimistic.dismissProblem}>Dismiss</Button>
+        </div>
+      )}
       {chosen.size > 0 && (
         <div
           className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-evidence-border bg-[#f7f5ee] px-4 py-3 text-[13px]"
@@ -105,6 +127,7 @@ export function DocumentWorkspace() {
       )}
       <DocumentList
         {...documents}
+        state={optimistic.view}
         onSelect={setSelectedId}
         chosen={chosen}
         onChoose={choose}
@@ -118,16 +141,9 @@ export function DocumentWorkspace() {
           onOpen={setSelectedId}
           liveRevision={live.revision}
           contentRevision={live.content}
-          onDeleted={() => {
-            setChosen((previous) => {
-              const next = new Map(previous)
-              next.delete(selectedId)
-              return next
-            })
-            setSelectedId(null)
-            documents.refreshQuietly()
-          }}
-          onChanged={documents.refreshQuietly}
+          onDelete={deleteOpenDocument}
+          onReprocess={optimistic.reprocess}
+          statusGuess={optimistic.statusGuesses.get(selectedId)}
           onVersionAdded={(newId) => {
             documents.goToPage(0)
             setSelectedId(newId)

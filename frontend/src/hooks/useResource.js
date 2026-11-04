@@ -42,7 +42,22 @@ export function useResource(key, loadResource, fallbackMessage) {
   function refreshQuietly() {
     setRevision((previous) => previous + 1)
   }
+  // Merge a value the server just confirmed (for example the reply to an action) into
+  // what is shown, so it does not briefly show stale data until the next fetch lands.
+  function mergeData(confirmed) {
+    setRequest((previous) =>
+      previous.key === key && previous.state.status === 'success'
+        ? {
+            key,
+            state: {
+              status: 'success',
+              data: { ...previous.state.data, ...confirmed },
+            },
+          }
+        : previous,
+    )
+  }
   // Never display a previous key's data while its replacement request starts.
   const state = request.key === key ? request.state : { status: 'loading' }
-  return { state, refresh, refreshQuietly }
+  return { state, refresh, refreshQuietly, mergeData }
 }

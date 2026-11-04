@@ -1,4 +1,6 @@
 export const STATUS_LABELS = {
+  // Only ever shown for an upload that is still on its way to the server.
+  uploading: 'Uploading',
   queued: 'Queued',
   processing: 'Processing',
   extracted: 'Text extracted',

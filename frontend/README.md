@@ -13,7 +13,7 @@ Open http://localhost:5173 with the API running on localhost:8000. The list load
 
 ## Upload a PDF
 
-Choose a PDF, then select **Upload PDF**. The form checks the extension, nonempty size, filename length, and 10 MiB limit (shown as 10 MB). The server validates the actual PDF header and enforces the size limit. On success, the picker clears and the list returns to the first page to show the new document. Processing happens in the existing background worker; use **Refresh** to update statuses.
+Choose a PDF, then select **Upload PDF**. The form checks the extension, nonempty size, filename length, and 10 MiB limit (shown as 10 MB). The server validates the actual PDF header and enforces the size limit. While the file uploads, a pulsing **Uploading** row appears at the top of the first page (unfiltered); on success the saved document replaces it without reloading the list, and on failure the row is removed and the form explains why. Past the first page or with a filter on, the list returns to the first page once the upload is saved. Processing happens in the existing background worker; use **Refresh** to update statuses.
 
 The file input and submit button are disabled during upload. Uploads time out after 60 seconds and are cancelled on unmount; cancelling the browser request does not undo a server save. Failed or unconfirmed requests are never retried automatically. If the connection or queue fails after a save, feedback asks you to refresh the list before uploading again. The backend currently has no upload idempotency mechanism.
 
@@ -77,6 +77,7 @@ The hook prevents duplicate submissions, times out after two minutes, and cancel
 - `src/features/documents/DocumentUpload.jsx`: accessible file picker, form, and feedback.
 - `src/features/health/queue.js`, `useQueueHealth.js` and `WorkerNotice.jsx`: polls `GET /health/queue` every 30 s and shows a notice when no worker is running; a failed check shows nothing.
 - `src/features/documents/manage.js` and `DocumentActions.jsx`: Process again (failed or text-only documents) and permanent delete behind an inline confirmation; delete removes every version, and a document that is already gone counts as deleted.
+- `src/features/documents/optimistic.js` and `useOptimisticDocuments.js`: optimistic updates. A small overlay holds only what is still in flight (an upload row, ids being deleted, a guessed `Queued` status); the list shows the server's page with that laid over it. When the server answers, the confirmed change is written into the real page and the overlay entry dropped; when it refuses, the entry is dropped, the list is exactly as before and a message says why (in the dialog while it is open, otherwise in a dismissible alert above the list). A guess is ignored once the server reports a different status, so it can never hide a real change. Every optimistic change is followed by a quiet reload to reconcile with the server.
 - `src/features/documents/`: document types, validated API requests, loading/pagination hook, list, rows, and status badges.
 - `src/components/`: shared UI primitives such as Button.
 - `src/lib/format.js`: date and file-size display helpers.

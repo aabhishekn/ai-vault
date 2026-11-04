@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { ApiError } from '../../lib/api'
-import { canProcessAgain, deleteDocument, reprocessDocument } from './manage'
+import { canProcessAgain } from './manage'
 
 const REPROCESS_HELP = {
   failed:
@@ -10,15 +10,19 @@ const REPROCESS_HELP = {
     'Text is extracted but the search index is not built yet. Process again to finish it and enable questions. Embedding the text uses a small amount of API credit.',
 }
 
-export function DocumentActions({ id, status, onDeleted, onReprocessed }) {
-  // null | 'processing' | 'deleting'
-  const [busy, setBusy] = useState(null)
+const QUEUED_NOTICE = 'Queued for processing. Its status updates here shortly.'
+
+// `onReprocess` resolves once queued and rejects with an ApiError if refused. `onDelete`
+// closes the dialog straight away; if the server refuses, the page says so.
+export function DocumentActions({ status, onDelete, onReprocess }) {
+  const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [notice, setNotice] = useState(null)
   const [error, setError] = useState(null)
   const deleteButton = useRef(null)
   const cancelButton = useRef(null)
   const wasConfirming = useRef(false)
+  const deleteRequested = useRef(false)
 
   // Move focus into the confirmation, and back to Delete if it is dismissed.
   useEffect(() => {
@@ -27,34 +31,29 @@ export function DocumentActions({ id, status, onDeleted, onReprocessed }) {
     wasConfirming.current = confirming
   }, [confirming])
 
-  async function run(kind, action) {
+  async function processAgain() {
     if (busy) return
-    setBusy(kind)
+    setBusy(true)
     setError(null)
-    setNotice(null)
+    // Say it is queued right away; the notice is withdrawn if the server refuses.
+    setNotice(QUEUED_NOTICE)
     try {
-      await action()
+      await onReprocess()
     } catch (caught) {
+      setNotice(null)
       setError(
         caught instanceof ApiError ? caught.message : 'Something went wrong.',
       )
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
-  const processAgain = () =>
-    run('processing', async () => {
-      await reprocessDocument(id, AbortSignal.timeout(30_000))
-      setNotice('Queued for processing. Its status updates here shortly.')
-      onReprocessed()
-    })
-
-  const remove = () =>
-    run('deleting', async () => {
-      await deleteDocument(id, AbortSignal.timeout(30_000))
-      onDeleted()
-    })
+  function remove() {
+    if (deleteRequested.current) return
+    deleteRequested.current = true
+    onDelete()
+  }
 
   return (
     <section
@@ -69,8 +68,8 @@ export function DocumentActions({ id, status, onDeleted, onReprocessed }) {
           <p className="mb-3 text-[13px] leading-[1.8] text-muted">
             {REPROCESS_HELP[status]}
           </p>
-          <Button onClick={() => void processAgain()} disabled={busy !== null}>
-            {busy === 'processing' ? 'Queueing…' : 'Process again'}
+          <Button onClick={() => void processAgain()} disabled={busy}>
+            {busy ? 'Queueing…' : 'Process again'}
           </Button>
         </div>
       )}
@@ -83,7 +82,7 @@ export function DocumentActions({ id, status, onDeleted, onReprocessed }) {
             setNotice(null)
             setConfirming(true)
           }}
-          disabled={busy !== null}
+          disabled={busy}
         >
           Delete document…
         </Button>
@@ -101,19 +100,11 @@ export function DocumentActions({ id, status, onDeleted, onReprocessed }) {
             insights, chat history and the stored PDF. This cannot be undone.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button
-              ref={cancelButton}
-              onClick={() => setConfirming(false)}
-              disabled={busy === 'deleting'}
-            >
+            <Button ref={cancelButton} onClick={() => setConfirming(false)}>
               Cancel
             </Button>
-            <Button
-              variant="danger"
-              onClick={() => void remove()}
-              disabled={busy === 'deleting'}
-            >
-              {busy === 'deleting' ? 'Deleting…' : 'Delete permanently'}
+            <Button variant="danger" onClick={remove}>
+              Delete permanently
             </Button>
           </div>
         </div>

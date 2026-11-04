@@ -95,7 +95,16 @@ export function DocumentList({
         </div>
       )}
 
-      {page && page.items.length === 0 && (
+      {page && page.items.length === 0 && page.total > 0 && (
+        <p
+          className="px-[26px] py-[54px] text-center text-[13px] text-muted"
+          role="status"
+        >
+          Updating your list…
+        </p>
+      )}
+
+      {page && page.items.length === 0 && page.total === 0 && (
         <div
           className="px-[26px] py-[54px] text-center [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-[550] [&_h3]:tracking-[-0.3px] [&_p]:mx-auto [&_p]:max-w-[370px] [&_p]:text-[13px] [&_p]:leading-[1.8] [&_p]:text-muted"
           role="status"

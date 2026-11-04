@@ -16,19 +16,33 @@ export function DocumentDetails({
   onClose,
   onOpen,
   onVersionAdded,
-  onDeleted,
-  onChanged,
+  onDelete,
+  onReprocess,
+  statusGuess = null,
   liveRevision = 0,
   contentRevision = 0,
 }) {
   const dialog = useRef(null)
-  const { state, refresh, refreshQuietly } = useDocument(id)
+  const { state, refresh, refreshQuietly, mergeData } = useDocument(id)
   const lastRevision = useRef(liveRevision)
   useEffect(() => {
     if (lastRevision.current === liveRevision) return
     lastRevision.current = liveRevision
     refreshQuietly()
   }, [liveRevision, refreshQuietly])
+
+  // What to show for the status: a guess made ahead of the server, while it still applies.
+  const loaded = state.status === 'success' ? state.data : null
+  const status =
+    loaded && statusGuess?.from === loaded.status
+      ? statusGuess.to
+      : loaded?.status
+
+  async function reprocess() {
+    const { filename, status: current } = state.data
+    mergeData(await onReprocess(id, current, filename))
+    refreshQuietly()
+  }
 
   useEffect(() => {
     const element = dialog.current
@@ -87,33 +101,29 @@ export function DocumentDetails({
             <h3 className="mb-[18px] text-lg leading-normal font-bold wrap-anywhere">
               {state.data.filename}
             </h3>
-            <DocumentStatusBadge status={state.data.status} />
+            <DocumentStatusBadge status={status} />
             <p className="my-[1em] text-[13px] leading-[1.8] text-muted">
-              {DOCUMENT_STATUS_DESCRIPTIONS[state.data.status]}
+              {DOCUMENT_STATUS_DESCRIPTIONS[status]}
             </p>
             <DocumentTags
               key={`${id}:${contentRevision}`}
               id={id}
-              status={state.data.status}
+              status={status}
               category={state.data.category}
               tags={state.data.tags}
             />
             <div className="mt-6">
-              <DocumentQuestion
-                key={id}
-                id={id}
-                documentStatus={state.data.status}
-              />
+              <DocumentQuestion key={id} id={id} documentStatus={status} />
             </div>
             <DocumentSummary
               key={contentRevision}
               id={id}
-              documentStatus={state.data.status}
+              documentStatus={status}
             />
             <DocumentInsights
               key={contentRevision}
               id={id}
-              documentStatus={state.data.status}
+              documentStatus={status}
             />
             <details className="border-t border-rule py-5">
               <summary className="cursor-pointer py-1 text-[15px] font-semibold select-none">
@@ -152,13 +162,9 @@ export function DocumentDetails({
             />
             <DocumentActions
               key={id}
-              id={id}
-              status={state.data.status}
-              onDeleted={onDeleted}
-              onReprocessed={() => {
-                refreshQuietly()
-                onChanged?.()
-              }}
+              status={status}
+              onDelete={() => onDelete(id, state.data.filename)}
+              onReprocess={reprocess}
             />
           </>
         )}

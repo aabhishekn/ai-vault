@@ -4,6 +4,7 @@ const statusStyles = {
   embedded: 'bg-success-soft text-success',
   ready: 'bg-success-soft text-success',
   extracted: 'bg-[#edf4f0] text-[#426b64]',
+  uploading: 'bg-[#ecf2f8] text-[#496a86]',
   queued: 'bg-[#f8f1e3] text-[#89662b]',
   processing: 'bg-[#ecf2f8] text-[#496a86]',
   failed: 'bg-danger-soft text-danger',
