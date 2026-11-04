@@ -163,12 +163,12 @@ From `backend/` with `.venv` active:
 ```bash
 python -m ruff check .
 python -m ruff format --check .
-python -m unittest discover -s tests -v
-RUN_INTEGRATION_TESTS=1 python -m unittest discover -s tests -v
+python -m pytest
+RUN_INTEGRATION_TESTS=1 python -m pytest
 python -m alembic check
 ```
 
-Database integration tests require local PostgreSQL with migrations applied and use their own records or temporary tables. Tests mock paid provider requests. GitHub Actions runs formatting, lint, migration replay and the complete test suite against PostgreSQL/pgvector and Redis. To format an edit, run `python -m ruff format .`.
+Tests run with pytest (the suite is written with `unittest` classes and `pytest` collects them; `python -m unittest discover -s tests` also works). Database integration tests require local PostgreSQL with migrations applied and use their own records or temporary tables. Tests mock paid provider requests. GitHub Actions runs formatting, lint, migration replay and the complete test suite against PostgreSQL/pgvector and Redis. To format an edit, run `python -m ruff format .`.
 
 For the queue demo or recovery of a saved queued/failed upload:
 
