@@ -1,0 +1,168 @@
+.health-card {
+  border: 1px solid #dedfd4;
+  background: #fffefa;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 5px 22px #25322704;
+}
+.health-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 26px;
+  border-bottom: 1px solid #eeeee6;
+  gap: 12px;
+}
+.health-card h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.health-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.health-badge-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.health-badge--online {
+  background: #eef3e9;
+  color: #527347;
+}
+.health-badge--checking {
+  background: #f6efe2;
+  color: #947548;
+}
+.health-badge--offline {
+  background: #f9ece7;
+  color: #a05a46;
+}
+.health-result {
+  padding: 32px 26px 36px;
+}
+.health-symbol {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  margin-bottom: 18px;
+}
+.health-symbol svg {
+  width: 24px;
+  height: 24px;
+}
+.health-symbol--online {
+  background: #eef3e9;
+  color: #527347;
+}
+.health-symbol--checking {
+  background: #f6efe2;
+  color: #947548;
+}
+.health-symbol--offline {
+  background: #f9ece7;
+  color: #a05a46;
+}
+.health-result h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  letter-spacing: -0.5px;
+  font-weight: 550;
+}
+.health-result p {
+  margin: 0;
+  max-width: 430px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #66705f;
+}
+.health-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 26px;
+  background: #fafaf5;
+  border-top: 1px solid #eeeee6;
+}
+.health-card-footer > span {
+  color: #66705f;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.health-card button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex-shrink: 0;
+  color: #4f584b;
+  background: #fffefa;
+  border: 1px solid #dddfd4;
+  border-radius: 7px;
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.health-card button:hover:not(:disabled) {
+  background: #f1f3e9;
+  border-color: #bfc7b3;
+}
+.health-card button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.health-card button svg {
+  width: 14px;
+  height: 14px;
+}
+.health-spinner {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #ddcfb5;
+  border-top-color: #947548;
+  border-radius: 50%;
+  animation: health-spin 1s linear infinite;
+}
+@keyframes health-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .health-spinner {
+    animation: none;
+  }
+  .health-card button {
+    transition: none;
+  }
+}
+@media (max-width: 600px) {
+  .health-card-topline,
+  .health-card-footer {
+    padding: 18px;
+  }
+  .health-result {
+    padding: 26px 18px;
+  }
+  .health-result h3 {
+    font-size: 18px;
+  }
+  .health-card-footer > span {
+    max-width: 150px;
+  }
+}

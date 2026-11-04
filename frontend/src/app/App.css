@@ -1,0 +1,105 @@
+.workspace {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  padding: 0 6.5%;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 104px;
+  border-bottom: 1px solid #e4e5dc;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 21px;
+  letter-spacing: -0.8px;
+}
+.brand-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  background: #263c31;
+  color: #f6f6ed;
+  border-radius: 11px;
+}
+.brand-icon svg {
+  width: 28px;
+  height: 28px;
+}
+.workspace-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #66705f;
+  font-size: 12px;
+  font-weight: 500;
+}
+.workspace-label > span {
+  width: 6px;
+  height: 6px;
+  background: #a0aa93;
+  border-radius: 50%;
+}
+.workspace-main {
+  width: 100%;
+  max-width: 650px;
+  margin: 0 auto;
+  padding: 72px 0 54px;
+}
+.eyebrow {
+  margin: 0 0 18px;
+  color: #786447;
+  font-size: 11px;
+  letter-spacing: 2.3px;
+  font-weight: 650;
+}
+h1 {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(46px, 6vw, 68px);
+  font-weight: 400;
+  letter-spacing: -2.8px;
+  line-height: 1.08;
+}
+.workspace-intro {
+  max-width: 420px;
+  margin: 22px 0 34px;
+  color: #66705f;
+  font-size: 15px;
+  line-height: 1.75;
+}
+.workspace-footer {
+  margin-top: auto;
+  padding: 0 0 28px;
+  text-align: center;
+  color: #66705f;
+  font-size: 11px;
+  letter-spacing: 0.2px;
+}
+
+@media (max-width: 600px) {
+  .workspace {
+    padding: 0 22px;
+  }
+  .workspace-header {
+    height: 82px;
+  }
+  .workspace-main {
+    padding-top: 48px;
+  }
+  .workspace-label {
+    font-size: 11px;
+  }
+  h1 {
+    letter-spacing: -1.8px;
+  }
+}

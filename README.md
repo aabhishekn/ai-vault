@@ -2,7 +2,7 @@
 
 A local document vault with PDF uploads, background text extraction, semantic search, source-cited answers, saved conversations, summaries, insights, and processing metrics.
 
-Built with Python 3.12, FastAPI, SQLAlchemy, PostgreSQL + pgvector, Redis/RQ, and OpenAI. The React/TypeScript frontend is the next development phase.
+Built with Python 3.12, FastAPI, SQLAlchemy, PostgreSQL + pgvector, Redis/RQ, and OpenAI. A React/TypeScript frontend starter now verifies the backend connection; document screens come next.
 
 ## Run locally
 
@@ -28,6 +28,20 @@ Open [Swagger](http://localhost:8000/docs), [health](http://localhost:8000/healt
 
 Extraction works without an API key. To enable document embeddings, set `OPENAI_API_KEY` and `ENABLE_EMBEDDINGS=true` in the root `.env`, then restart the API and worker. Search, answers, summaries, and insights also use the key. Generated results send text to the provider and can incur charges. Fresh clones default to embeddings disabled.
 
+## Frontend connection screen
+
+In another terminal, from the repository root (Node.js 24 is used in CI):
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open [the frontend](http://localhost:5173). It checks `/health` through Vite's local `/api` proxy and shows checking, connected or disconnected state. **Check again** retries the connection. Connection checks do not use the AI API. The Python server must be running on port 8000.
+
+Frontend code is grouped under `src/app`, `src/features/health`, and `src/lib`. TypeScript strict mode, lint, formatting and build checks are enabled. See the [frontend guide](frontend/README.md) for commands and proxy behavior. Production API routing is not configured yet.
+
 ## Code structure
 
 ```text
@@ -46,6 +60,10 @@ backend/
     worker.py         Worker entry point
   migrations/         Versioned database changes
   tests/              Unit, HTTP, architecture and database integration tests
+frontend/
+  src/app/           Application layout
+  src/features/      UI and API contracts grouped by feature
+  src/lib/           Shared frontend request helpers
 docs/
   architecture.md     Boundaries, transaction design and extension guide
   api.md              Endpoint behavior, operations and current limitations
