@@ -21,7 +21,7 @@ ContentValue = str | list[dict]
 def get_cached_content(document_id: UUID, field: ContentField) -> ContentValue:
     try:
         with Session(engine) as session:
-            document = get_document_or_raise(session, document_id)
+            document = get_document_or_raise(session, document_id, load=(field,))
             value = getattr(document, field)
             if value is None:
                 message = (
@@ -43,7 +43,7 @@ def generate_cached_content(
     """Generate outside a transaction, then save only if no earlier result exists."""
     try:
         with Session(engine) as session:
-            document = get_document_or_raise(session, document_id)
+            document = get_document_or_raise(session, document_id, load=("extracted_pages", field))
             existing = getattr(document, field)
             if existing is not None:
                 return existing
@@ -66,7 +66,7 @@ def generate_cached_content(
                 .returning(column)
             )
             if saved is None:
-                document = get_document_or_raise(session, document_id)
+                document = get_document_or_raise(session, document_id, load=(field,))
                 saved = getattr(document, field)
                 if saved is None:
                     raise ConflictError(

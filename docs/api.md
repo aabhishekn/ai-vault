@@ -30,7 +30,7 @@ Uploads return HTTP 201 with a document ID, original filename, type, byte size, 
 
 This first version accepts `.pdf` files with a `%PDF-` header, limited to 10 MiB. This is a basic signature check, not full PDF parsing. The processing worker will validate readability later. Empty files return 400, unsupported types/headers return 415, and oversized files return 413. Files are removed if saving their database record fails. A process crash between saving the file and committing metadata can still leave an orphan file; reconciliation can be added later.
 
-`queued` means awaiting background extraction. A successful upload automatically queues an RQ job after the file and metadata are saved. Start `python -m app.worker` from `backend/` (with `.venv` active) to process jobs. AI calls are disabled by default; set `ENABLE_EMBEDDINGS=true` to enable the embedding stage.
+`queued` means awaiting background extraction. A successful upload automatically queues an RQ job after the file and metadata are saved. Start `python -m app.worker` from `backend/` (with `.venv` active) to process jobs. The embedding stage runs automatically when `OPENAI_API_KEY` is set; set `ENABLE_EMBEDDINGS=false` to disable it.
 
 Run upload validation and failure-cleanup tests from `backend/`:
 
@@ -206,7 +206,7 @@ No approximate vector index is added yet; initial similarity queries can use exa
 
 ## Optional embeddings in the background worker
 
-Apply migrations with `python -m alembic upgrade head`. By default, `ENABLE_EMBEDDINGS=false` (including when unset), and uploaded documents finish at `extracted` without any AI calls. To enable the embedding stage for future uploads, configure the root `.env`:
+Apply migrations with `python -m alembic upgrade head`. When `ENABLE_EMBEDDINGS` is unset, embeddings run exactly when `OPENAI_API_KEY` is set; without a key, uploaded documents finish at `extracted` without any AI calls. An explicit `ENABLE_EMBEDDINGS=true` or `false` always wins. To force the embedding stage on, configure the root `.env`:
 
 ```dotenv
 OPENAI_API_KEY=your_key_here
@@ -396,3 +396,20 @@ Every process logs JSON lines to stderr (set `LOG_LEVEL` to `DEBUG`, `INFO`, `WA
 - `rate_limit_exceeded` and `rate_limiter_unavailable`.
 
 Logs contain identifiers, sizes, durations, token counts and outcomes, not document text, questions or answers. Failure tracebacks can include provider error text, so keep logs private. For monitoring, `/health`, `/health/db`, `/stats/documents`, `/metrics/processing` and `/metrics/ai-usage` cover liveness, database reachability, document pipeline state, job timings and spend. Run uvicorn with `--no-access-log` to avoid duplicate request lines.
+
+## Retry and recovery
+
+`POST /documents/{document_id}/reprocess` (HTTP 202) queues processing again and returns the document with status `queued`. It works for:
+
+- `failed` documents (the error message is cleared),
+- `queued` documents whose job was never confirmed (for example Redis was down at upload),
+- `extracted` documents, which backfills embeddings after you add an API key,
+- `processing` documents whose worker died: an attempt running longer than 10 minutes (twice the 5-minute job timeout) is closed as `failed` in the processing metrics and the document is queued again.
+
+A document that is `embedded`/`ready`, or genuinely still processing, returns 409 and nothing is queued. If the job queue is unavailable the document stays `queued` and the call can simply be repeated (503). The endpoint shares the `upload` rate limit because reprocessing can spend embedding tokens.
+
+When a worker starts it also re-queues every abandoned document, so a crash or restart heals itself without a manual call. A duplicate job is harmless: only one worker can claim a `queued` document, and the other skips it.
+
+## Query efficiency
+
+Extracted pages and insights can be megabytes per document. Listing, retrieving, and searching documents defer those columns, and summary or insight routes load only the column they use, so metadata lookups no longer transfer document text.

@@ -17,6 +17,9 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 1536
 MAX_EMBEDDING_BATCH_SIZE = 64
+JOB_TIMEOUT_SECONDS = 300
+# Twice the job timeout, so a job that is merely slow is never mistaken for a dead one.
+PROCESSING_STALE_AFTER_SECONDS = 2 * JOB_TIMEOUT_SECONDS
 TEXT_AVAILABLE_STATUSES = ("extracted", "embedded", "ready")
 SEARCHABLE_STATUSES = ("embedded", "ready")
 DOCUMENT_STATUSES = ("queued", "processing", "extracted", "embedded", "ready", "failed")
@@ -33,10 +36,10 @@ def get_answer_model() -> str:
 
 
 def embeddings_enabled() -> bool:
-    value = os.getenv("ENABLE_EMBEDDINGS", "false").strip().lower()
-    if value not in ("true", "false"):
-        raise ConfigurationError("ENABLE_EMBEDDINGS must be true or false")
-    return value == "true"
+    """Explicit ENABLE_EMBEDDINGS wins; when unset, embeddings run only if an API key exists."""
+    if not os.getenv("ENABLE_EMBEDDINGS", "").strip():
+        return bool(os.getenv("OPENAI_API_KEY", "").strip())
+    return _bool_setting("ENABLE_EMBEDDINGS", "false")
 
 
 def database_url() -> URL:

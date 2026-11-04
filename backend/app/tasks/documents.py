@@ -14,6 +14,7 @@ from app.ai.embeddings import EMBEDDING_MODEL, MAX_BATCH_SIZE, generate_embeddin
 from app.core.config import REPOSITORY_ROOT, embeddings_enabled
 from app.db.database import engine
 from app.db.models import Document, DocumentChunk, ProcessingAttempt
+from app.db.queries import lightweight
 from app.processing.chunking import TextChunk, chunk_pages
 from app.processing.pdf_extraction import ExtractedPage, PDFExtractionError, extract_pdf
 
@@ -50,7 +51,7 @@ def _claim_document(context: ProcessingContext) -> tuple[str | None, str]:
             .returning(Document.storage_path)
         )
         if storage_path is None:
-            document = session.get(Document, context.document_id)
+            document = session.get(Document, context.document_id, options=lightweight())
             if document is None:
                 raise ValueError("Document not found")
             return None, document.status

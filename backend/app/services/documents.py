@@ -17,7 +17,7 @@ from app.core.errors import (
 )
 from app.db.database import engine
 from app.db.models import Document
-from app.db.queries import get_document_or_raise
+from app.db.queries import get_document_or_raise, list_documents_query
 from app.schemas.documents import DocumentListResponse, DocumentResponse
 from app.tasks.documents import extract_document
 from app.tasks.queue import document_queue
@@ -101,7 +101,7 @@ def list_documents(limit: int = 20, offset: int = 0) -> DocumentListResponse:
         with Session(engine) as session:
             total = session.scalar(select(func.count()).select_from(Document))
             documents = session.scalars(
-                select(Document)
+                list_documents_query()
                 .order_by(Document.created_at.desc(), Document.id.desc())
                 .limit(limit)
                 .offset(offset)

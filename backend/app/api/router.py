@@ -9,12 +9,14 @@ from app.api.routes import (
     health,
     insights,
     processing_metrics,
+    reprocessing,
     search,
     summaries,
 )
 
 router = APIRouter()
 router.include_router(documents.router)
+router.include_router(reprocessing.router)
 router.include_router(search.router)
 router.include_router(answers.router)
 router.include_router(conversations.router)

@@ -26,7 +26,7 @@ python -m app.worker
 
 Open [Swagger](http://localhost:8000/docs), [health](http://localhost:8000/health), or [database health](http://localhost:8000/health/db). PostgreSQL binds to localhost:5433 and Redis to localhost:6379.
 
-Extraction works without an API key. To enable document embeddings, set `OPENAI_API_KEY` and `ENABLE_EMBEDDINGS=true` in the root `.env`, then restart the API and worker. Search, answers, summaries, and insights also use the key. Generated results send text to the provider and can incur charges. Fresh clones default to embeddings disabled.
+Set `OPENAI_API_KEY` in the root `.env` before starting the API and worker: with a key present, uploads are embedded automatically and documents reach **Search ready**, which chat, search, summaries, and insights need. Without a key, extraction still works and documents stop at **Text extracted**. Set `ENABLE_EMBEDDINGS=false` to force extraction-only even when a key exists. These features send document text to the provider and can incur charges.
 
 ## Frontend workspace
 
@@ -77,6 +77,7 @@ Routes delegate to services. Services coordinate database access and provider ad
 | Workflow | Endpoint |
 | --- | --- |
 | Upload/list/get | `POST /documents`, `GET /documents`, `GET /documents/{id}` |
+| Retry processing | `POST /documents/{id}/reprocess` |
 | Semantic search | `POST /documents/{id}/search` |
 | One question with citations | `POST /documents/{id}/ask` |
 | Saved conversations | `POST /documents/{id}/conversations`, `POST /conversations/{id}/messages`, `GET /conversations/{id}` |

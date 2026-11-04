@@ -30,6 +30,7 @@ class APIContractTests(unittest.TestCase):
             ("GET", "/documents"),
             ("POST", "/documents"),
             ("GET", "/documents/{document_id}"),
+            ("POST", "/documents/{document_id}/reprocess"),
             ("POST", "/documents/{document_id}/search"),
             ("POST", "/documents/{document_id}/ask"),
             ("GET", "/documents/{document_id}/summary"),
