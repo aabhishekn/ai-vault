@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Button } from '../../components/Button'
 import { ApiError } from '../../lib/api'
 import { getHealth } from './api'
 import './HealthCard.css'
@@ -100,7 +101,7 @@ export function HealthCard() {
 
       <div className="health-card-footer">
         <span>Connection checks don’t use AI credits.</span>
-        <button type="button" onClick={retry} disabled={checking}>
+        <Button onClick={retry} disabled={checking}>
           <svg
             viewBox="0 0 20 20"
             fill="none"
@@ -115,7 +116,7 @@ export function HealthCard() {
             />
           </svg>
           {checking ? 'Checking…' : 'Check again'}
-        </button>
+        </Button>
       </div>
     </section>
   )

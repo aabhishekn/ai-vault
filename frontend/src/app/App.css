@@ -51,9 +51,9 @@
 }
 .workspace-main {
   width: 100%;
-  max-width: 650px;
+  max-width: 940px;
   margin: 0 auto;
-  padding: 72px 0 54px;
+  padding: 56px 0 54px;
 }
 .eyebrow {
   margin: 0 0 18px;
@@ -102,4 +102,22 @@ h1 {
   h1 {
     letter-spacing: -1.8px;
   }
+}
+
+.connection-details {
+  margin-top: 24px;
+}
+.connection-details > summary {
+  width: fit-content;
+  cursor: pointer;
+  color: #66705f;
+  font-size: 12px;
+  padding: 10px 0;
+}
+.connection-details > summary:focus-visible {
+  outline: 3px solid #b46d36;
+  outline-offset: 4px;
+}
+.connection-details[open] > summary {
+  margin-bottom: 12px;
 }

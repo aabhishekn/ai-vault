@@ -1,4 +1,5 @@
-import { HealthCard } from '../features/health/HealthCard'
+import { DocumentList } from '../features/documents/DocumentList'
+import { ConnectionDetails } from '../features/health/ConnectionDetails'
 import './App.css'
 
 export default function App() {
@@ -27,17 +28,18 @@ export default function App() {
       </header>
 
       <main className="workspace-main">
-        <p className="eyebrow">THE FOUNDATION</p>
+        <p className="eyebrow">YOUR WORKSPACE</p>
         <h1>
-          A good place
+          Room for your
           <br />
-          to start.
+          next idea.
         </h1>
         <p className="workspace-intro">
-          Your vault is taking shape. First, let’s make sure your workspace and
-          document service are connected.
+          Your documents, gathered in one place. See what’s arrived and where
+          each one stands.
         </p>
-        <HealthCard />
+        <DocumentList />
+        <ConnectionDetails />
       </main>
 
       <footer className="workspace-footer">
