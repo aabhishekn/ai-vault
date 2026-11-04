@@ -24,6 +24,9 @@ def get_document(document_id: UUID) -> DocumentResponse:
 
 @router.get("", response_model=DocumentListResponse)
 def list_documents(
-    limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0)
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    category: str | None = Query(default=None, max_length=40),
+    tag: str | None = Query(default=None, max_length=40),
 ) -> DocumentListResponse:
-    return service.list_documents(limit, offset)
+    return service.list_documents(limit, offset, category, tag)

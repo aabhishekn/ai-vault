@@ -19,6 +19,7 @@ from app.db.models import Document, DocumentChunk, ProcessingAttempt
 from app.db.queries import lightweight
 from app.processing.chunking import TextChunk, chunk_pages
 from app.processing.pdf_extraction import ExtractedPage, PDFExtractionError, extract_pdf
+from app.services.classification import create_classification
 from app.services.insights import create_insights
 from app.services.summaries import create_summary
 
@@ -169,13 +170,17 @@ def _record_failure(context: ProcessingContext, error: Exception) -> None:
 
 
 def _generate_content(document_id: UUID) -> dict[str, str]:
-    """Best effort: a summary and insights are conveniences, never a reason to fail a document.
+    """Best effort: a summary, insights and tags are conveniences, never a reason to fail a document.
 
     The document is already searchable when this runs, and anything that fails here can still be
     generated on demand from the API. Results that already exist are reused, not regenerated.
     """
     outcomes = {}
-    for name, create in (("summary", create_summary), ("insights", create_insights)):
+    for name, create in (
+        ("summary", create_summary),
+        ("insights", create_insights),
+        ("classification", create_classification),
+    ):
         started = perf_counter()
         try:
             create(document_id)

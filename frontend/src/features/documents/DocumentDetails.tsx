@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Button } from '../../components/Button'
 import { formatFileSize, formatUploadDate } from '../../lib/format'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
+import { DocumentTags } from './DocumentTags'
 import { DocumentSummary } from './DocumentSummary'
 import { DocumentInsights } from './DocumentInsights'
 import { DocumentQuestion } from './DocumentQuestion'
@@ -79,6 +80,13 @@ export function DocumentDetails({
             <p className="my-[1em] text-[13px] leading-[1.8] text-muted">
               {DOCUMENT_STATUS_DESCRIPTIONS[state.data.status]}
             </p>
+            <DocumentTags
+              key={id}
+              id={id}
+              status={state.data.status}
+              category={state.data.category}
+              tags={state.data.tags}
+            />
             <dl className="mt-6 grid grid-cols-2 gap-[22px] border-t border-rule py-6 max-[600px]:grid-cols-1 [&_dd]:leading-[1.6] [&_dd]:wrap-anywhere [&_dt]:mb-2 [&_dt]:text-[11px] [&_dt]:text-muted">
               <div>
                 <dt>File size</dt>

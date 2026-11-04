@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ApiError } from '../../lib/api'
-import { listDocuments } from './api'
+import { listDocuments, type DocumentFilter } from './api'
 import type { DocumentPage } from './types'
 
 const PAGE_SIZE = 10
@@ -11,7 +11,11 @@ type DocumentListState =
   | { status: 'error'; message: string }
 
 export function useDocuments() {
-  const [query, setQuery] = useState({ offset: 0, revision: 0 })
+  const [query, setQuery] = useState<{
+    offset: number
+    revision: number
+    filter: DocumentFilter
+  }>({ offset: 0, revision: 0, filter: {} })
   const [state, setState] = useState<DocumentListState>({ status: 'loading' })
 
   useEffect(() => {
@@ -26,6 +30,7 @@ export function useDocuments() {
         const page = await listDocuments({
           limit: PAGE_SIZE,
           offset: query.offset,
+          filter: query.filter,
           signal,
         })
         if (controller.signal.aborted) return
@@ -63,5 +68,11 @@ export function useDocuments() {
     setQuery((previous) => ({ ...previous, offset }))
   }
 
-  return { state, refresh, goToPage }
+  // Changing the filter always returns to the first page.
+  function setFilter(filter: DocumentFilter) {
+    setState({ status: 'loading' })
+    setQuery((previous) => ({ ...previous, offset: 0, filter }))
+  }
+
+  return { state, refresh, goToPage, filter: query.filter, setFilter }
 }

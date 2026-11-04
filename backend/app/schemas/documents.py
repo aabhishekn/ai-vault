@@ -12,7 +12,14 @@ class DocumentResponse(BaseModel):
     content_type: str
     size_bytes: int
     status: str
+    category: str | None = None
+    tags: list[str] = []
     created_at: datetime
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def no_tags_means_empty(cls, value: list[str] | None) -> list[str]:
+        return value or []
 
 
 class DocumentListResponse(BaseModel):
@@ -63,3 +70,24 @@ class SuggestedQuestionsResponse(BaseModel):
 class InsightsResponse(BaseModel):
     document_id: UUID
     insights: list[DocumentInsight]
+
+
+class ClassificationResponse(BaseModel):
+    document_id: UUID
+    category: str
+    tags: list[str]
+
+
+class TagCount(BaseModel):
+    tag: str
+    count: int
+
+
+class CategoryCount(BaseModel):
+    category: str
+    count: int
+
+
+class TagsOverviewResponse(BaseModel):
+    categories: list[CategoryCount]
+    tags: list[TagCount]

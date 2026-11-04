@@ -471,3 +471,15 @@ The server requires at least one `[n]` label in the answer text, each within the
 | `focus` | free text up to 200 characters, such as `deadlines and costs` | none |
 
 The response has `summary`, the `options` used and `cached`. A custom summary is **not saved on the document**: the document keeps one default summary (`/summary`). Variants are cached in Redis for 7 days under a hash of the model and options, so repeating a style returns `cached: true` without a provider call. The `focus` text is sent as data next to the document, never inside the instructions, and the prompt tells the model to treat it as a preference only and to say so briefly when the document has little on the topic. Uses the `ai` rate limit; returns 409 until text is extracted.
+
+## Category and tags
+
+Each document can carry one `category` and 3–6 `tags`, generated once by the model and saved on the document.
+
+- `POST /documents/{document_id}/classification` generates and saves them (or returns the saved result, with no provider call). `GET` on the same path reads them and returns 404 until they exist. The workers also do this automatically after the summary and insights, as a best-effort step that can never fail the document.
+- Categories are a fixed list: `Legal`, `Finance`, `Technical`, `Policy`, `Research`, `Business`, `Education`, `Other`. The model's choice is validated against it. Tags are lowercase, trimmed, de-duplicated and at most 30 characters.
+- The source is the saved summary and insights (a small request). Documents with neither fall back to the first 4,000 characters of text.
+- `GET /documents` accepts `category=Legal` and `tag=lease` (both optional, combinable); `total` reflects the filter. Documents include `category` (nullable) and `tags` (empty when unclassified).
+- `GET /tags` returns `categories` and `tags` with document counts (most used first, 100 tags at most) for building filters.
+
+Both columns are indexed (a GIN index for tags), so filtering stays fast as the library grows. Migration `b7d3e1a94c20` adds them; existing documents stay unclassified until `POST /classification` is called or they are reprocessed.

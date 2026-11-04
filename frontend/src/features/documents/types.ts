@@ -15,6 +15,9 @@ export type VaultDocument = {
   content_type: string
   size_bytes: number
   status: DocumentStatus
+  // Absent from older servers; treat missing as unclassified.
+  category?: string | null
+  tags?: string[]
   created_at: string
 }
 

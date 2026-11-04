@@ -20,6 +20,16 @@ MAX_EMBEDDING_BATCH_SIZE = 64
 JOB_TIMEOUT_SECONDS = 300
 # Twice the job timeout, so a job that is merely slow is never mistaken for a dead one.
 PROCESSING_STALE_AFTER_SECONDS = 2 * JOB_TIMEOUT_SECONDS
+DOCUMENT_CATEGORIES = (
+    "Legal",
+    "Finance",
+    "Technical",
+    "Policy",
+    "Research",
+    "Business",
+    "Education",
+    "Other",
+)
 TEXT_AVAILABLE_STATUSES = ("extracted", "embedded", "ready")
 SEARCHABLE_STATUSES = ("embedded", "ready")
 DOCUMENT_STATUSES = ("queued", "processing", "extracted", "embedded", "ready", "failed")

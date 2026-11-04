@@ -96,12 +96,21 @@ def get_document(document_id: UUID) -> DocumentResponse:
         raise DependencyUnavailableError("Unable to retrieve document metadata") from None
 
 
-def list_documents(limit: int = 20, offset: int = 0) -> DocumentListResponse:
+def list_documents(
+    limit: int = 20, offset: int = 0, category: str | None = None, tag: str | None = None
+) -> DocumentListResponse:
+    """Newest first; `category` and `tag` narrow the list (and its total)."""
+    filters = []
+    if category:
+        filters.append(Document.category == category)
+    if tag:
+        filters.append(Document.tags.contains([" ".join(tag.lower().split())]))
     try:
         with Session(engine) as session:
-            total = session.scalar(select(func.count()).select_from(Document))
+            total = session.scalar(select(func.count()).select_from(Document).where(*filters))
             documents = session.scalars(
                 list_documents_query()
+                .where(*filters)
                 .order_by(Document.created_at.desc(), Document.id.desc())
                 .limit(limit)
                 .offset(offset)

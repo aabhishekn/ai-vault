@@ -24,6 +24,12 @@ export function isDocument(value: unknown): value is VaultDocument {
     isNonnegativeInteger(value.size_bytes) &&
     value.size_bytes > 0 &&
     DOCUMENT_STATUSES.some((status) => status === value.status) &&
+    (value.category === undefined ||
+      value.category === null ||
+      typeof value.category === 'string') &&
+    (value.tags === undefined ||
+      (Array.isArray(value.tags) &&
+        value.tags.every((tag) => typeof tag === 'string'))) &&
     typeof value.created_at === 'string' &&
     Number.isFinite(Date.parse(value.created_at))
   )
@@ -54,21 +60,27 @@ export function parseDocumentPage(data: unknown): DocumentPage {
   }
 }
 
+export type DocumentFilter = { category?: string; tag?: string }
+
 type ListDocumentsOptions = {
   limit: number
   offset: number
   signal: AbortSignal
+  filter?: DocumentFilter
 }
 
 export async function listDocuments({
   limit,
   offset,
   signal,
+  filter = {},
 }: ListDocumentsOptions): Promise<DocumentPage> {
   const query = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
   })
+  if (filter.category) query.set('category', filter.category)
+  if (filter.tag) query.set('tag', filter.tag)
   const page = parseDocumentPage(await getJson(`/documents?${query}`, signal))
   if (page.limit !== limit || page.offset !== offset) {
     throw new ApiError(

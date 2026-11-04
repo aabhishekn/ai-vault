@@ -1,15 +1,20 @@
 import { Button } from '../../components/Button'
+import { DocumentFilters } from './DocumentFilters'
 import { DocumentRow } from './DocumentRow'
+import { useTagsOverview } from './useTagsOverview'
 import type { useDocuments } from './useDocuments'
 
 export function DocumentList({
   state,
   refresh,
   goToPage,
+  filter,
+  setFilter,
   onSelect,
 }: ReturnType<typeof useDocuments> & { onSelect: (id: string) => void }) {
   const loading = state.status === 'loading'
   const page = state.status === 'success' ? state.page : null
+  const overview = useTagsOverview(page)
 
   return (
     <section
@@ -46,6 +51,12 @@ export function DocumentList({
           {loading ? 'Loading…' : 'Refresh'}
         </Button>
       </div>
+
+      <DocumentFilters
+        overview={overview}
+        filter={filter}
+        onChange={setFilter}
+      />
 
       {loading && (
         <div
@@ -86,7 +97,11 @@ export function DocumentList({
             +
           </span>
           <h3>A little space for your next idea.</h3>
-          <p>No documents yet. Your uploaded PDFs will appear here.</p>
+          <p>
+            {filter.category || filter.tag
+              ? 'No documents match this filter.'
+              : 'No documents yet. Your uploaded PDFs will appear here.'}
+          </p>
         </div>
       )}
 

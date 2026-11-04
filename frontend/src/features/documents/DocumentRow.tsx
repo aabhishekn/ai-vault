@@ -1,5 +1,6 @@
 import { formatFileSize, formatUploadDate } from '../../lib/format'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
+import { TagChips } from './TagChips'
 import type { VaultDocument } from './types'
 
 export function DocumentRow({
@@ -46,6 +47,9 @@ export function DocumentRow({
             {formatUploadDate(document.created_at)}
           </time>
         </p>
+        <div className="mt-2">
+          <TagChips category={document.category} tags={document.tags} max={3} />
+        </div>
       </div>
       <div className="max-[600px]:col-start-2">
         <DocumentStatusBadge status={document.status} />

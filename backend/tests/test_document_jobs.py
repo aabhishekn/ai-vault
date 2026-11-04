@@ -255,21 +255,30 @@ class DocumentJobTests(unittest.TestCase):
         with (
             patch.object(jobs, "create_summary") as summary,
             patch.object(jobs, "create_insights") as insights,
+            patch.object(jobs, "create_classification") as classification,
         ):
             result = self.run_embedded_job(env={"AUTO_GENERATE_CONTENT": "true"})
         summary.assert_called_once_with(self.identifier)
         insights.assert_called_once_with(self.identifier)
+        classification.assert_called_once_with(self.identifier)
         self.assertEqual(result["status"], "embedded")
-        self.assertEqual(result["generated"], {"summary": "saved", "insights": "saved"})
+        self.assertEqual(
+            result["generated"],
+            {"summary": "saved", "insights": "saved", "classification": "saved"},
+        )
 
     def test_generation_failure_never_fails_the_processed_document(self):
         with (
             patch.object(jobs, "create_summary", side_effect=ConflictError("not ready")),
             patch.object(jobs, "create_insights", side_effect=TimeoutError("private details")),
+            patch.object(jobs, "create_classification", side_effect=ConflictError("no text")),
             self.assertLogs("app.tasks.documents", "WARNING") as logs,
         ):
             result = self.run_embedded_job(env={"AUTO_GENERATE_CONTENT": "true"})
-        self.assertEqual(result["generated"], {"summary": "failed", "insights": "failed"})
+        self.assertEqual(
+            result["generated"],
+            {"summary": "failed", "insights": "failed", "classification": "failed"},
+        )
         self.assertNotIn("private details", "".join(logs.output))
         with Session(engine) as session:
             self.assertEqual(session.get(Document, self.identifier).status, "embedded")
@@ -283,19 +292,25 @@ class DocumentJobTests(unittest.TestCase):
         with (
             patch.object(jobs, "create_summary", side_effect=ConflictError("no")),
             patch.object(jobs, "create_insights") as insights,
+            patch.object(jobs, "create_classification"),
         ):
             result = self.run_embedded_job(env={"AUTO_GENERATE_CONTENT": "true"})
         insights.assert_called_once()
-        self.assertEqual(result["generated"], {"summary": "failed", "insights": "saved"})
+        self.assertEqual(
+            result["generated"],
+            {"summary": "failed", "insights": "saved", "classification": "saved"},
+        )
 
     def test_generation_can_be_switched_off(self):
         with (
             patch.object(jobs, "create_summary") as summary,
             patch.object(jobs, "create_insights") as insights,
+            patch.object(jobs, "create_classification") as classification,
         ):
             result = self.run_embedded_job(env={"AUTO_GENERATE_CONTENT": "false"})
         summary.assert_not_called()
         insights.assert_not_called()
+        classification.assert_not_called()
         self.assertNotIn("generated", result)
 
     def test_extraction_only_processing_generates_nothing(self):
