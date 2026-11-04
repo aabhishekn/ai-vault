@@ -1,6 +1,6 @@
 # AI Vault frontend
 
-React + TypeScript + Vite + Tailwind CSS. The workspace uploads PDFs and lists documents with processing status, size, upload time, and pagination.
+React + Vite + Tailwind CSS (plain JavaScript). The workspace uploads PDFs and lists documents with processing status, size, upload time, and pagination.
 
 From this directory:
 
@@ -56,30 +56,30 @@ The hook prevents duplicate submissions, times out after two minutes, and cancel
 ## Structure
 
 - `src/app/`: application layout.
-- `src/features/documents/DocumentWorkspace.tsx`: composes upload, list, and details; owns list state and selected document ID.
-- `src/features/documents/answers.ts`: question eligibility/validation, JSON requests, and answer/citation validation.
-- `src/features/documents/useDocumentAnswer.ts`: explicit submission, request guard, cancellation, and timeout.
-- `src/features/documents/DocumentQuestion.tsx`: question form, cost explanation, loading/error feedback, and focus.
-- `src/features/documents/AnswerResult.tsx`: submitted question, answer, and expandable source passages.
-- `src/features/documents/summary.ts`: validated read/generation requests, processing-status eligibility, and safe API errors.
-- `src/features/documents/useDocumentSummary.ts`: summary lifecycle configuration through the shared generated-content hook.
-- `src/features/documents/DocumentSummary.tsx`: summary, empty state, and retry UI.
-- `src/features/documents/useDocument.ts`: metadata loading through the shared resource hook.
-- `src/features/documents/insights.ts`: saved/generated insight validation, processing-status eligibility, and safe API requests.
-- `src/features/documents/useDocumentInsights.ts`: insight lifecycle configuration.
-- `src/features/documents/useGeneratedDocumentContent.ts`: shared saved-content reads and explicit generation, with request guards, timeouts, cancellation, and document isolation.
-- `src/features/documents/DocumentInsights.tsx`: independent insight cards, generation, empty states, and recovery.
-- `src/features/documents/savedContent.ts`: shared summary/insights missing-content handling.
-- `src/hooks/useResource.ts`: metadata loading, timeout, cancellation, key isolation, and refresh.
-- `src/features/documents/DocumentDetails.tsx`: metadata dialog and focus lifecycle.
-- `src/features/documents/upload.ts`: upload validation and multipart API request.
-- `src/features/documents/useUploadDocument.ts`: upload lifecycle, timeout, duplicate-submit guard, and cancellation.
-- `src/features/documents/DocumentUpload.tsx`: accessible file picker, form, and feedback.
+- `src/features/documents/DocumentWorkspace.jsx`: composes upload, list, and details; owns list state and selected document ID.
+- `src/features/documents/answers.js`: question eligibility/validation, JSON requests, and answer/citation validation.
+- `src/features/documents/useDocumentAnswer.js`: explicit submission, request guard, cancellation, and timeout.
+- `src/features/documents/DocumentQuestion.jsx`: question form, cost explanation, loading/error feedback, and focus.
+- `src/features/documents/AnswerResult.jsx`: submitted question, answer, and expandable source passages.
+- `src/features/documents/summary.js`: validated read/generation requests, processing-status eligibility, and safe API errors.
+- `src/features/documents/useDocumentSummary.js`: summary lifecycle configuration through the shared generated-content hook.
+- `src/features/documents/DocumentSummary.jsx`: summary, empty state, and retry UI.
+- `src/features/documents/useDocument.js`: metadata loading through the shared resource hook.
+- `src/features/documents/insights.js`: saved/generated insight validation, processing-status eligibility, and safe API requests.
+- `src/features/documents/useDocumentInsights.js`: insight lifecycle configuration.
+- `src/features/documents/useGeneratedDocumentContent.js`: shared saved-content reads and explicit generation, with request guards, timeouts, cancellation, and document isolation.
+- `src/features/documents/DocumentInsights.jsx`: independent insight cards, generation, empty states, and recovery.
+- `src/features/documents/savedContent.js`: shared summary/insights missing-content handling.
+- `src/hooks/useResource.js`: metadata loading, timeout, cancellation, key isolation, and refresh.
+- `src/features/documents/DocumentDetails.jsx`: metadata dialog and focus lifecycle.
+- `src/features/documents/upload.js`: upload validation and multipart API request.
+- `src/features/documents/useUploadDocument.js`: upload lifecycle, timeout, duplicate-submit guard, and cancellation.
+- `src/features/documents/DocumentUpload.jsx`: accessible file picker, form, and feedback.
 - `src/features/documents/`: document types, validated API requests, loading/pagination hook, list, rows, and status badges.
 - `src/components/`: shared UI primitives such as Button.
-- `src/lib/format.ts`: date and file-size display helpers.
+- `src/lib/format.js`: date and file-size display helpers.
 - `src/features/health/`: health API contract and connection component.
-- `src/lib/api.ts`: shared fetch entry point for future feature APIs.
+- `src/lib/api.js`: shared fetch entry point for future feature APIs.
 - `src/styles.css`: Tailwind entry point, shared theme tokens, and global base/focus styles.
 
 API modules validate unknown JSON, hooks own request lifecycle, and components render state. Feature components do not call fetch directly.
@@ -103,8 +103,8 @@ npm test
 npm run build
 ```
 
-Vitest verifies response validation, pagination parameters, cancellation signal forwarding, safe error messages, upload size boundaries, multipart data, unconfirmed saves, and summary/insight generation contracts without live API calls. React Testing Library also checks lifecycle guards, cancellation, document switching, recovery, citation rendering, and focus after generation. CI runs all four checks. TypeScript strict mode is enabled. The lockfile pins installed dependencies; use `npm ci` for repeatable installs. The proxy applies to the development server. A production deployment will need its own `/api` routing; deployment is not configured in this step.
+Vitest verifies response validation, pagination parameters, cancellation signal forwarding, safe error messages, upload size boundaries, multipart data, unconfirmed saves, and summary/insight generation contracts without live API calls. React Testing Library also checks lifecycle guards, cancellation, document switching, recovery, citation rendering, and focus after generation. CI runs all four checks. The lockfile pins installed dependencies; use `npm ci` for repeatable installs. The proxy applies to the development server. A production deployment will need its own `/api` routing; deployment is not configured in this step.
 
 ## Workspace overview
 
-`src/features/analytics/` reads `GET /stats/documents` and `GET /metrics/processing`. `analytics.ts` validates the responses (non-negative counts, status totals matching the document total, rates between 0 and 1) and maps them to camelCase, `useAnalytics.ts` loads each independently so one failure never hides the other, and `AnalyticsPanel.tsx` renders them with loading, error, empty, and refresh states. Neither endpoint calls the AI provider.
+`src/features/analytics/` reads `GET /stats/documents` and `GET /metrics/processing`. `analytics.js` validates the responses (non-negative counts, status totals matching the document total, rates between 0 and 1) and maps them to camelCase, `useAnalytics.js` loads each independently so one failure never hides the other, and `AnalyticsPanel.jsx` renders them with loading, error, empty, and refresh states. Neither endpoint calls the AI provider.
