@@ -20,14 +20,15 @@ export function DocumentSummary({ id, documentStatus }) {
         <h3 ref={heading} tabIndex={-1} id="summary-heading">
           Summary
         </h3>
-        <Button
-          onClick={() => {
-            if (!busy) refresh()
-          }}
-          aria-disabled={busy}
-        >
-          {state.status === 'error' ? 'Check saved summary' : 'Refresh summary'}
-        </Button>
+        {state.status === 'error' && (
+          <Button
+            onClick={() => {
+              if (!busy) refresh()
+            }}
+          >
+            Check saved summary
+          </Button>
+        )}
       </div>
       {state.status === 'loading' && (
         <p
@@ -55,8 +56,8 @@ export function DocumentSummary({ id, documentStatus }) {
             </p>
           ) : (
             <p className="mt-3 text-[13px] leading-[1.9] wrap-anywhere text-muted">
-              A summary needs extracted document text. Refresh document details
-              after processing finishes.
+              A summary needs extracted document text. Try again once processing
+              finishes.
             </p>
           )}
         </div>

@@ -20,16 +20,15 @@ export function DocumentInsights({ id, documentStatus }) {
         <h3 ref={heading} tabIndex={-1} id="insights-heading">
           Insights
         </h3>
-        <Button
-          onClick={() => {
-            if (!busy) refresh()
-          }}
-          aria-disabled={busy}
-        >
-          {state.status === 'error'
-            ? 'Check saved insights'
-            : 'Refresh insights'}
-        </Button>
+        {state.status === 'error' && (
+          <Button
+            onClick={() => {
+              if (!busy) refresh()
+            }}
+          >
+            Check saved insights
+          </Button>
+        )}
       </div>
       {state.status === 'loading' && (
         <p className="text-[13px] leading-[1.9] text-muted" role="status">
@@ -52,7 +51,7 @@ export function DocumentInsights({ id, documentStatus }) {
           >
             {canGenerate
               ? 'Generate insights with page references using AI. Document text is sent to your configured AI provider and API charges may apply.'
-              : 'Insights need extracted document text. Refresh document details after processing finishes.'}
+              : 'Insights need extracted document text. Try again once processing finishes.'}
           </p>
         </div>
       )}

@@ -44,7 +44,7 @@ export async function generateDocumentSummary(id, signal) {
         )
       if (error.status === 409)
         throw new ApiError(
-          'Document text is not ready or has changed. Refresh document details and check for a saved summary before trying again.',
+          'Document text is not ready or has changed. Try again once processing finishes, and check for a saved summary first.',
         )
       if (error.status === 413)
         throw new ApiError(
@@ -54,7 +54,7 @@ export async function generateDocumentSummary(id, signal) {
     // The server can finish saving a summary after a timeout or disconnect.
     // Never retry a generation request automatically.
     throw new ApiError(
-      'We couldn’t confirm summary generation. Refresh the summary to check for a saved result before generating again.',
+      'We couldn’t confirm summary generation. Use “Check saved summary” to look for a saved result before generating again.',
     )
   }
 }

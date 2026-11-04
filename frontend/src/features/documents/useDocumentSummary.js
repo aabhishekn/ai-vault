@@ -12,7 +12,7 @@ const summaryApi = {
   loadError:
     'We couldn’t load the saved summary. Check your connection and try again.',
   generationError:
-    'Summary generation could not be confirmed. Refresh the summary before trying again.',
+    'Summary generation could not be confirmed. Check saved summary before trying again.',
 }
 
 export function useDocumentSummary(id, status) {

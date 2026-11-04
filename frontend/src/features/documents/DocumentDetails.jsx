@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
+import { TabList, TabPanel } from '../../components/Tabs'
 import {
   displayTitle,
   formatFileSize,
@@ -13,8 +14,15 @@ import { DocumentVersions } from './DocumentVersions'
 import { DocumentSummary } from './DocumentSummary'
 import { DocumentInsights } from './DocumentInsights'
 import { DocumentQuestion } from './DocumentQuestion'
-import { DOCUMENT_STATUS_DESCRIPTIONS } from './status'
+import { canAskDocument } from './answers'
+import { DOCUMENT_STATUS_HINTS } from './status'
 import { useDocument } from './useDocument'
+
+const TABS = [
+  { id: 'ask', label: 'Ask' },
+  { id: 'summary', label: 'Summary' },
+  { id: 'details', label: 'Details' },
+]
 
 export function DocumentDetails({
   id,
@@ -56,6 +64,10 @@ export function DocumentDetails({
       : null
     : loaded?.title_source
 
+  // Until a tab is picked: Ask when the document can be asked about, otherwise Details.
+  const [pickedTab, setPickedTab] = useState(null)
+  const tab = pickedTab ?? (canAskDocument(status) ? 'ask' : 'details')
+
   async function reprocess() {
     mergeData(await onReprocess(id, state.data.status, title))
     refreshQuietly()
@@ -79,42 +91,45 @@ export function DocumentDetails({
     <dialog
       ref={dialog}
       className="m-auto max-h-[calc(100svh-40px)] w-[min(680px,calc(100%-32px))] overflow-auto rounded-[18px] border border-panel-border bg-surface p-0 text-ink shadow-[0_24px_100px_#14141326] backdrop:bg-[#141413b3]"
-      aria-labelledby="details-heading"
+      aria-labelledby={loaded ? 'details-heading' : undefined}
+      aria-label={loaded ? undefined : 'Document'}
       onCancel={onClose}
     >
-      <div className="flex items-center justify-between gap-4 border-b border-rule p-[26px] max-[600px]:px-[18px] max-[600px]:py-[22px]">
-        <div>
-          <p className="mb-2.5 text-[10px] font-[650] tracking-[1.6px] text-earth">
-            INSIDE YOUR VAULT
-          </p>
-          <h2
-            className="font-serif text-[28px] font-normal tracking-[-0.5px] max-[600px]:text-2xl"
-            id="details-heading"
-          >
-            Document details
-          </h2>
-        </div>
-        <Button onClick={onClose}>Close</Button>
-      </div>
+      <button
+        type="button"
+        className="absolute top-3.5 right-3.5 z-10 grid size-9 cursor-pointer place-items-center rounded-[7px] border-0 bg-transparent text-muted hover:bg-[#efede4] hover:text-ink"
+        aria-label="Close"
+        onClick={onClose}
+      >
+        <svg
+          viewBox="0 0 20 20"
+          className="size-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          aria-hidden="true"
+        >
+          <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+        </svg>
+      </button>
       <div
         className="p-[26px] max-[600px]:px-[18px] max-[600px]:py-[22px]"
         aria-busy={state.status === 'loading'}
       >
         {state.status === 'loading' && (
-          <p
-            className="my-[1em] text-[13px] leading-[1.8] text-muted"
-            role="status"
-          >
-            Loading document details…
+          <p className="text-[13px] leading-[1.8] text-muted" role="status">
+            Loading…
           </p>
         )}
         {state.status === 'error' && (
-          <div
-            role="alert"
-            className="[&_h3]:mb-[1em] [&_h3]:text-base [&_h3]:font-bold [&_p]:my-[1em] [&_p]:text-[13px] [&_p]:leading-[1.8] [&_p]:text-muted"
-          >
-            <h3>We couldn’t open this document.</h3>
-            <p>{state.message}</p>
+          <div role="alert" className="pr-10">
+            <h3 className="mb-2 text-base font-semibold">
+              We couldn’t open this document.
+            </h3>
+            <p className="mb-4 text-[13px] leading-[1.8] text-muted">
+              {state.message}
+            </p>
+            <Button onClick={refresh}>Try again</Button>
           </div>
         )}
         {state.status === 'success' && (
@@ -124,88 +139,79 @@ export function DocumentDetails({
               source={titleSource}
               onRename={rename}
             />
-            <DocumentStatusBadge status={status} />
-            <p className="my-[1em] text-[13px] leading-[1.8] text-muted">
-              {DOCUMENT_STATUS_DESCRIPTIONS[status]}
-            </p>
-            <DocumentTags
-              key={`${id}:${contentRevision}`}
-              id={id}
-              status={status}
-              category={state.data.category}
-              tags={state.data.tags}
-            />
-            <div className="mt-6">
-              <DocumentQuestion key={id} id={id} documentStatus={status} />
+            <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <DocumentStatusBadge status={status} />
+              {DOCUMENT_STATUS_HINTS[status] && (
+                <span className="text-[13px] text-muted">
+                  {DOCUMENT_STATUS_HINTS[status]}
+                </span>
+              )}
             </div>
-            <DocumentSummary
-              key={`summary:${contentRevision}`}
-              id={id}
-              documentStatus={status}
+            <TabList
+              idBase="document"
+              label="Document sections"
+              tabs={TABS}
+              active={tab}
+              onChange={setPickedTab}
             />
-            <DocumentInsights
-              key={`insights:${contentRevision}`}
-              id={id}
-              documentStatus={status}
-            />
-            <details className="border-t border-rule py-5">
-              <summary className="cursor-pointer py-1 text-[15px] font-semibold select-none">
-                File details
-              </summary>
-              <dl className="mt-5 grid grid-cols-2 gap-[22px] max-[600px]:grid-cols-1 [&_dd]:leading-[1.6] [&_dd]:wrap-anywhere [&_dt]:mb-2 [&_dt]:text-[11px] [&_dt]:text-muted">
-                <div className="col-span-full">
-                  <dt>File name</dt>
-                  <dd className="text-[13px]">{state.data.filename}</dd>
-                </div>
-                <div>
-                  <dt>File size</dt>
-                  <dd className="text-[13px]">
-                    {formatFileSize(state.data.size_bytes)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>File type</dt>
-                  <dd className="text-[13px]">{state.data.content_type}</dd>
-                </div>
-                <div>
-                  <dt>Uploaded</dt>
-                  <dd className="text-[13px]">
-                    <time dateTime={state.data.created_at}>
-                      {formatUploadDate(state.data.created_at)}
-                    </time>
-                  </dd>
-                </div>
-                <div className="col-span-full">
-                  <dt>Document ID</dt>
-                  <dd className="font-mono text-xs">{state.data.id}</dd>
-                </div>
-              </dl>
-            </details>
-            <DocumentVersions
-              key={`versions:${id}`}
-              id={id}
-              onOpen={onOpen}
-              onVersionAdded={onVersionAdded}
-            />
-            <DocumentActions
-              key={`actions:${id}`}
-              status={status}
-              onDelete={() => onDelete(id, title)}
-              onReprocess={reprocess}
-            />
+            <div className="[&_section:first-child]:border-t-0">
+              <TabPanel idBase="document" tab="ask" active={tab}>
+                <DocumentQuestion key={id} id={id} documentStatus={status} />
+              </TabPanel>
+              <TabPanel idBase="document" tab="summary" active={tab}>
+                <DocumentSummary
+                  key={`summary:${contentRevision}`}
+                  id={id}
+                  documentStatus={status}
+                />
+                <DocumentInsights
+                  key={`insights:${contentRevision}`}
+                  id={id}
+                  documentStatus={status}
+                />
+              </TabPanel>
+              <TabPanel idBase="document" tab="details" active={tab}>
+                <DocumentTags
+                  key={`${id}:${contentRevision}`}
+                  id={id}
+                  status={status}
+                  category={state.data.category}
+                  tags={state.data.tags}
+                />
+                <dl className="grid grid-cols-2 gap-[18px] border-t border-rule py-6 max-[600px]:grid-cols-1 [&_dd]:text-[13px] [&_dd]:leading-[1.6] [&_dd]:wrap-anywhere [&_dt]:mb-1.5 [&_dt]:text-[11px] [&_dt]:text-muted">
+                  <div className="col-span-full">
+                    <dt>File name</dt>
+                    <dd>{state.data.filename}</dd>
+                  </div>
+                  <div>
+                    <dt>Size</dt>
+                    <dd>{formatFileSize(state.data.size_bytes)}</dd>
+                  </div>
+                  <div>
+                    <dt>Uploaded</dt>
+                    <dd>
+                      <time dateTime={state.data.created_at}>
+                        {formatUploadDate(state.data.created_at)}
+                      </time>
+                    </dd>
+                  </div>
+                </dl>
+                <DocumentVersions
+                  key={`versions:${id}`}
+                  id={id}
+                  onOpen={onOpen}
+                  onVersionAdded={onVersionAdded}
+                />
+                <DocumentActions
+                  key={`actions:${id}`}
+                  status={status}
+                  onDelete={() => onDelete(id, title)}
+                  onReprocess={reprocess}
+                />
+              </TabPanel>
+            </div>
           </>
         )}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule pt-5 [&_p]:text-[11px] [&_p]:text-muted">
-          <p>Refresh to get the latest processing status.</p>
-          <Button
-            onClick={() => {
-              if (state.status !== 'loading') refresh()
-            }}
-            aria-disabled={state.status === 'loading'}
-          >
-            {state.status === 'error' ? 'Try again' : 'Refresh details'}
-          </Button>
-        </div>
       </div>
     </dialog>
   )

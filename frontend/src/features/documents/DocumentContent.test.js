@@ -70,11 +70,6 @@ describe('generated content UI', () => {
         .getByRole('button', { name: 'Generating…' })
         .getAttribute('aria-disabled'),
     ).toBe('true')
-    expect(
-      screen
-        .getByRole('button', { name: 'Refresh insights' })
-        .getAttribute('aria-disabled'),
-    ).toBe('true')
     resolve(Response.json(saved))
     expect(await screen.findByText('A key finding.')).toBeTruthy()
     expect(screen.getByText('Page 2')).toBeTruthy()
@@ -84,8 +79,8 @@ describe('generated content UI', () => {
         screen.getByRole('heading', { name: 'Insights' }),
       ),
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh insights' }))
-    expect(await screen.findByText('A key finding.')).toBeTruthy()
+    // Nothing to check or refresh while the saved result loads fine.
+    expect(screen.queryByRole('button', { name: /^Check saved/ })).toBeNull()
     expect(
       fetch.mock.calls.filter(([, options]) => options?.method === 'POST'),
     ).toHaveLength(1)

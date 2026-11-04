@@ -150,14 +150,14 @@ describe('insight generation API', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(data)))
     await expect(
       generateDocumentInsights(id, new AbortController().signal),
-    ).rejects.toThrow('Refresh insights')
+    ).rejects.toThrow('Check saved insights')
   })
   it('does not retry after a disconnect', async () => {
     const fetch = vi.fn().mockRejectedValue(new TypeError('Disconnected'))
     vi.stubGlobal('fetch', fetch)
     await expect(
       generateDocumentInsights(id, new AbortController().signal),
-    ).rejects.toThrow('Refresh insights')
+    ).rejects.toThrow('Check saved insights')
     expect(fetch).toHaveBeenCalledTimes(1)
   })
   it.each(['extracted', 'embedded', 'ready'])(

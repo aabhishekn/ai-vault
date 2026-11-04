@@ -150,6 +150,28 @@ describe('versions panel', () => {
     await waitFor(() => expect(onVersionAdded).toHaveBeenCalledWith('doc-3'))
   })
 
+  it('does not list a document that has only one version', async () => {
+    const fetch = vi.fn(() =>
+      Promise.resolve(
+        Response.json({ group_id: 'g', versions: [version(1, true)] }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetch)
+    render(
+      createElement(DocumentVersions, {
+        id: 'doc-1',
+        onOpen: vi.fn(),
+        onVersionAdded: vi.fn(),
+      }),
+    )
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(screen.queryByText('Loading versions…')).toBeNull(),
+    )
+    expect(screen.queryByRole('list', { name: 'Document versions' })).toBeNull()
+    expect(screen.getByLabelText('Upload a new version')).toBeTruthy()
+  })
+
   it('shows why an upload failed', async () => {
     vi.stubGlobal(
       'fetch',
@@ -168,7 +190,7 @@ describe('versions panel', () => {
         onVersionAdded: vi.fn(),
       }),
     )
-    await screen.findByText(/report-v1/)
+    await screen.findByLabelText('Upload a new version')
     fireEvent.change(screen.getByLabelText('Upload a new version'), {
       target: { files: [pdf()] },
     })

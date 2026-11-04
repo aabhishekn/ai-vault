@@ -9,7 +9,7 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:5173 with the API running on localhost:8000. The list loads ten documents at a time. **Previous** and **Next** navigate pages; **Refresh** reloads the current page. Empty lists and disappeared last pages are handled. Expand **Service connection** to check backend health; **Check again** retries it. Loading, failure, invalid-response, and timeout states are handled. Requests are cancelled when the component unmounts. No AI request is involved.
+Open http://localhost:5173 with the API running on localhost:8000. The list loads ten documents at a time. **Previous** and **Next** navigate pages; The refresh icon reloads the current page. Empty lists and disappeared last pages are handled. Loading, failure, invalid-response, and timeout states are handled. Requests are cancelled when the component unmounts. No AI request is involved.
 
 ## Upload a PDF
 
@@ -19,13 +19,13 @@ The file input and submit button are disabled during upload. Uploads time out af
 
 ## Document details
 
-Documents are listed by their `title` when they have one (written by the AI during classification, or set with **Rename** in the details dialog; it saves instantly and rolls back with the typed text kept if refused). Without one they are listed by a readable version of the file name: the file name without `.pdf`, with underscores turned into spaces (and `_ ` back into a colon, which operating systems substitute in file names). The exact file name is the tooltip on the title and the **File name** line under **File details**. Select a document title to open its details dialog. It fetches fresh metadata from `GET /documents/{id}`, validates that the returned ID matches the selected document, and shows status, size, type, upload time, and ID. **Refresh details** checks for processing updates without an AI call. Close or press Escape to return to the same list and page. The modal contains keyboard focus and restores it to the selected filename on close.
+Documents are listed by their `title` when they have one (written by the AI during classification, or set with **Rename** in the details dialog; it saves instantly and rolls back with the typed text kept if refused). Without one they are listed by a readable version of the file name: the file name without `.pdf`, with underscores turned into spaces (and `_ ` back into a colon, which operating systems substitute in file names). The exact file name is the tooltip on the title and the **File name** line on the **Details** tab. Select a document title to open its details dialog. It fetches fresh metadata from `GET /documents/{id}`, validates that the returned ID matches the selected document, and shows status, size and upload time. The dialog has **Ask**, **Summary** and **Details** tabs (all kept mounted, so a half-typed question survives switching); it opens on **Ask** for a document that can be asked about and on **Details** otherwise. Status changes arrive over the live connection, so there is no manual refresh. Close or press Escape to return to the same list and page. The modal contains keyboard focus and restores it to the selected filename on close.
 
 Loading, missing documents, invalid responses, and connection failures have dedicated feedback. Details requests time out after ten seconds and are cancelled when the dialog closes. Selection is local UI state; reloading the page closes the dialog. PDF preview is a separate future step.
 
 ## Saved summaries
 
-Document details include a **Saved summary** section. Opening it or using **Refresh summary** reads `GET /documents/{id}/summary`; it never generates content or calls the AI provider. Summary text is rendered as plain text with paragraph breaks preserved. No summary yet, loading, invalid data, and service failures have distinct states. **Retry summary** recovers without closing the dialog or replacing the document metadata.
+Document details include a **Saved summary** section. Opening the **Summary** tab reads `GET /documents/{id}/summary`; it never generates content or calls the AI provider. Summary text is rendered as plain text with paragraph breaks preserved. No summary yet, loading, invalid data, and service failures have distinct states. **Check saved summary** (shown only after a failure) recovers without closing the dialog or replacing the document metadata.
 
 The backend returns 404 for both a missing summary and a missing document. On that response, the summary API confirms the document exists before showing an empty state. Responses must match the selected document ID. Requests time out after ten seconds and are cancelled on unmount; switching documents cannot display a previous document’s result.
 
@@ -37,13 +37,13 @@ The summary hook configures the shared generated-content lifecycle, which owns b
 
 ## Saved insights
 
-Document details include **Insights**, loaded independently from metadata and the summary. Each card displays the insight, source page number, and quoted evidence as plain text. **Refresh insights** reads the saved result without calling the AI provider. No saved insights, a saved empty result, malformed data, and service failures are handled separately. When no saved result exists and extracted text is available, **Generate insights** sends one POST request. Its note explains document-text sharing and possible API charges. Results appear immediately with page references and evidence. A saved empty result is shown explicitly and does not offer regeneration.
+Document details include **Insights**, loaded independently from metadata and the summary. Each card displays the insight, source page number, and quoted evidence as plain text. **Check saved insights** (shown only after a failure) reads the saved result without calling the AI provider. No saved insights, a saved empty result, malformed data, and service failures are handled separately. When no saved result exists and extracted text is available, **Generate insights** sends one POST request. Its note explains document-text sharing and possible API charges. Results appear immediately with page references and evidence. A saved empty result is shown explicitly and does not offer regeneration.
 
 The insights API validates the selected document ID, nonempty insight/evidence text, and positive integer page numbers. It shares the missing-content lookup with summaries so a deleted document is not presented as simply missing generated content. Page labels are references, not PDF navigation links; PDF preview is not implemented.
 
 ## Generate insights
 
-`POST /documents/{id}/insights` uses the existing backend generation and cache. Opening details and refreshing insights use GET only. Eligibility matches summary generation: extracted, embedded, or ready. The shared lifecycle blocks duplicate submissions and refresh while generating, applies a two-minute browser timeout, and cancels pending requests when details close or the document changes. After failure, **Check saved insights** must finish before another generation can be attempted. The server may still save a result after browser cancellation; requests from other tabs are not deduplicated by this frontend guard.
+`POST /documents/{id}/insights` uses the existing backend generation and cache. Opening details and checking saved insights use GET only. Eligibility matches summary generation: extracted, embedded, or ready. The shared lifecycle blocks duplicate submissions and refresh while generating, applies a two-minute browser timeout, and cancels pending requests when details close or the document changes. After failure, **Check saved insights** must finish before another generation can be attempted. The server may still save a result after browser cancellation; requests from other tabs are not deduplicated by this frontend guard.
 
 ## Ask a document
 
@@ -81,7 +81,7 @@ The hook prevents duplicate submissions, times out after two minutes, and cancel
 - `src/features/documents/`: document types, validated API requests, loading/pagination hook, list, rows, and status badges.
 - `src/components/`: shared UI primitives such as Button.
 - `src/lib/format.js`: date and file-size display helpers.
-- `src/features/health/`: health API contract and connection component.
+- `src/features/health/`: the queue check and the worker notice.
 - `src/lib/api.js`: shared fetch entry point for API requests (JSON, and bodiless 204 responses).
 - `src/styles.css`: Tailwind entry point, shared theme tokens, and global base/focus styles.
 

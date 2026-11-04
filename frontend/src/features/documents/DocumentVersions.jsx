@@ -47,11 +47,10 @@ export function DocumentVersions({ id, onOpen, onVersionAdded }) {
       className="border-t border-rule py-6"
       aria-labelledby="versions-heading"
     >
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4">
         <h3 id="versions-heading" className="text-[15px] font-semibold">
           Versions
         </h3>
-        <Button onClick={refresh}>Refresh versions</Button>
       </div>
       {state.status === 'loading' && (
         <p className="text-[13px] text-muted" role="status">
@@ -59,11 +58,15 @@ export function DocumentVersions({ id, onOpen, onVersionAdded }) {
         </p>
       )}
       {state.status === 'error' && (
-        <p className="text-[13px] text-error" role="alert">
-          {state.message}
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-[13px] text-error" role="alert">
+            {state.message}
+          </p>
+          <Button onClick={refresh}>Try again</Button>
+        </div>
       )}
-      {state.status === 'success' && (
+      {/* A list of one is only the document already on screen. */}
+      {state.status === 'success' && state.data.length > 1 && (
         <ul className="grid list-none gap-2" aria-label="Document versions">
           {state.data.map((version) => (
             <li

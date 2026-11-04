@@ -44,7 +44,7 @@ export async function classifyDocument(id, signal) {
     if (error instanceof ApiError) {
       if (error.status === 409)
         throw new ApiError(
-          'Document text is not ready yet. Refresh details once processing finishes.',
+          'Document text is not ready yet. Try again once processing finishes.',
         )
       if (error.status === 429)
         throw new ApiError('Too many AI requests right now. Try again shortly.')

@@ -140,7 +140,7 @@ describe('summary generation API', () => {
     vi.stubGlobal('fetch', fetch)
     await expect(
       generateDocumentSummary(id, new AbortController().signal),
-    ).rejects.toThrow('Refresh the summary')
+    ).rejects.toThrow('Check saved summary')
     expect(fetch).toHaveBeenCalledTimes(1)
   })
   it('treats a mismatched result as unconfirmed rather than showing it', async () => {

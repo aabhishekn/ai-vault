@@ -91,7 +91,7 @@ export function toAnswerError(error) {
       )
     if (error.status === 409)
       return new ApiError(
-        'This document is not ready for questions, or the conversation changed. Refresh document details and try again.',
+        'This document is not ready for questions, or the conversation changed. Close this view, open the document again and retry.',
       )
     if (error.status === 422)
       return new ApiError(

@@ -42,7 +42,8 @@ export function DocumentQuestion({ id, documentStatus }) {
       aria-labelledby="question-heading"
       aria-busy={busy}
     >
-      <h3 id="question-heading" className="mb-3 text-[15px] font-semibold">
+      {/* The tab already says it; kept for screen readers. */}
+      <h3 id="question-heading" className="sr-only">
         Ask this document
       </h3>
       <p
@@ -51,7 +52,7 @@ export function DocumentQuestion({ id, documentStatus }) {
       >
         {eligible
           ? 'Ask a question, then ask follow-ups. Each answer is supported by cited passages from this document.'
-          : 'Questions need indexed document text. Refresh document details once processing finishes and the document is search ready.'}
+          : 'Questions need indexed document text. Try again once the document is search ready.'}
       </p>
       {restoring && (
         <p className="mb-4 text-[13px] leading-[1.8] text-muted" role="status">

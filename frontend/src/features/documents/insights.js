@@ -61,7 +61,7 @@ export async function generateDocumentInsights(id, signal) {
         )
       if (error.status === 409)
         throw new ApiError(
-          'Document text is not ready or has changed. Refresh document details and check for saved insights before trying again.',
+          'Document text is not ready or has changed. Try again once processing finishes, and check for saved insights first.',
         )
       if (error.status === 413)
         throw new ApiError(
@@ -70,7 +70,7 @@ export async function generateDocumentInsights(id, signal) {
     }
     // A disconnect can happen after the server saves the result. Do not retry.
     throw new ApiError(
-      'We couldn’t confirm insight generation. Refresh insights to check for a saved result before generating again.',
+      'We couldn’t confirm insight generation. Use “Check saved insights” to look for a saved result before generating again.',
     )
   }
 }

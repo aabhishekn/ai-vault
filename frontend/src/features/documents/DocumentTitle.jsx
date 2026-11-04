@@ -50,7 +50,7 @@ export function DocumentTitle({ title, source, onRename }) {
 
   if (editing) {
     return (
-      <form className="mb-[18px]" onSubmit={(event) => void save(event)}>
+      <form className="mb-4 pr-10" onSubmit={(event) => void save(event)}>
         <label
           className="mb-2 block text-xs font-semibold"
           htmlFor="document-title"
@@ -96,9 +96,12 @@ export function DocumentTitle({ title, source, onRename }) {
   }
 
   return (
-    <div className="mb-[18px]">
+    <div className="mb-4 pr-10">
       <div className="flex items-start justify-between gap-3">
-        <h3 className="font-serif text-[22px] leading-snug font-normal tracking-[-0.3px] wrap-anywhere">
+        <h3
+          id="details-heading"
+          className="font-serif text-[22px] leading-snug font-normal tracking-[-0.3px] wrap-anywhere max-[600px]:text-[18px]"
+        >
           {title}
         </h3>
         <Button ref={renameButton} onClick={open}>

@@ -18,7 +18,7 @@ function toError(error) {
       )
     if (error.status === 409)
       return new ApiError(
-        'Document text is not ready yet. Refresh document details once processing finishes.',
+        'Document text is not ready yet. Try again once processing finishes.',
       )
     if (error.status === 413)
       return new ApiError('This document is too long for a custom summary.')

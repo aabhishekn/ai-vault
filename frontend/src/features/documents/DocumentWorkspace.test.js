@@ -176,7 +176,13 @@ describe('optimistic changes', () => {
 
   async function openDocument(name) {
     fireEvent.click(await screen.findByRole('button', { name }))
-    await screen.findByText('Document details')
+    await screen.findByRole('tab', { name: 'Details' })
+  }
+
+  // Delete and Process again live under Details; a document that cannot be asked about
+  // opens there, any other opens on Ask.
+  function openDetails() {
+    fireEvent.click(screen.getByRole('tab', { name: 'Details' }))
   }
 
   const refusal = (status) => Response.json({ detail: 'no' }, { status })
@@ -201,6 +207,7 @@ describe('optimistic changes', () => {
       render(createElement(DocumentWorkspace))
       await openDocument('a')
 
+      openDetails()
       fireEvent.click(screen.getByRole('button', { name: /Delete document/ }))
       fireEvent.click(
         screen.getByRole('button', { name: 'Delete permanently' }),
@@ -208,7 +215,7 @@ describe('optimistic changes', () => {
 
       // The server has not answered, yet the row and the dialog are gone.
       expect(screen.queryByRole('button', { name: 'a' })).toBeNull()
-      expect(screen.queryByText('Document details')).toBeNull()
+      expect(screen.queryByRole('tab', { name: 'Details' })).toBeNull()
       expect(screen.getByRole('button', { name: 'b' })).toBeTruthy()
       expect(screen.getByLabelText('1 documents')).toBeTruthy()
 
@@ -233,6 +240,7 @@ describe('optimistic changes', () => {
       })
       render(createElement(DocumentWorkspace))
       await openDocument('a')
+      openDetails()
       fireEvent.click(screen.getByRole('button', { name: /Delete document/ }))
       fireEvent.click(
         screen.getByRole('button', { name: 'Delete permanently' }),
@@ -263,6 +271,7 @@ describe('optimistic changes', () => {
       await openDocument('a')
       expect(screen.getAllByText('Failed')).toHaveLength(2)
 
+      openDetails()
       fireEvent.click(screen.getByRole('button', { name: 'Process again' }))
 
       expect(screen.getAllByText('Queued')).toHaveLength(2)
@@ -285,6 +294,7 @@ describe('optimistic changes', () => {
       serveVault([failed()], { onReprocess: () => gate.promise })
       render(createElement(DocumentWorkspace))
       await openDocument('a')
+      openDetails()
       fireEvent.click(screen.getByRole('button', { name: 'Process again' }))
       expect(screen.getAllByText('Queued')).toHaveLength(2)
 
@@ -301,6 +311,7 @@ describe('optimistic changes', () => {
       serveVault([failed()], { onReprocess: () => gate.promise })
       render(createElement(DocumentWorkspace))
       await openDocument('a')
+      openDetails()
       fireEvent.click(screen.getByRole('button', { name: 'Process again' }))
       fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
@@ -310,6 +321,90 @@ describe('optimistic changes', () => {
         /“a” was not queued\. The processing queue is unavailable/,
       )
       expect(screen.getByText('Failed')).toBeTruthy()
+    })
+  })
+
+  describe('dialog tabs', () => {
+    const selected = () =>
+      screen
+        .getAllByRole('tab')
+        .filter((tab) => tab.getAttribute('aria-selected') === 'true')
+        .map((tab) => tab.textContent)
+
+    it('opens on Ask for a document that can be asked about', async () => {
+      serveVault([documentNamed('a', 'embedded')], {})
+      render(createElement(DocumentWorkspace))
+      await openDocument('a')
+      expect(selected()).toEqual(['Ask'])
+      expect(screen.getByRole('tabpanel', { name: 'Ask' })).toBeTruthy()
+      // The other sections are not on screen until their tab is chosen.
+      expect(
+        screen.queryByRole('button', { name: /Delete document/ }),
+      ).toBeNull()
+    })
+
+    it('opens on Details for a document that cannot be asked about yet', async () => {
+      serveVault([documentNamed('a', 'failed')], {})
+      render(createElement(DocumentWorkspace))
+      await openDocument('a')
+      expect(selected()).toEqual(['Details'])
+      expect(
+        screen.getByText('Processing failed. The PDF is still saved.'),
+      ).toBeTruthy()
+      expect(
+        screen.getByRole('button', { name: /Delete document/ }),
+      ).toBeTruthy()
+    })
+
+    it('says nothing extra about a document that is ready to use', async () => {
+      serveVault([documentNamed('a', 'embedded')], {})
+      render(createElement(DocumentWorkspace))
+      await openDocument('a')
+      expect(
+        screen.queryByText(/Processing failed|Waiting to be processed/),
+      ).toBeNull()
+    })
+
+    it('moves between tabs with the arrow keys', async () => {
+      serveVault([documentNamed('a')], {})
+      render(createElement(DocumentWorkspace))
+      await openDocument('a')
+      const ask = screen.getByRole('tab', { name: 'Ask' })
+      fireEvent.keyDown(ask, { key: 'ArrowRight' })
+      expect(selected()).toEqual(['Summary'])
+      expect(globalThis.document.activeElement.textContent).toBe('Summary')
+      fireEvent.keyDown(globalThis.document.activeElement, { key: 'End' })
+      expect(selected()).toEqual(['Details'])
+      fireEvent.keyDown(globalThis.document.activeElement, {
+        key: 'ArrowRight',
+      })
+      expect(selected()).toEqual(['Ask'])
+    })
+
+    it('keeps a half-typed question when switching tabs', async () => {
+      serveVault([documentNamed('a')], {})
+      render(createElement(DocumentWorkspace))
+      await openDocument('a')
+      const box = () => screen.getByRole('textbox', { name: /Your question/i })
+      fireEvent.change(box(), {
+        target: { value: 'What is the notice period?' },
+      })
+      fireEvent.click(screen.getByRole('tab', { name: 'Summary' }))
+      expect(
+        screen.queryByRole('textbox', { name: /Your question/i }),
+      ).toBeNull()
+      fireEvent.click(screen.getByRole('tab', { name: 'Ask' }))
+      expect(box().value).toBe('What is the notice period?')
+    })
+
+    it('goes back to the first tab for the next document', async () => {
+      serveVault([documentNamed('a'), documentNamed('b')], {})
+      render(createElement(DocumentWorkspace))
+      await openDocument('a')
+      fireEvent.click(screen.getByRole('tab', { name: 'Details' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      await openDocument('b')
+      expect(selected()).toEqual(['Ask'])
     })
   })
 

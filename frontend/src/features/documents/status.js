@@ -9,16 +9,10 @@ export const STATUS_LABELS = {
   failed: 'Failed',
 }
 
-export const DOCUMENT_STATUS_DESCRIPTIONS = {
-  queued:
-    'Your PDF is saved and waiting for the background worker to process it.',
-  processing:
-    'The background worker is processing your PDF. Refresh to check its progress.',
-  extracted:
-    'Text extraction is complete. Search and answers become available once embeddings are created.',
-  embedded:
-    'Your document is indexed for semantic search and source-cited answers.',
-  ready: 'Your document has finished processing.',
-  failed:
-    'Processing failed. The PDF is still saved, but its content may not be available.',
+// One short line next to the status badge; nothing is said once a document is ready to use.
+export const DOCUMENT_STATUS_HINTS = {
+  queued: 'Waiting to be processed.',
+  processing: 'Being processed now.',
+  extracted: 'Text is extracted, but questions need the search index.',
+  failed: 'Processing failed. The PDF is still saved.',
 }
