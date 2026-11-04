@@ -118,12 +118,13 @@ See [docs/architecture.md](docs/architecture.md) for transaction boundaries and 
 
 | Decision | Why | Trade-off |
 | --- | --- | --- |
-| Hand-built RAG instead of LangChain or LlamaIndex | The pipeline is small and I wanted full control over citations, validation, and failure handling, with every step testable | No framework features (hybrid search, rerankers); I would adopt one for multi-document or multi-source retrieval |
+| LlamaIndex for ingestion and retrieval, over LangChain | Document Q&A is what LlamaIndex is built around (documents, splitters, indexes, retrievers). LangChain's strengths, chains and agents, are not used here. LlamaIndex splits pages (`SentenceSplitter`), drives batching through a custom embed model, and retrieves through `VectorStoreIndex` and a metadata-filtered retriever | The framework sits on top of our own pieces: a custom vector store over the existing `document_chunks` table (migrations, cascade delete and statistics keep working), and a custom embed model that reuses our OpenAI helper for exact token counts and retries |
+| OpenAI SDK for answers, summaries and insights | `llama-index-llms-openai` requires `openai<3`, and this project pins `openai==3.43.0`. Answers also need strict structured output, a citation retry and streaming, all of which are tested against the SDK directly | LlamaIndex's query engines and LLM classes are not used; moving to them means downgrading the SDK and re-verifying citations |
 | PostgreSQL + pgvector for vectors | One store for metadata, chats and vectors, written in the same transactions | Not specialised for huge vector workloads; fine for per-document search |
 | RQ + Redis instead of Celery | Smaller surface, enough for retries, status and a single queue | Fewer built-in scheduling features |
-| Page-bounded chunks of 200 words with 40 overlap | A chunk belongs to exactly one page, so every citation has a precise page | Text spanning a page break is split; word counts are not token counts |
+| Page-bounded chunks of up to 200 words with about 40 overlap, split on sentence boundaries | A chunk belongs to exactly one page, so every citation has a precise page; sentence boundaries keep passages readable | Text spanning a page break is split; word counts are not token counts |
 | Top 3 chunks, no distance cutoff | Keeps prompts cheap; the model abstains via an explicit `insufficient_evidence` flag | A cutoff or reranker could improve borderline questions |
-| Model returns source numbers only; the server attaches page and quote | Citations cannot be hallucinated | Checks that a source exists, not that every claim follows from it |
+| The `[n]` labels written in the answer pick the sources; the server attaches page and quote | Citations cannot be hallucinated | Checks that a source exists, not that every claim follows from it |
 | Follow-ups: last 3 turns plus a short slice of the previous turn in the retrieval query | No extra rewrite call (cost and latency) | Very old references retrieve poorly |
 | Summaries and insights saved on the document, generated automatically after embedding | Repeat views cost nothing and users see results without clicking | Their token usage is logged but not stored in the database |
 | One conversation belongs to one document | Keeps retrieval and citations unambiguous | Multi-document chat is future work |

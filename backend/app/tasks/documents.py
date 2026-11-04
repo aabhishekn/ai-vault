@@ -10,7 +10,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import delete, update
 from sqlalchemy.orm import Session
 
-from app.ai.embeddings import EMBEDDING_MODEL, MAX_BATCH_SIZE, generate_embeddings
+from app.ai.embed_model import VaultEmbedding
+from app.ai.embeddings import EMBEDDING_MODEL
 from app.core.config import REPOSITORY_ROOT, auto_generate_content_enabled, embeddings_enabled
 from app.core.errors import AppError
 from app.db.database import engine
@@ -120,18 +121,18 @@ def _save_extracted_content(
 
 def _embed_chunks(context: ProcessingContext, chunks: list[TextChunk]) -> list[ChunkEmbedding]:
     """Call the provider without an open transaction; retain usage on later failures."""
-    embeddings = []
-    for start in range(0, len(chunks), MAX_BATCH_SIZE):
-        chunk_batch = chunks[start : start + MAX_BATCH_SIZE]
-        batch = generate_embeddings([chunk.text for chunk in chunk_batch])
-        context.input_tokens += batch.input_tokens
-        if len(batch.vectors) != len(chunk_batch) or batch.model != EMBEDDING_MODEL:
-            raise ValueError("Embeddings do not match the document chunks or model")
-        embeddings.extend(
-            ChunkEmbedding(chunk.chunk_index, vector, batch.model)
-            for chunk, vector in zip(chunk_batch, batch.vectors, strict=True)
-        )
-    return embeddings
+    embed_model = VaultEmbedding()
+    try:
+        vectors = embed_model.get_text_embedding_batch([chunk.text for chunk in chunks])
+    finally:
+        # Tokens already spent are recorded even when a later batch fails.
+        context.input_tokens += embed_model.input_tokens
+    if len(vectors) != len(chunks):
+        raise ValueError("Embeddings do not match the document chunks")
+    return [
+        ChunkEmbedding(chunk.chunk_index, vector, EMBEDDING_MODEL)
+        for chunk, vector in zip(chunks, vectors, strict=True)
+    ]
 
 
 def _save_embeddings(context: ProcessingContext, embeddings: list[ChunkEmbedding]) -> None:

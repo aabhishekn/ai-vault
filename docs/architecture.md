@@ -41,3 +41,16 @@ Add an HTTP contract under `schemas/` and a route under `api/routes/`. Put workf
 PostgreSQL commits and Redis enqueueing are not atomic: if the queue is down at upload the document stays `queued`, and `POST /documents/{id}/reprocess` (or the worker's startup recovery for abandoned jobs) re-queues it. A force-killed worker leaves its attempt running until it is older than twice the job timeout, after which it is closed as failed and the document is queued again. API latency statistics are held in memory per process (`GET /metrics/api`) and reset on restart. Request idempotency and durable accounting for summary, insight and stateless answer usage remain future work (that usage is logged as `ai_call` events).
 
 Word-sized chunks are not token limits. Summary/insight input has a documented size cap. Citation/source-ID validation ensures references exist, not that every generated claim follows from its evidence. The complete API reference describes these operational limits.
+
+## Retrieval framework
+
+LlamaIndex handles the document-specific steps and our code keeps the guarantees:
+
+| Step | Implementation |
+| --- | --- |
+| Chunking | `SentenceSplitter` run on one page at a time (`app/processing/chunking.py`), so a chunk never crosses a page. Sizes are counted in words, so no tokenizer model is downloaded |
+| Embedding | `VaultEmbedding` (`app/ai/embed_model.py`) is a LlamaIndex `BaseEmbedding` that calls our `generate_embeddings`. LlamaIndex batches; we keep the provider's exact token counts, validation and retry policy |
+| Storage | The existing `document_chunks` table. Ingestion writes it in staged transactions (text first, vectors later), so a failed embedding never loses extracted text |
+| Retrieval | `ChunkVectorStore` (`app/db/vector_store.py`) is a read-only LlamaIndex vector store over that table. `VectorStoreIndex.as_retriever` with a `document_id` metadata filter returns the closest chunks. A search without exactly one `document_id` filter is refused |
+| Query embedding cache | Redis, keyed by the normalised question, in front of the embed model |
+| Answers | The OpenAI SDK with structured output (`app/ai/answer_generation.py`). `llama-index-llms-openai` needs `openai<3` while this project uses 3.x, so LlamaIndex's LLM and query-engine classes are not used |

@@ -1,6 +1,8 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from llama_index.core.node_parser import SentenceSplitter
+
 from app.processing.pdf_extraction import ExtractedPage
 
 
@@ -11,29 +13,38 @@ class TextChunk:
     text: str
 
 
+def _count_words(text: str) -> list[str]:
+    # Chunk sizes are counted in words, so no tokenizer model has to be downloaded.
+    return text.split()
+
+
 def chunk_pages(
     pages: Iterable[ExtractedPage], *, max_words: int = 200, overlap_words: int = 40
 ) -> list[TextChunk]:
-    """Split each page into overlapping word windows without crossing page boundaries."""
+    """Split each page with LlamaIndex's sentence-aware splitter, never crossing a page.
+
+    Pages are split one at a time so every chunk keeps the page it came from, which is
+    what makes page-exact citations possible. Chunks end on sentence boundaries where
+    they can and stay within ``max_words`` words, overlapping by about ``overlap_words``.
+    """
     if max_words <= 0:
         raise ValueError("max_words must be positive")
     if not 0 <= overlap_words < max_words:
         raise ValueError("overlap_words must be between 0 and max_words - 1")
+    splitter = SentenceSplitter(
+        chunk_size=max_words,
+        chunk_overlap=overlap_words,
+        tokenizer=_count_words,
+        include_metadata=False,
+    )
     chunks = []
-    step = max_words - overlap_words
     for page in pages:
-        words = page.text.split()
-        for start in range(0, len(words), step):
-            end = start + max_words
-            chunks.append(
-                TextChunk(
-                    chunk_index=len(chunks),
-                    page_number=page.page_number,
-                    text=" ".join(words[start:end]),
+        for text in splitter.split_text(page.text):
+            text = " ".join(text.split())
+            if text:
+                chunks.append(
+                    TextChunk(chunk_index=len(chunks), page_number=page.page_number, text=text)
                 )
-            )
-            if end >= len(words):
-                break
     return chunks
 
 

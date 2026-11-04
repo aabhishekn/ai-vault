@@ -96,7 +96,7 @@ class DocumentSearchTests(unittest.TestCase):
             session.commit()
 
     def test_ranks_only_requested_document_and_model_with_limit(self):
-        with patch.object(search, "generate_embeddings", return_value=self.batch) as provider:
+        with patch("app.ai.embed_model.generate_embeddings", return_value=self.batch) as provider:
             result = search.search_document(
                 self.identifier, SearchRequest(question="Question", top_k=1)
             )
@@ -106,7 +106,7 @@ class DocumentSearchTests(unittest.TestCase):
         self.assertEqual(result.matches[0].text, "Closest")
         self.assertEqual(result.matches[0].page_number, 3)
         self.assertAlmostEqual(result.matches[0].cosine_distance, 0.0)
-        with patch.object(search, "generate_embeddings", return_value=self.batch):
+        with patch("app.ai.embed_model.generate_embeddings", return_value=self.batch):
             result = search.search_document(
                 self.identifier, SearchRequest(question="Question", top_k=10)
             )
@@ -116,7 +116,7 @@ class DocumentSearchTests(unittest.TestCase):
         with Session(engine) as session:
             session.get(Document, self.identifier).status = "extracted"
             session.commit()
-        with patch.object(search, "generate_embeddings") as provider:
+        with patch("app.ai.embed_model.generate_embeddings") as provider:
             for identifier, status in [(uuid4(), 404), (self.identifier, 409)]:
                 with self.subTest(status=status):
                     with self.assertRaises(AppError) as error:
@@ -133,16 +133,15 @@ class DocumentSearchTests(unittest.TestCase):
                 )
             )
             session.commit()
-        with patch.object(search, "generate_embeddings") as provider:
+        with patch("app.ai.embed_model.generate_embeddings") as provider:
             with self.assertRaises(AppError) as error:
                 search.search_document(self.identifier, SearchRequest(question="Question"))
             self.assertEqual(error.exception.status_code, 409)
             provider.assert_not_called()
 
     def test_provider_error_returns_safe_error(self):
-        with patch.object(
-            search,
-            "generate_embeddings",
+        with patch(
+            "app.ai.embed_model.generate_embeddings",
             side_effect=ConfigurationError("private credential details"),
         ):
             with self.assertRaises(AppError) as error:

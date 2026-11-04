@@ -164,7 +164,9 @@ class DocumentJobTests(unittest.TestCase):
         with patch.dict(os.environ, {"ENABLE_EMBEDDINGS": "true"}):
             with patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "Text")]):
                 with patch.object(jobs, "chunk_pages", return_value=chunks):
-                    with patch.object(jobs, "generate_embeddings", side_effect=embed) as provider:
+                    with patch(
+                        "app.ai.embed_model.generate_embeddings", side_effect=embed
+                    ) as provider:
                         result = jobs.extract_document(str(self.identifier))
         self.assertEqual([len(call.args[0]) for call in provider.call_args_list], [64, 1])
         self.assertEqual(result["status"], "embedded")
@@ -190,9 +192,8 @@ class DocumentJobTests(unittest.TestCase):
         with patch.dict(os.environ, {"ENABLE_EMBEDDINGS": "true"}):
             with patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "Saved text")]):
                 with patch.object(jobs, "chunk_pages", return_value=chunks):
-                    with patch.object(
-                        jobs,
-                        "generate_embeddings",
+                    with patch(
+                        "app.ai.embed_model.generate_embeddings",
                         side_effect=[first_batch, TimeoutError("secret provider details")],
                     ):
                         with self.assertRaises(TimeoutError):
@@ -216,7 +217,7 @@ class DocumentJobTests(unittest.TestCase):
 
     def test_disabled_embeddings_make_no_provider_calls(self):
         with patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "Text")]):
-            with patch.object(jobs, "generate_embeddings") as provider:
+            with patch("app.ai.embed_model.generate_embeddings") as provider:
                 result = jobs.extract_document(str(self.identifier))
         provider.assert_not_called()
         self.assertEqual(result["status"], "extracted")
@@ -229,7 +230,7 @@ class DocumentJobTests(unittest.TestCase):
                 "extract_pdf",
                 return_value=[ExtractedPage(1, "First"), ExtractedPage(2, "Second")],
             ):
-                with patch.object(jobs, "generate_embeddings", return_value=batch):
+                with patch("app.ai.embed_model.generate_embeddings", return_value=batch):
                     with self.assertRaises(StatementError):
                         jobs.extract_document(str(self.identifier))
         with Session(engine) as session:
@@ -247,7 +248,7 @@ class DocumentJobTests(unittest.TestCase):
         settings = {"ENABLE_EMBEDDINGS": "true", **(env or {})}
         with patch.dict(os.environ, settings):
             with patch.object(jobs, "extract_pdf", return_value=[ExtractedPage(1, "Text")]):
-                with patch.object(jobs, "generate_embeddings", return_value=batch):
+                with patch("app.ai.embed_model.generate_embeddings", return_value=batch):
                     return jobs.extract_document(str(self.identifier))
 
     def test_summary_and_insights_are_generated_after_embedding(self):
