@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Button } from '../../components/Button'
+import { ComparisonDialog } from './ComparisonDialog'
+import { MAX_COMPARED } from './comparison'
 import { DocumentDetails } from './DocumentDetails'
 import { DocumentList } from './DocumentList'
 import { DocumentUpload } from './DocumentUpload'
@@ -15,6 +17,7 @@ export function DocumentWorkspace() {
   // Documents chosen for a question across several (id -> filename).
   const [chosen, setChosen] = useState<Map<string, string>>(new Map())
   const [asking, setAsking] = useState(false)
+  const [comparing, setComparing] = useState(false)
 
   function choose(document: VaultDocument) {
     setChosen((previous) => {
@@ -40,6 +43,13 @@ export function DocumentWorkspace() {
           </span>
           <span className="flex gap-2">
             <Button onClick={() => setChosen(new Map())}>Clear</Button>
+            <Button
+              onClick={() => setComparing(true)}
+              disabled={chosen.size < 2 || chosen.size > MAX_COMPARED}
+              title={`Compare 2 to ${MAX_COMPARED} documents`}
+            >
+              Compare
+            </Button>
             <Button onClick={() => setAsking(true)} disabled={chosen.size < 2}>
               Ask across documents
             </Button>
@@ -62,6 +72,13 @@ export function DocumentWorkspace() {
             documents.goToPage(0)
             setSelectedId(newId)
           }}
+        />
+      )}
+      {comparing && (
+        <ComparisonDialog
+          key={[...chosen.keys()].join(',')}
+          documents={chosen}
+          onClose={() => setComparing(false)}
         />
       )}
       {asking && (

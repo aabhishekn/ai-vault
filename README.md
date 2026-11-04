@@ -82,6 +82,7 @@ Routes delegate to services. Services coordinate database access and provider ad
 | Retry processing | `POST /documents/{id}/reprocess` |
 | Semantic search | `POST /documents/{id}/search` |
 | One question with citations | `POST /documents/{id}/ask` |
+| Comparative analysis | `POST /comparisons` (2–5 documents, optional focus) |
 | Multi-document chat | `POST` / `GET /multi-conversations` (then the same message endpoints as below) |
 | Saved conversations | `POST` / `GET /documents/{id}/conversations`, `POST /conversations/{id}/messages`, `POST /conversations/{id}/messages/stream` (SSE), `GET /conversations/{id}` |
 | Saved summaries | `POST` / `GET /documents/{id}/summary` |

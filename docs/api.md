@@ -507,3 +507,13 @@ A conversation can span two to ten documents. Answers and citations name the doc
 - Each source sent to the model carries its `document` name, and the prompt asks it to say where a fact comes from and to point out when documents disagree.
 - Answers have `document_id: null`. Each citation has `document_id` and `filename` as well as `page_number` and the quoted `text`, all taken from the stored chunks rather than from the model. Every validation rule for citations (inline `[n]` labels, one retry) is unchanged.
 - Deleting a document removes it from the scope of any multi-document conversation; the conversation and its saved turns remain. Migration `d5a9c3e07b46` makes `conversations.document_id` nullable and adds the `conversation_documents` table.
+
+## Comparative analysis
+
+`POST /comparisons` compares two to five documents and returns a structured result. Uses the `ai` rate limit.
+
+Request: `{"document_ids": [...], "focus": "payment terms"}`. `focus` is optional (up to 200 characters). Every document must be searchable (409 otherwise; 404 for an unknown id). Because each version is its own document, two versions of the same file can be compared the same way.
+
+The model sees, for each document, its saved summary and insights plus the four passages closest to the focus (or to a general "purpose, requirements, terms" query), retrieved **per document** so a long document cannot crowd out a short one. This keeps the request small whatever the document sizes.
+
+Response: `documents` (id, filename, version), `focus`, `overview`, `similarities` and `differences`. Each difference has a `topic` and one `position` per document (`document_id`, `filename`, `statement`; "Not addressed" when a document is silent). The model refers to documents by number; the server maps the numbers back to ids and filenames and rejects drafts with unknown or repeated numbers, fewer than two positions, empty text or more than eight points. `cached: true` means the result came from Redis: results are kept for 7 days under a hash of the model, the sorted document ids and the focus, so listing the same documents in a different order is still a hit.

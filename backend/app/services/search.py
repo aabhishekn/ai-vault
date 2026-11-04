@@ -139,3 +139,13 @@ def search_documents(document_ids: list[UUID], request: SearchRequest) -> Search
         raise DependencyUnavailableError("Embedding service unavailable") from None
     except ValueError:
         raise InvalidAIResponseError("Invalid response from embedding service") from None
+
+
+def embed_question(question: str) -> list[float]:
+    """Embedding of a question (cached), for callers that retrieve per document."""
+    return _embed_query(question)
+
+
+def passages_of_document(document_id: UUID, question: str, vector: list[float], top_k: int) -> list:
+    """The nearest passages of a single document for an already-embedded question."""
+    return _retrieve([document_id], question, vector, top_k)

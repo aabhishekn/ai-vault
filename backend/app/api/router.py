@@ -4,6 +4,7 @@ from app.api.routes import (
     ai_usage,
     answers,
     classification,
+    comparison,
     conversations,
     document_stats,
     documents,
@@ -25,6 +26,7 @@ router.include_router(conversations.router)
 router.include_router(summaries.router)
 router.include_router(insights.router)
 router.include_router(classification.router)
+router.include_router(comparison.router)
 router.include_router(suggestions.router)
 router.include_router(document_stats.router)
 router.include_router(processing_metrics.router)

@@ -69,9 +69,9 @@ export function DocumentRow({
               type="checkbox"
               checked={chosen}
               onChange={() => onChoose(document)}
-              aria-label={`Ask across documents: include ${document.filename}`}
+              aria-label={`Select for comparison or multi-document questions: ${document.filename}`}
             />
-            Compare
+            Select
           </label>
         )}
         <DocumentStatusBadge status={document.status} />
