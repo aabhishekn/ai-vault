@@ -97,7 +97,6 @@ class AnswerTests(unittest.TestCase):
         for answer, numbers in [
             ("No citation", [1]),
             ("Invented [3]", [3]),
-            ("Mismatch [1]", [2]),
             ("Nothing", []),
             ("Bad [0]", [0]),
         ]:
@@ -107,6 +106,39 @@ class AnswerTests(unittest.TestCase):
                 )
                 with self.assertRaises(ValueError):
                     generate_answer(self.retrieval)
+
+    def test_inline_labels_decide_the_citations(self):
+        self.respond(
+            AnswerDraft(
+                answer="Use FastAPI [1].", source_numbers=[1, 2], insufficient_evidence=False
+            )
+        )
+        result = generate_answer(self.retrieval)
+        self.assertEqual([c.source_number for c in result.citations], [1])
+
+    def test_missing_citations_are_retried_once(self):
+        def draft(answer):
+            return SimpleNamespace(
+                output_parsed=AnswerDraft(
+                    answer=answer, source_numbers=[1], insufficient_evidence=False
+                ),
+                status="completed",
+                model="gpt-4.1-mini",
+                usage=SimpleNamespace(input_tokens=100, output_tokens=20),
+            )
+
+        self.client.responses.parse.side_effect = [draft("No label"), draft("Use FastAPI [1].")]
+        result = generate_answer(self.retrieval)
+        self.assertEqual(result.answer, "Use FastAPI [1].")
+        self.assertEqual(self.client.responses.parse.call_count, 2)
+
+    def test_missing_citations_give_up_after_one_retry(self):
+        self.respond(
+            AnswerDraft(answer="No label", source_numbers=[1], insufficient_evidence=False)
+        )
+        with self.assertRaises(ValueError):
+            generate_answer(self.retrieval)
+        self.assertEqual(self.client.responses.parse.call_count, 2)
 
     def test_incomplete_or_refused_output_is_rejected(self):
         for draft, status in [(None, "completed"), (None, "incomplete")]:

@@ -42,6 +42,7 @@ class APIContractTests(unittest.TestCase):
             ("GET", "/documents/{document_id}/conversations"),
             ("GET", "/conversations/{conversation_id}"),
             ("POST", "/conversations/{conversation_id}/messages"),
+            ("POST", "/conversations/{conversation_id}/messages/stream"),
             ("GET", "/stats/documents"),
             ("GET", "/metrics/processing"),
             ("GET", "/metrics/ai-usage"),

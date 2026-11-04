@@ -1,6 +1,9 @@
+import json
+from collections.abc import Iterator
 from uuid import UUID
 
 from fastapi import APIRouter, Query
+from fastapi.responses import StreamingResponse
 
 from app.api.rate_limit import limit
 from app.schemas.chat import (
@@ -49,3 +52,18 @@ def get_conversation(
 )
 def send_message(conversation_id: UUID, request: SearchRequest) -> ConversationTurnResponse:
     return service.send_message(conversation_id, request)
+
+
+def _server_sent_events(events: Iterator[service.StreamEvent]) -> Iterator[str]:
+    for event in events:
+        yield f"event: {event.name}\ndata: {json.dumps(event.data, ensure_ascii=False)}\n\n"
+
+
+@router.post("/conversations/{conversation_id}/messages/stream", dependencies=[limit("ai")])
+def stream_message(conversation_id: UUID, request: SearchRequest) -> StreamingResponse:
+    events = service.stream_message(conversation_id, request)
+    return StreamingResponse(
+        _server_sent_events(events),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
