@@ -9,7 +9,7 @@ import {
   within,
 } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AnalyticsPanel } from './AnalyticsPanel'
+import { OverviewPanel } from './OverviewPanel'
 
 afterEach(cleanup)
 const stats = {
@@ -58,7 +58,7 @@ function route(overrides = {}) {
 describe('workspace overview', () => {
   it('shows document statistics and processing metrics', async () => {
     route()
-    render(createElement(AnalyticsPanel))
+    render(createElement(OverviewPanel))
     const documents = await screen.findByRole('region', { name: 'Documents' })
     expect(within(documents).getByText('3')).toBeTruthy()
     expect(within(documents).getByText('379.3 KB')).toBeTruthy()
@@ -85,7 +85,7 @@ describe('workspace overview', () => {
           }),
         ),
     })
-    render(createElement(AnalyticsPanel))
+    render(createElement(OverviewPanel))
     expect(await screen.findByText(/No processing attempts/)).toBeTruthy()
   })
   it('keeps one section usable when the other endpoint fails, and refresh retries', async () => {
@@ -96,7 +96,7 @@ describe('workspace overview', () => {
           ? Promise.resolve(Response.json({}, { status: 503 }))
           : Promise.resolve(Response.json(metrics)),
     })
-    render(createElement(AnalyticsPanel))
+    render(createElement(OverviewPanel))
     expect((await screen.findByRole('alert')).textContent).toContain(
       'document service is unavailable',
     )

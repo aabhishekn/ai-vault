@@ -1,5 +1,5 @@
 import { useResource } from '../../hooks/useResource'
-import { getDocumentStatistics, getProcessingMetrics } from './analytics'
+import { getDocumentStatistics, getProcessingMetrics } from './overview'
 
 const STATS_ERROR =
   'We couldn’t load document statistics. Check your connection and try again.'
@@ -7,7 +7,7 @@ const METRICS_ERROR =
   'We couldn’t load processing metrics. Check your connection and try again.'
 
 // Both reads are independent so one failing endpoint never hides the other.
-export function useAnalytics() {
+export function useOverview() {
   const statistics = useResource(
     'statistics',
     getDocumentStatistics,

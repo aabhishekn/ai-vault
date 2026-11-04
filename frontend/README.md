@@ -110,4 +110,4 @@ Vitest verifies response validation, pagination parameters, cancellation signal 
 
 ## Workspace overview
 
-`src/features/analytics/` reads `GET /stats/documents` and `GET /metrics/processing`. `analytics.js` validates the responses (non-negative counts, status totals matching the document total, rates between 0 and 1) and maps them to camelCase, `useAnalytics.js` loads each independently so one failure never hides the other, and `AnalyticsPanel.jsx` renders them with loading, error, empty, and refresh states. Neither endpoint calls the AI provider.
+`src/features/overview/` reads `GET /stats/documents` and `GET /metrics/processing`. `overview.js` validates the responses (non-negative counts, status totals matching the document total, rates between 0 and 1) and maps them to camelCase, `useOverview.js` loads each independently so one failure never hides the other, and `OverviewPanel.jsx` renders them with loading, error, empty, and refresh states. Neither endpoint calls the AI provider.

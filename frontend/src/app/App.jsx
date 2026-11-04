@@ -1,5 +1,5 @@
 import { DocumentWorkspace } from '../features/documents/DocumentWorkspace'
-import { AnalyticsPanel } from '../features/analytics/AnalyticsPanel'
+import { OverviewPanel } from '../features/overview/OverviewPanel'
 
 export default function App() {
   return (
@@ -38,7 +38,7 @@ export default function App() {
           cite the page they came from.
         </p>
         <DocumentWorkspace />
-        <AnalyticsPanel />
+        <OverviewPanel />
       </main>
 
       <footer className="mt-auto pb-7 text-center text-[11px] tracking-[0.2px] text-muted">

@@ -8,7 +8,7 @@ import {
 import { DOCUMENT_STATUSES } from '../documents/types'
 import { STATUS_LABELS } from '../documents/status'
 
-import { useAnalytics } from './useAnalytics'
+import { useOverview } from './useOverview'
 
 function Stat({ label, value }) {
   return (
@@ -95,8 +95,8 @@ function ProcessingStats({ data }) {
   )
 }
 
-export function AnalyticsPanel() {
-  const { statistics, metrics, refresh } = useAnalytics()
+export function OverviewPanel() {
+  const { statistics, metrics, refresh } = useOverview()
   const busy = statistics.status === 'loading' || metrics.status === 'loading'
   return (
     <details className="mt-10 rounded-2xl border border-panel-border bg-surface shadow-panel">
@@ -105,10 +105,10 @@ export function AnalyticsPanel() {
       </summary>
       <section
         className="border-t border-rule p-6"
-        aria-labelledby="analytics-heading"
+        aria-labelledby="overview-heading"
       >
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <h2 id="analytics-heading" className="text-base font-semibold">
+          <h2 id="overview-heading" className="text-base font-semibold">
             Workspace overview
           </h2>
           <Button

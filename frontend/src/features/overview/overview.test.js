@@ -4,7 +4,7 @@ import {
   getProcessingMetrics,
   parseDocumentStatistics,
   parseProcessingMetrics,
-} from './analytics'
+} from './overview'
 
 const stats = {
   total_documents: 3,
@@ -36,7 +36,7 @@ const metrics = {
 }
 const signal = () => new AbortController().signal
 
-describe('analytics parsing', () => {
+describe('overview parsing', () => {
   it('maps document statistics to camelCase', () => {
     expect(parseDocumentStatistics(stats)).toMatchObject({
       totalDocuments: 3,
@@ -89,7 +89,7 @@ describe('analytics parsing', () => {
   })
 })
 
-describe('analytics requests', () => {
+describe('overview requests', () => {
   it('reads each endpoint with GET', async () => {
     const fetch = vi
       .fn()
