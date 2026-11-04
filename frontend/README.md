@@ -104,3 +104,7 @@ npm run build
 ```
 
 Vitest verifies response validation, pagination parameters, cancellation signal forwarding, safe error messages, upload size boundaries, multipart data, unconfirmed saves, and summary/insight generation contracts without live API calls. React Testing Library also checks lifecycle guards, cancellation, document switching, recovery, citation rendering, and focus after generation. CI runs all four checks. TypeScript strict mode is enabled. The lockfile pins installed dependencies; use `npm ci` for repeatable installs. The proxy applies to the development server. A production deployment will need its own `/api` routing; deployment is not configured in this step.
+
+## Workspace overview
+
+`src/features/analytics/` reads `GET /stats/documents` and `GET /metrics/processing`. `analytics.ts` validates the responses (non-negative counts, status totals matching the document total, rates between 0 and 1) and maps them to camelCase, `useAnalytics.ts` loads each independently so one failure never hides the other, and `AnalyticsPanel.tsx` renders them with loading, error, empty, and refresh states. Neither endpoint calls the AI provider.

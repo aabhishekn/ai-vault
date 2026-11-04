@@ -1,4 +1,5 @@
 import { DocumentWorkspace } from '../features/documents/DocumentWorkspace'
+import { AnalyticsPanel } from '../features/analytics/AnalyticsPanel'
 import { ConnectionDetails } from '../features/health/ConnectionDetails'
 
 export default function App() {
@@ -50,6 +51,7 @@ export default function App() {
           each one stands.
         </p>
         <DocumentWorkspace />
+        <AnalyticsPanel />
         <ConnectionDetails />
       </main>
 
