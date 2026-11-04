@@ -23,6 +23,12 @@ export function documentTitle(filename) {
   return title || filename
 }
 
+// What to call a document: the title it was given (by the AI or by a person) when it has
+// one, otherwise a tidied file name.
+export function displayTitle(item) {
+  return item.title || documentTitle(item.filename)
+}
+
 export function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`

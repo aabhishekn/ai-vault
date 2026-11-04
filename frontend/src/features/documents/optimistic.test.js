@@ -70,6 +70,28 @@ describe('applyOverlay', () => {
     expect(effectiveStatus(doc('a', 'failed'), guess)).toBe('queued')
   })
 
+  it('shows a title ahead of the server, and null brings the file name back', () => {
+    const titles = new Map([
+      ['a', 'Q3 Plan'],
+      ['b', null],
+    ])
+    const shown = applyOverlay(
+      page([
+        { ...doc('a'), title: 'Old' },
+        { ...doc('b'), title: 'AI' },
+        doc('c'),
+      ]),
+      overlay({ titles }),
+      false,
+    )
+    expect(shown.items.map((item) => item.title)).toEqual([
+      'Q3 Plan',
+      null,
+      undefined,
+    ])
+    expect(shown.total).toBe(3)
+  })
+
   it('puts an upload in flight first, on the first unfiltered page only', () => {
     const withUpload = overlay({ uploading: upload })
     const first = applyOverlay(page([doc('a')]), withUpload, false)

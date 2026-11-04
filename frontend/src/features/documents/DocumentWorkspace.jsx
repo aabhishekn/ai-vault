@@ -8,7 +8,7 @@ import { DocumentList } from './DocumentList'
 import { DocumentUpload } from './DocumentUpload'
 import { MultiDocumentChat } from './MultiDocumentChat'
 
-import { documentTitle } from '../../lib/format'
+import { displayTitle } from '../../lib/format'
 import { useDocuments } from './useDocuments'
 import { useOptimisticDocuments } from './useOptimisticDocuments'
 import { useQueueHealth } from '../health/useQueueHealth'
@@ -21,7 +21,7 @@ export function DocumentWorkspace() {
   const documents = useDocuments()
   const queue = useQueueHealth()
   const [selectedId, setSelectedId] = useState(null)
-  // Documents chosen for a question across several (id -> filename).
+  // Documents chosen for a question across several (id -> title).
   const [chosen, setChosen] = useState(new Map())
   const [asking, setAsking] = useState(false)
   const [comparing, setComparing] = useState(false)
@@ -68,19 +68,19 @@ export function DocumentWorkspace() {
       const next = new Map(previous)
       if (next.has(document.id)) next.delete(document.id)
       else if (next.size < MAX_CHOSEN)
-        next.set(document.id, documentTitle(document.filename))
+        next.set(document.id, displayTitle(document))
       return next
     })
   }
 
-  function deleteOpenDocument(id, filename) {
+  function deleteOpenDocument(id, name) {
     setChosen((previous) => {
       const next = new Map(previous)
       next.delete(id)
       return next
     })
     setSelectedId(null)
-    void optimistic.removeDocument(id, filename)
+    void optimistic.removeDocument(id, name)
   }
 
   return (
@@ -145,6 +145,8 @@ export function DocumentWorkspace() {
           contentRevision={live.content}
           onDelete={deleteOpenDocument}
           onReprocess={optimistic.reprocess}
+          onRename={optimistic.rename}
+          titleGuess={optimistic.titleGuesses.get(selectedId)}
           statusGuess={optimistic.statusGuesses.get(selectedId)}
           onVersionAdded={(newId) => {
             documents.goToPage(0)

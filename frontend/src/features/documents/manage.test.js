@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../lib/api'
-import { canProcessAgain, deleteDocument, reprocessDocument } from './manage'
+import {
+  canProcessAgain,
+  deleteDocument,
+  renameDocument,
+  reprocessDocument,
+} from './manage'
 
 const document = {
   id: 'doc-1',
@@ -84,6 +89,40 @@ describe('document management API', () => {
   it('rejects an unexpected reprocess response', async () => {
     respond(Response.json({ nope: true }, { status: 202 }))
     await expect(reprocessDocument('doc-1', signal)).rejects.toThrow(
+      /unexpected result/,
+    )
+  })
+
+  it('sends a trimmed title and returns the renamed document', async () => {
+    const renamed = { ...document, title: 'Q3 Plan', title_source: 'user' }
+    const fetch = respond(Response.json(renamed))
+    await expect(
+      renameDocument('doc-1', '  Q3 Plan ', signal),
+    ).resolves.toEqual(renamed)
+    const [url, options] = fetch.mock.calls[0]
+    expect(url).toBe('/api/documents/doc-1')
+    expect(options.method).toBe('PATCH')
+    expect(JSON.parse(options.body)).toEqual({ title: 'Q3 Plan' })
+  })
+
+  it('sends null for a blank title so the file name is shown again', async () => {
+    const fetch = respond(Response.json(document))
+    await renameDocument('doc-1', '   ', signal)
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ title: null })
+  })
+
+  it.each([
+    [404, /could not be found/],
+    [422, /at most 120 characters/],
+    [500, /couldn’t save the title/],
+  ])('maps rename status %i to a safe message', async (status, message) => {
+    respond(Response.json({ detail: 'x' }, { status }))
+    await expect(renameDocument('doc-1', 'x', signal)).rejects.toThrow(message)
+  })
+
+  it('rejects an unexpected rename response', async () => {
+    respond(Response.json({ nope: true }))
+    await expect(renameDocument('doc-1', 'x', signal)).rejects.toThrow(
       /unexpected result/,
     )
   })

@@ -36,6 +36,7 @@ export async function getVersions(id, signal) {
       id: item.id,
       version_number: item.version_number,
       filename: item.filename,
+      title: typeof item.title === 'string' ? item.title : null,
       size_bytes: item.size_bytes,
       status: item.status,
       is_latest: item.is_latest,

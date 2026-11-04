@@ -2,7 +2,7 @@
 
 How AI tools were used to build this is described in [AI_USAGE.md](AI_USAGE.md).
 
-A local document vault with PDF uploads, background text extraction, semantic search, source-cited answers (chat with one document or across several), saved conversations, customizable summaries, insights, automatic category and tags, document versions, comparative analysis, live status updates over WebSocket, and processing metrics.
+A local document vault with PDF uploads, background text extraction, semantic search, source-cited answers (chat with one document or across several), saved conversations, customizable summaries, insights, automatic category, tags and title, document versions, comparative analysis, live status updates over WebSocket, and processing metrics.
 
 Built with Python 3.12, FastAPI, SQLAlchemy, PostgreSQL + pgvector, Redis/RQ, and OpenAI. A React frontend (plain JavaScript, Vite and Tailwind CSS) covers the whole workflow: upload, filter, read, chat, compare and manage documents.
 
@@ -43,6 +43,7 @@ npm run dev
 Open [the frontend](http://localhost:5173). The Python server must be running on port 8000 (the dev server proxies `/api` to it).
 
 - **Upload and browse.** Choose a PDF up to 10 MB and select **Upload PDF**. The list shows status, size, upload time, category and tags, with pagination and filters by category or tag. A **Live** badge means status changes arrive without refreshing (WebSocket, reconnecting automatically); **Refresh** reloads on demand. A notice appears if no background worker is running, since uploads would stay queued. Uploading, deleting and **Process again** show their result at once (a pending row, a vanished row, a **Queued** badge) and roll back with a message if the server refuses.
+- **Titles.** Documents are listed by a readable title: one the AI writes from the content (in the same request that picks the category and tags, so no extra cost) or one you set with **Rename** in the document dialog. Your own title always wins and applies to every version; clearing it shows the file name, tidied, again.
 - **Open a document** by selecting its filename. The dialog starts with **Ask this document**: a saved conversation for search-ready documents, with streaming answers, expandable sources with page citations, suggested starter questions and **New conversation**. Reopening a document restores its latest conversation. Below it are the saved **summary** (or **Generate summary**) and **Customize the summary** (length, tone, focus; not saved, cached for repeats), **insights** with page evidence, collapsible **File details**, **Versions** (upload a new version; the list shows only the latest, with a `v2` badge for revisions) and **Manage**: **Process again** for failed or text-only documents, and permanent **Delete** with a confirmation. Close or press Escape to return to the list.
 - **Several documents.** Tick **Select** on two or more search-ready documents, then **Ask across documents** (one conversation, sources labelled by document) or **Compare** (2 to 5 documents: similarities and differences by topic, with an optional focus).
 - **Overview.** The **Workspace overview** shows document statistics and processing metrics; **Service connection** checks backend health.
@@ -97,7 +98,8 @@ Routes delegate to services. Services coordinate database access and provider ad
 | Saved summaries | `POST` / `GET /documents/{id}/summary` |
 | Custom summaries (length, tone, focus) | `POST /documents/{id}/summary/custom` |
 | Versions of a document | `POST` / `GET /documents/{id}/versions` |
-| Category and tags, filters | `POST` / `GET /documents/{id}/classification`, `GET /documents?category=&tag=`, `GET /tags` |
+| Category, tags and AI title, filters | `POST` / `GET /documents/{id}/classification`, `GET /documents?category=&tag=`, `GET /tags` |
+| Rename a document | `PATCH /documents/{id}` with `{"title": "..."}` (`null` shows the file name again) |
 | Saved insights | `POST` / `GET /documents/{id}/insights` |
 | Suggested starter questions | `POST /documents/{id}/suggested-questions` |
 | Document statistics | `GET /stats/documents` |

@@ -33,6 +33,28 @@ export async function deleteDocument(id, signal) {
   }
 }
 
+// A blank title removes it, so the file name is shown again.
+export async function renameDocument(id, title, signal) {
+  let data
+  try {
+    data = await requestJson(`/documents/${encodeURIComponent(id)}`, signal, {
+      method: 'PATCH',
+      json: { title: title.trim() || null },
+    })
+  } catch (error) {
+    throw new ApiError(
+      messageFor(error instanceof ApiError ? error.status : undefined, {
+        404: 'This document could not be found. Close this view and refresh the list.',
+        422: 'Use a title of at most 120 characters.',
+        default: 'We couldn’t save the title. Try again.',
+      }),
+    )
+  }
+  if (!isDocument(data))
+    throw new ApiError('The document service returned an unexpected result.')
+  return data
+}
+
 export async function reprocessDocument(id, signal) {
   let data
   try {

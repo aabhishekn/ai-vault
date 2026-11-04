@@ -11,6 +11,8 @@ export const NO_OVERLAY = {
   // id -> { from, to }: a status shown ahead of the server. Ignored once the server's own
   // status is no longer `from`, so a stale guess can never mask a real change.
   statuses: new Map(),
+  // id -> title (null shows the file name): a rename not yet confirmed.
+  titles: new Map(),
   // The upload in flight, shown as a row at the top of the first page.
   uploading: null,
 }
@@ -40,13 +42,25 @@ export function applyOverlay(page, overlay, filtered) {
   const hiddenHere = page.items.filter((item) =>
     overlay.hidden.has(item.id),
   ).length
-  if (!showUpload && hiddenHere === 0 && overlay.statuses.size === 0)
+  if (
+    !showUpload &&
+    hiddenHere === 0 &&
+    overlay.statuses.size === 0 &&
+    overlay.titles.size === 0
+  )
     return page
   const items = page.items
     .filter((item) => !overlay.hidden.has(item.id))
     .map((item) => {
       const status = effectiveStatus(item, overlay.statuses)
-      return status === item.status ? item : { ...item, status }
+      const renamed = overlay.titles.has(item.id)
+      return status === item.status && !renamed
+        ? item
+        : {
+            ...item,
+            status,
+            ...(renamed ? { title: overlay.titles.get(item.id) } : {}),
+          }
     })
   return {
     ...page,

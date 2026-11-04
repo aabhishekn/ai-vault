@@ -154,6 +154,7 @@ describe('optimistic changes', () => {
       if (path.includes('/health/queue'))
         return Promise.resolve(Response.json(RUNNING))
       if (method === 'DELETE') return handlers.onDelete()
+      if (method === 'PATCH') return handlers.onRename()
       if (method === 'POST' && path.includes('/reprocess'))
         return handlers.onReprocess()
       if (method === 'POST' && /\/documents(\?|$)/.test(path))
@@ -316,6 +317,117 @@ describe('optimistic changes', () => {
         /“a” was not queued\. The processing queue is unavailable/,
       )
       expect(screen.getByText('Failed')).toBeTruthy()
+    })
+  })
+
+  describe('rename', () => {
+    const rename = (value) => {
+      fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
+      const field = screen.getByLabelText('Title')
+      fireEvent.change(field, { target: { value } })
+      fireEvent.submit(field.closest('form'))
+    }
+
+    it('shows an AI-written title in the list and says so in the dialog', async () => {
+      serveVault(
+        [
+          {
+            ...documentNamed('a'),
+            title: 'RAG Vault Design',
+            title_source: 'ai',
+          },
+        ],
+        {},
+      )
+      render(createElement(DocumentWorkspace))
+      await openDocument('RAG Vault Design')
+      expect(screen.getAllByText('RAG Vault Design')).toHaveLength(2)
+      expect(screen.getByText(/written by AI/)).toBeTruthy()
+      // The exact file name stays available.
+      expect(screen.getAllByText('a.pdf').length).toBeGreaterThan(0)
+    })
+
+    it('shows the new title at once in the dialog and the list', async () => {
+      const items = [documentNamed('a')]
+      const gate = deferred()
+      const fetch = serveVault(items, { onRename: () => gate.promise })
+      render(createElement(DocumentWorkspace))
+      await openDocument('a')
+
+      rename('  Q3 Plan ')
+
+      // The server has not answered, yet both places already read the new title.
+      expect(screen.getAllByText('Q3 Plan')).toHaveLength(2)
+      expect(screen.getByText('Title set by you.')).toBeTruthy()
+
+      items[0] = { ...items[0], title: 'Q3 Plan', title_source: 'user' }
+      gate.resolve(Response.json(items[0]))
+      await waitFor(() =>
+        expect(screen.getByText('Title set by you.')).toBeTruthy(),
+      )
+      const patches = fetch.mock.calls.filter(
+        ([, options]) => options?.method === 'PATCH',
+      )
+      expect(patches).toHaveLength(1)
+      expect(JSON.parse(patches[0][1].body)).toEqual({ title: 'Q3 Plan' })
+      expect(screen.getAllByText('Q3 Plan')).toHaveLength(2)
+    })
+
+    it('puts the old title back and keeps the text when the server refuses', async () => {
+      const gate = deferred()
+      serveVault([documentNamed('a')], { onRename: () => gate.promise })
+      render(createElement(DocumentWorkspace))
+      await openDocument('a')
+      rename('Q3 Plan')
+      expect(screen.getAllByText('Q3 Plan')).toHaveLength(2)
+
+      gate.resolve(refusal(500))
+
+      expect(await screen.findByText(/couldn’t save the title/)).toBeTruthy()
+      expect(screen.getByLabelText('Title').value).toBe('Q3 Plan')
+      // Behind the form the list has its old title back.
+      expect(screen.getByRole('button', { name: 'a' })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'Q3 Plan' })).toBeNull()
+    })
+
+    it('shows the file name again after a blank title', async () => {
+      const items = [
+        { ...documentNamed('a'), title: 'Old Name', title_source: 'user' },
+      ]
+      const gate = deferred()
+      const fetch = serveVault(items, { onRename: () => gate.promise })
+      render(createElement(DocumentWorkspace))
+      await openDocument('Old Name')
+
+      rename('   ')
+
+      // The list row and the dialog both read the file name again.
+      expect(screen.getAllByRole('heading', { name: 'a' })).toHaveLength(2)
+      expect(screen.getByText(/Showing the file name/)).toBeTruthy()
+      items[0] = { ...documentNamed('a') }
+      gate.resolve(Response.json(items[0]))
+      await waitFor(() => {
+        const [, options] = fetch.mock.calls.find(
+          ([, options]) => options?.method === 'PATCH',
+        )
+        expect(JSON.parse(options.body)).toEqual({ title: null })
+      })
+    })
+
+    it('reports a refusal on the page when the dialog was closed meanwhile', async () => {
+      const gate = deferred()
+      serveVault([documentNamed('a')], { onRename: () => gate.promise })
+      render(createElement(DocumentWorkspace))
+      await openDocument('a')
+      rename('Q3 Plan')
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+      gate.resolve(refusal(500))
+
+      expect((await screen.findByText(/was not renamed/)).textContent).toMatch(
+        /“a” was not renamed/,
+      )
+      expect(screen.getByRole('button', { name: 'a' })).toBeTruthy()
     })
   })
 

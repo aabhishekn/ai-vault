@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Button } from '../../components/Button'
-import { documentTitle, formatFileSize } from '../../lib/format'
+import { displayTitle, formatFileSize } from '../../lib/format'
 import { useUploadDocument } from './useUploadDocument'
 import { validateUpload } from './upload'
 
@@ -112,7 +112,7 @@ export function DocumentUpload({ handlers }) {
             className="mt-3.5 text-xs leading-[1.8] wrap-anywhere text-[#375b3f]"
             role="status"
           >
-            “{documentTitle(state.document.filename)}” was saved and queued for
+            “{displayTitle(state.document)}” was saved and queued for
             processing. It’s now in your document list.
           </p>
         )}

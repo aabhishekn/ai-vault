@@ -151,7 +151,8 @@ export function ComparisonDialog({ documents, onClose }) {
                         {difference.positions.map((position) => (
                           <div key={position.document_id}>
                             <dt className="text-[11px] font-semibold text-muted">
-                              {documentTitle(position.filename)}
+                              {documents.get(position.document_id) ??
+                                documentTitle(position.filename)}
                             </dt>
                             <dd>{position.statement}</dd>
                           </div>

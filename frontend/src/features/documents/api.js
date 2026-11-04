@@ -24,6 +24,9 @@ export function isDocument(value) {
       (isNonnegativeInteger(value.version_number) &&
         value.version_number >= 1)) &&
     (value.is_latest === undefined || typeof value.is_latest === 'boolean') &&
+    (value.title === undefined ||
+      value.title === null ||
+      typeof value.title === 'string') &&
     (value.category === undefined ||
       value.category === null ||
       typeof value.category === 'string') &&

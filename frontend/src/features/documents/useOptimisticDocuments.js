@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError } from '../../lib/api'
-import { deleteDocument, reprocessDocument } from './manage'
+import { deleteDocument, renameDocument, reprocessDocument } from './manage'
 import {
   NO_OVERLAY,
   applyOverlay,
@@ -60,6 +60,16 @@ export function useOptimisticDocuments(documents, openId) {
       if (guess) next.set(id, guess)
       else next.delete(id)
       return { ...previous, statuses: next }
+    })
+  }
+
+  // `undefined` takes the guess away; null is a real guess: "show the file name".
+  function setTitleGuess(id, title) {
+    setOverlay((previous) => {
+      const next = new Map(previous.titles)
+      if (title === undefined) next.delete(id)
+      else next.set(id, title)
+      return { ...previous, titles: next }
     })
   }
 
@@ -128,13 +138,40 @@ export function useOptimisticDocuments(documents, openId) {
     }
   }
 
+  // Resolves with the renamed document. On refusal it puts the old title back and rethrows,
+  // for the dialog to show; if the dialog was closed meanwhile the page says it instead.
+  async function rename(id, title, previousName) {
+    setProblem(null)
+    setTitleGuess(id, title.trim() || null)
+    try {
+      const document = await renameDocument(
+        id,
+        title,
+        AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      )
+      latest.current.changePage((page) => withReplacedDocument(page, document))
+      return document
+    } catch (error) {
+      if (openId.current !== id)
+        setProblem(
+          `“${previousName}” was not renamed. ${error instanceof ApiError ? error.message : 'Try again.'}`,
+        )
+      throw error
+    } finally {
+      setTitleGuess(id, undefined)
+      latest.current.refreshQuietly()
+    }
+  }
+
   return {
     view,
     statusGuesses: overlay.statuses,
+    titleGuesses: overlay.titles,
     problem,
     dismissProblem: () => setProblem(null),
     upload,
     removeDocument,
     reprocess,
+    rename,
   }
 }

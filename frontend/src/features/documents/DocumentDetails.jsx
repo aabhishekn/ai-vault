@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { Button } from '../../components/Button'
 import {
-  documentTitle,
+  displayTitle,
   formatFileSize,
   formatUploadDate,
 } from '../../lib/format'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
+import { DocumentTitle } from './DocumentTitle'
 import { DocumentTags } from './DocumentTags'
 import { DocumentActions } from './DocumentActions'
 import { DocumentVersions } from './DocumentVersions'
@@ -22,7 +23,9 @@ export function DocumentDetails({
   onVersionAdded,
   onDelete,
   onReprocess,
+  onRename,
   statusGuess = null,
+  titleGuess,
   liveRevision = 0,
   contentRevision = 0,
 }) {
@@ -42,10 +45,24 @@ export function DocumentDetails({
       ? statusGuess.to
       : loaded?.status
 
+  // A rename shown ahead of the server (null means "show the file name"), while it applies.
+  const renamedAhead = titleGuess !== undefined
+  const title = loaded
+    ? displayTitle(renamedAhead ? { ...loaded, title: titleGuess } : loaded)
+    : null
+  const titleSource = renamedAhead
+    ? titleGuess
+      ? 'user'
+      : null
+    : loaded?.title_source
+
   async function reprocess() {
-    const { filename, status: current } = state.data
-    mergeData(await onReprocess(id, current, documentTitle(filename)))
+    mergeData(await onReprocess(id, state.data.status, title))
     refreshQuietly()
+  }
+
+  async function rename(value) {
+    mergeData(await onRename(id, value, title))
   }
 
   useEffect(() => {
@@ -102,9 +119,11 @@ export function DocumentDetails({
         )}
         {state.status === 'success' && (
           <>
-            <h3 className="mb-[18px] font-serif text-[22px] leading-snug font-normal tracking-[-0.3px] wrap-anywhere">
-              {documentTitle(state.data.filename)}
-            </h3>
+            <DocumentTitle
+              title={title}
+              source={titleSource}
+              onRename={rename}
+            />
             <DocumentStatusBadge status={status} />
             <p className="my-[1em] text-[13px] leading-[1.8] text-muted">
               {DOCUMENT_STATUS_DESCRIPTIONS[status]}
@@ -171,7 +190,7 @@ export function DocumentDetails({
             <DocumentActions
               key={`actions:${id}`}
               status={status}
-              onDelete={() => onDelete(id, documentTitle(state.data.filename))}
+              onDelete={() => onDelete(id, title)}
               onReprocess={reprocess}
             />
           </>

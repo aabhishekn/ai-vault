@@ -1,5 +1,5 @@
 import {
-  documentTitle,
+  displayTitle,
   formatFileSize,
   formatUploadDate,
 } from '../../lib/format'
@@ -8,7 +8,7 @@ import { DocumentStatusBadge } from './DocumentStatusBadge'
 import { TagChips } from './TagChips'
 
 export function DocumentRow({ document, onSelect, chosen = false, onChoose }) {
-  const title = documentTitle(document.filename)
+  const title = displayTitle(document)
   // An upload still on its way: shown at once, but there is nothing to open yet.
   const pending = document.pending === true
   return (

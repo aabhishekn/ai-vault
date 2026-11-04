@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { documentTitle } from './format'
+import { displayTitle, documentTitle } from './format'
 
 describe('documentTitle', () => {
   it.each([
@@ -19,5 +19,16 @@ describe('documentTitle', () => {
   it('never returns an empty title', () => {
     expect(documentTitle('.pdf')).toBe('.pdf')
     expect(documentTitle('___.pdf')).toBe('___.pdf')
+  })
+})
+
+describe('displayTitle', () => {
+  it('prefers a title and otherwise tidies the file name', () => {
+    expect(displayTitle({ title: 'Q3 Plan', filename: 'x_y.pdf' })).toBe(
+      'Q3 Plan',
+    )
+    expect(displayTitle({ title: null, filename: 'x_y.pdf' })).toBe('x y')
+    expect(displayTitle({ filename: 'Notes.pdf' })).toBe('Notes')
+    expect(displayTitle({ title: '', filename: 'Notes.pdf' })).toBe('Notes')
   })
 })
