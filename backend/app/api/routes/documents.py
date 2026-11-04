@@ -8,6 +8,7 @@ from app.schemas.documents import (
     DocumentResponse,
     DocumentVersionsResponse,
 )
+from app.services import deletion
 from app.services import documents as service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -21,6 +22,12 @@ def upload_document(file: UploadFile) -> DocumentResponse:
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(document_id: UUID) -> DocumentResponse:
     return service.get_document(document_id)
+
+
+@router.delete("/{document_id}", status_code=204)
+def delete_document(document_id: UUID, all_versions: bool = False) -> None:
+    """Delete a document version, or every version with `all_versions=true`."""
+    deletion.delete_document(document_id, all_versions=all_versions)
 
 
 @router.get("", response_model=DocumentListResponse)

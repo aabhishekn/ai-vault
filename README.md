@@ -80,6 +80,7 @@ Routes delegate to services. Services coordinate database access and provider ad
 | --- | --- |
 | Upload/list/get | `POST /documents`, `GET /documents`, `GET /documents/{id}` |
 | Retry processing | `POST /documents/{id}/reprocess` |
+| Delete | `DELETE /documents/{id}` (`?all_versions=true` removes every version) |
 | Semantic search | `POST /documents/{id}/search` |
 | One question with citations | `POST /documents/{id}/ask` |
 | Real-time updates | `WS /ws/events` (status changes pushed from the worker through Redis) |
@@ -157,9 +158,9 @@ This has not been load-tested; the following is how the design is expected to be
 
 ## Known limitations
 
-- No authentication or per-user isolation; no document deletion endpoint.
+- No authentication or per-user isolation, so anyone who can reach the API can read or delete any document. Deletion is permanent (no trash or undo).
 - PDF text only: no OCR, no DOCX, 60,000-character limit for summaries and insights.
-- Not implemented: multi-document chat and WebSocket updates (the UI refreshes on demand). Summaries and insights are not streamed; only chat answers are.
+- Summaries and insights are not streamed; only chat answers are.
 - Token usage for summaries, insights and stateless `/ask` is logged but not stored, so `/metrics/ai-usage` undercounts spend.
 - Answer quality is checked by tests and manual trials, not by an automated evaluation set.
 - Hosted production would need HTTPS, a proxy-aware client-IP policy, secrets management, and database backups.

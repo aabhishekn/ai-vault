@@ -494,7 +494,20 @@ A document can have several versions. Each version is a normal document of its o
 - A file with the same SHA-256 as the current latest version is rejected with 409 and stored nowhere, so re-uploading the same file does not create a duplicate version.
 - Version numbers are unique per group; if two uploads race for the same number, one gets 409 and nothing is left behind (the file is removed and the previous latest version stays latest).
 
-Older versions are never deleted or changed, so a conversation always refers to the exact file it was asked about. Migration `c4e8f2b17d35` turns every existing document into version 1 of its own group.
+Uploading a new version never changes or removes an older one, so a conversation always refers to the exact file it was asked about (older versions go away only when someone deletes them, see below). Migration `c4e8f2b17d35` turns every existing document into version 1 of its own group.
+
+## Deleting documents
+
+`DELETE /documents/{document_id}` returns 204 and permanently removes a document:
+
+- Its chunks and embeddings, saved chat conversations, processing attempts and stored PDF go with it. The summary, insights, category and tags live on the document row and go too.
+- A multi-document conversation that included it is deleted as well (its answers quote the deleted file); the other documents are untouched.
+- By default only that version is deleted. Deleting the newest version makes the one before it current again. Add `?all_versions=true` to delete every version of the document (the id of any version works). The web UI uses this.
+- A document a worker is processing right now returns 409 and nothing is deleted; try again when it finishes. A job abandoned by a dead worker does not count as running.
+- A queued job for a deleted document is skipped by the worker, not failed. The PDF is removed after the database commit, and a failure to remove it is logged, not returned.
+- Processing metrics and statistics are computed from stored rows, so they no longer include deleted documents or their attempts.
+
+Deletion cannot be undone. There is no authentication in this project, so anyone who can reach the API can delete documents.
 
 ## Multi-document chat
 
@@ -529,6 +542,7 @@ Messages are JSON text frames:
 | `{"type": "ready"}` | Sent once the subscription is active. |
 | `{"type": "document.status", "document_id": "...", "status": "processing"}` | A document moved to `queued`, `processing`, `extracted`, `embedded` or `failed`. |
 | `{"type": "document.content", "document_id": "..."}` | The automatic summary, insights and tags finished (or were skipped), so they can be fetched. |
+| `{"type": "document.deleted", "document_id": "..."}` | A document (one version) was deleted, so lists should be refetched. |
 
 How it works: the worker is a separate process from the API, so it cannot talk to browsers directly. Whenever it (or an upload or reprocess request) changes a status, it publishes the event on the Redis channel `vault:events`. Each WebSocket connection subscribes to that channel in the API process and forwards what it receives. Publishing is best effort and never fails the work it reports.
 

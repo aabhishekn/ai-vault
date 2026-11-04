@@ -32,7 +32,7 @@ REPROCESSABLE_STATUSES = ("queued", "failed", "extracted")
 ABANDONED_MESSAGE = "Processing stopped before it finished. It was queued again."
 
 
-def _close_abandoned_attempts(session: Session, document_id: UUID | None = None) -> list[UUID]:
+def close_abandoned_attempts(session: Session, document_id: UUID | None = None) -> list[UUID]:
     """Fail attempts that have been running too long; returns their document IDs."""
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=PROCESSING_STALE_AFTER_SECONDS)
     elapsed_ms = cast(
@@ -83,7 +83,7 @@ def reprocess_document(document_id: UUID) -> DocumentResponse:
     try:
         with Session(engine) as session:
             get_document_or_raise(session, document_id)
-            _close_abandoned_attempts(session, document_id)
+            close_abandoned_attempts(session, document_id)
             if not _requeue(session, Document.id == document_id):
                 session.rollback()
                 status = session.scalar(select(Document.status).where(Document.id == document_id))
@@ -113,7 +113,7 @@ def reprocess_document(document_id: UUID) -> DocumentResponse:
 def recover_abandoned_documents() -> list[UUID]:
     """Re-queue every document whose worker died mid-job. Called when a worker starts."""
     with Session(engine) as session:
-        abandoned = set(_close_abandoned_attempts(session))
+        abandoned = set(close_abandoned_attempts(session))
         recovered = _requeue(session, Document.id.in_(abandoned)) if abandoned else []
         session.commit()
     for document_id in recovered:

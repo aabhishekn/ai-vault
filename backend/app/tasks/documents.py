@@ -58,9 +58,8 @@ def _claim_document(context: ProcessingContext) -> tuple[str | None, str]:
         )
         if storage_path is None:
             document = session.get(Document, context.document_id, options=lightweight())
-            if document is None:
-                raise ValueError("Document not found")
-            return None, document.status
+            # Deleted while the job waited in the queue: nothing left to process.
+            return None, "deleted" if document is None else document.status
         session.add(ProcessingAttempt(id=context.attempt_id, document_id=context.document_id))
         session.commit()
     publish_status(context.document_id, "processing")

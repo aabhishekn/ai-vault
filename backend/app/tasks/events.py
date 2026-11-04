@@ -35,3 +35,8 @@ def publish_status(document_id: UUID | str, status: str) -> None:
 def publish_content_ready(document_id: UUID | str) -> None:
     """Summary, insights and tags finished generating (or were skipped)."""
     publish_event("document.content", document_id)
+
+
+def publish_deleted(document_id: UUID | str) -> None:
+    """A document (one version of it) was removed."""
+    publish_event("document.deleted", document_id)

@@ -6,7 +6,12 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app.core.errors import DependencyUnavailableError, InvalidAIResponseError, NotFoundError
+from app.core.errors import (
+    ConflictError,
+    DependencyUnavailableError,
+    InvalidAIResponseError,
+    NotFoundError,
+)
 from app.main import create_app
 from app.schemas.documents import InsightsResponse, SummaryResponse
 
@@ -30,6 +35,7 @@ class APIContractTests(unittest.TestCase):
             ("GET", "/documents"),
             ("POST", "/documents"),
             ("GET", "/documents/{document_id}"),
+            ("DELETE", "/documents/{document_id}"),
             ("POST", "/documents/{document_id}/reprocess"),
             ("POST", "/documents/{document_id}/search"),
             ("POST", "/documents/{document_id}/ask"),
@@ -74,6 +80,23 @@ class APIContractTests(unittest.TestCase):
             with self.subTest(status=error.status_code):
                 with patch("app.services.documents.get_document", side_effect=error):
                     response = self.client.get(f"/documents/{self.identifier}")
+                self.assertEqual(response.status_code, error.status_code)
+                self.assertEqual(response.json(), {"detail": error.detail})
+
+    def test_delete_returns_no_content_and_forwards_the_versions_flag(self):
+        with patch("app.services.deletion.delete_document") as delete_document:
+            response = self.client.delete(f"/documents/{self.identifier}")
+            self.assertEqual((response.status_code, response.content), (204, b""))
+            delete_document.assert_called_once_with(self.identifier, all_versions=False)
+            delete_document.reset_mock()
+            self.client.delete(f"/documents/{self.identifier}?all_versions=true")
+            delete_document.assert_called_once_with(self.identifier, all_versions=True)
+
+    def test_delete_renders_service_errors(self):
+        for error in [NotFoundError("Document not found"), ConflictError("Still processing")]:
+            with self.subTest(status=error.status_code):
+                with patch("app.services.deletion.delete_document", side_effect=error):
+                    response = self.client.delete(f"/documents/{self.identifier}")
                 self.assertEqual(response.status_code, error.status_code)
                 self.assertEqual(response.json(), {"detail": error.detail})
 
