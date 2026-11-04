@@ -13,7 +13,7 @@ function isNonnegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
-function isDocument(value: unknown): value is VaultDocument {
+export function isDocument(value: unknown): value is VaultDocument {
   return (
     isRecord(value) &&
     typeof value.id === 'string' &&

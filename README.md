@@ -2,7 +2,7 @@
 
 A local document vault with PDF uploads, background text extraction, semantic search, source-cited answers, saved conversations, summaries, insights, and processing metrics.
 
-Built with Python 3.12, FastAPI, SQLAlchemy, PostgreSQL + pgvector, Redis/RQ, and OpenAI. A React/TypeScript frontend lists documents with processing status and pagination, and verifies the backend connection.
+Built with Python 3.12, FastAPI, SQLAlchemy, PostgreSQL + pgvector, Redis/RQ, and OpenAI. A React/TypeScript frontend uploads PDFs, lists documents with processing status and pagination, and verifies the backend connection.
 
 ## Run locally
 
@@ -38,7 +38,7 @@ npm ci
 npm run dev
 ```
 
-Open [the frontend](http://localhost:5173). It lists documents with status, size, upload time, and pagination. **Refresh** reloads the list. Expand **Service connection** to check backend health. These actions do not use the AI API. The Python server must be running on port 8000.
+Open [the frontend](http://localhost:5173). Choose a PDF up to 10 MB and select **Upload PDF**; the form saves it and refreshes the list. It lists documents with status, size, upload time, and pagination. **Refresh** reloads the list. Expand **Service connection** to check backend health. Listing documents and checking health do not use the AI API. Uploads queue background processing, which uses the AI API when embeddings are enabled. The Python server must be running on port 8000.
 
 Frontend code is grouped under `src/app`, `src/features`, `src/components`, and `src/lib`. Requests, validation, loading state, and presentation have separate modules. TypeScript strict mode, lint, formatting, API contract tests, and build checks are enabled. See the [frontend guide](frontend/README.md) for commands and proxy behavior. Production API routing is not configured yet.
 

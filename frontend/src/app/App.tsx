@@ -1,4 +1,4 @@
-import { DocumentList } from '../features/documents/DocumentList'
+import { DocumentWorkspace } from '../features/documents/DocumentWorkspace'
 import { ConnectionDetails } from '../features/health/ConnectionDetails'
 import './App.css'
 
@@ -38,7 +38,7 @@ export default function App() {
           Your documents, gathered in one place. See what’s arrived and where
           each one stands.
         </p>
-        <DocumentList />
+        <DocumentWorkspace />
         <ConnectionDetails />
       </main>
 

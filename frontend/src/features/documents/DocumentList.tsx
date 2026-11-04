@@ -1,10 +1,13 @@
 import { Button } from '../../components/Button'
 import { DocumentRow } from './DocumentRow'
-import { useDocuments } from './useDocuments'
+import type { useDocuments } from './useDocuments'
 import './DocumentList.css'
 
-export function DocumentList() {
-  const { state, refresh, goToPage } = useDocuments()
+export function DocumentList({
+  state,
+  refresh,
+  goToPage,
+}: ReturnType<typeof useDocuments>) {
   const loading = state.status === 'loading'
   const page = state.status === 'success' ? state.page : null
 
