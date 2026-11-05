@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { parseAnswer } from './answers'
-import { createMultiConversation, sendMessage } from './conversations'
+import { createMultiConversation, sendMessageStream } from './conversations'
 
 const question = 'Which is cheaper?'
 const multiAnswer = {
@@ -67,23 +67,27 @@ describe('multi-document conversations', () => {
     ).rejects.toThrow('invalid conversation response')
   })
   it('validates a turn without a document id', async () => {
+    const turn = {
+      id: 'turn-a',
+      conversation_id: 'conv-a',
+      turn_number: 1,
+      response: multiAnswer,
+    }
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        Response.json({
-          id: 'turn-a',
-          conversation_id: 'conv-a',
-          turn_number: 1,
-          response: multiAnswer,
-        }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(`event: turn\ndata: ${JSON.stringify(turn)}\n\n`),
+        ),
     )
-    const turn = await sendMessage(
+    const saved = await sendMessageStream(
       null,
       'conv-a',
       question,
       new AbortController().signal,
+      vi.fn(),
     )
-    expect(turn.answer.citations[0].filename).toBe('a.pdf')
+    expect(saved.answer.citations[0].filename).toBe('a.pdf')
   })
 })

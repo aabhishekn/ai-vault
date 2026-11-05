@@ -63,27 +63,6 @@ function parseTurn(data, documentId, conversationId, question) {
   }
 }
 
-export async function sendMessage(
-  documentId,
-  conversationId,
-  question,
-  signal,
-) {
-  const validationError = validateQuestion(question)
-  if (validationError) throw new ApiError(validationError)
-  const normalized = question.trim()
-  try {
-    const data = await requestJson(
-      `/conversations/${encodeURIComponent(conversationId)}/messages`,
-      signal,
-      { method: 'POST', json: { question: normalized } },
-    )
-    return parseTurn(data, documentId, conversationId, normalized)
-  } catch (error) {
-    throw toAnswerError(error)
-  }
-}
-
 // Splits a server-sent-event byte stream into events; chunk boundaries can fall anywhere.
 async function* readEvents(body) {
   const reader = body.getReader()

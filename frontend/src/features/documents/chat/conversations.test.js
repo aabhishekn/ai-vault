@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createConversation,
   getLatestConversation,
-  sendMessage,
   sendMessageStream,
 } from './conversations'
 
@@ -62,103 +61,6 @@ describe('conversation API', () => {
       'invalid conversation response',
     )
   })
-  it('posts a trimmed question and returns the validated turn', async () => {
-    const fetch = vi.fn().mockResolvedValue(Response.json(turn))
-    vi.stubGlobal('fetch', fetch)
-    const abort = signal()
-    await expect(
-      sendMessage(documentId, conversationId, `  ${question}  `, abort),
-    ).resolves.toEqual({ id: 'turn-a', turnNumber: 1, answer })
-    expect(fetch).toHaveBeenCalledExactlyOnceWith(
-      `/api/conversations/${conversationId}/messages`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ question }),
-        signal: abort,
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-      },
-    )
-  })
-  it('accepts an explicit insufficient-evidence answer without sources', async () => {
-    const response = {
-      ...answer,
-      insufficient_evidence: true,
-      answer: 'Not enough evidence.',
-      citations: [],
-    }
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(Response.json({ ...turn, response })),
-    )
-    await expect(
-      sendMessage(documentId, conversationId, question, signal()),
-    ).resolves.toMatchObject({ answer: response })
-  })
-  it.each([
-    null,
-    {},
-    { ...turn, conversation_id: 'another-conversation' },
-    { ...turn, turn_number: 1.5 },
-    { ...turn, response: null },
-    { ...turn, response: { ...answer, document_id: 'another-document' } },
-    { ...turn, response: { ...answer, question: 'Another question' } },
-    { ...turn, response: { ...answer, answer: ' ' } },
-    { ...turn, response: { ...answer, citations: [] } },
-    { ...turn, response: { ...answer, citations: [citation, citation] } },
-    { ...turn, response: { ...answer, answer: 'Unsupported answer [2].' } },
-    { ...turn, response: { ...answer, insufficient_evidence: true } },
-    ...[
-      { ...citation, source_number: 0 },
-      { ...citation, page_number: 1.5 },
-      { ...citation, text: ' ' },
-      { ...citation, chunk_id: '' },
-    ].map((item) => ({ ...turn, response: { ...answer, citations: [item] } })),
-  ])('rejects mismatched turns and malformed citations', async (data) => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(data)))
-    await expect(
-      sendMessage(documentId, conversationId, question, signal()),
-    ).rejects.toThrow(/invalid (answer or citations|conversation response)/)
-  })
-  it.each([
-    [404, 'could not be found'],
-    [409, 'conversation changed'],
-    [422, 'not accepted'],
-    [502, 'couldn’t complete'],
-    [503, 'couldn’t complete'],
-  ])('handles HTTP %i safely without retrying', async (status, message) => {
-    const fetch = vi
-      .fn()
-      .mockResolvedValue(
-        Response.json({ detail: 'private provider details' }, { status }),
-      )
-    vi.stubGlobal('fetch', fetch)
-    await expect(
-      sendMessage(documentId, conversationId, question, signal()),
-    ).rejects.toThrow(message)
-    expect(fetch).toHaveBeenCalledTimes(1)
-  })
-  it('does not retry a failed connection', async () => {
-    const fetch = vi.fn().mockRejectedValue(new TypeError('Disconnected'))
-    vi.stubGlobal('fetch', fetch)
-    await expect(
-      sendMessage(documentId, conversationId, question, signal()),
-    ).rejects.toThrow('couldn’t complete')
-    expect(fetch).toHaveBeenCalledTimes(1)
-  })
-  it.each(['', '  ', 'x'.repeat(2001)])(
-    'rejects invalid questions before sending a request',
-    async (invalid) => {
-      const fetch = vi.fn()
-      vi.stubGlobal('fetch', fetch)
-      await expect(
-        sendMessage(documentId, conversationId, invalid, signal()),
-      ).rejects.toThrow()
-      expect(fetch).not.toHaveBeenCalled()
-    },
-  )
 })
 
 describe('latest saved conversation', () => {
@@ -331,6 +233,119 @@ describe('streamed messages', () => {
     )
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual(body)
   })
+
+  it('posts the trimmed question and returns the validated turn', async () => {
+    const fetch = vi.fn().mockResolvedValue(streamOf(turnEvent, 1000))
+    vi.stubGlobal('fetch', fetch)
+    const abort = signal()
+    await expect(
+      sendMessageStream(
+        documentId,
+        conversationId,
+        `  ${question}  `,
+        abort,
+        vi.fn(),
+      ),
+    ).resolves.toEqual({ id: 'turn-a', turnNumber: 1, answer })
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      `/api/conversations/${conversationId}/messages/stream`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ question }),
+        signal: abort,
+        headers: {
+          Accept: 'text/event-stream',
+          'Content-Type': 'application/json',
+        },
+      },
+    )
+  })
+
+  it('accepts an explicit insufficient-evidence answer without sources', async () => {
+    const response = {
+      ...answer,
+      insufficient_evidence: true,
+      answer: 'Not enough evidence.',
+      citations: [],
+    }
+    const event = `event: turn\ndata: ${JSON.stringify({ ...turn, response })}\n\n`
+    const { result } = run(streamOf(event, 1000))
+    await expect(result).resolves.toMatchObject({ answer: response })
+  })
+
+  it.each([
+    null,
+    {},
+    { ...turn, conversation_id: 'another-conversation' },
+    { ...turn, turn_number: 1.5 },
+    { ...turn, response: null },
+    { ...turn, response: { ...answer, document_id: 'another-document' } },
+    { ...turn, response: { ...answer, question: 'Another question' } },
+    { ...turn, response: { ...answer, answer: ' ' } },
+    { ...turn, response: { ...answer, citations: [] } },
+    { ...turn, response: { ...answer, citations: [citation, citation] } },
+    { ...turn, response: { ...answer, answer: 'Unsupported answer [2].' } },
+    { ...turn, response: { ...answer, insufficient_evidence: true } },
+    ...[
+      { ...citation, source_number: 0 },
+      { ...citation, page_number: 1.5 },
+      { ...citation, text: ' ' },
+      { ...citation, chunk_id: '' },
+    ].map((item) => ({ ...turn, response: { ...answer, citations: [item] } })),
+  ])('rejects mismatched turns and malformed citations', async (data) => {
+    const event = `event: turn\ndata: ${JSON.stringify(data)}\n\n`
+    const { result } = run(streamOf(event, 1000))
+    await expect(result).rejects.toThrow(
+      /invalid (answer or citations|conversation response)/,
+    )
+  })
+
+  it.each([
+    [404, 'could not be found'],
+    [409, 'conversation changed'],
+    [422, 'not accepted'],
+    [502, 'couldn’t complete'],
+    [503, 'couldn’t complete'],
+  ])('handles HTTP %i safely without retrying', async (status, message) => {
+    const { fetch, result } = run(
+      Response.json({ detail: 'private provider details' }, { status }),
+    )
+    await expect(result).rejects.toThrow(message)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retry a failed connection', async () => {
+    const fetch = vi.fn().mockRejectedValue(new TypeError('Disconnected'))
+    vi.stubGlobal('fetch', fetch)
+    await expect(
+      sendMessageStream(
+        documentId,
+        conversationId,
+        question,
+        signal(),
+        vi.fn(),
+      ),
+    ).rejects.toThrow('couldn’t complete')
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['', '  ', 'x'.repeat(2001)])(
+    'rejects invalid questions before sending a request',
+    async (invalid) => {
+      const fetch = vi.fn()
+      vi.stubGlobal('fetch', fetch)
+      await expect(
+        sendMessageStream(
+          documentId,
+          conversationId,
+          invalid,
+          signal(),
+          vi.fn(),
+        ),
+      ).rejects.toThrow()
+      expect(fetch).not.toHaveBeenCalled()
+    },
+  )
 
   it('rejects a turn for another conversation', async () => {
     const wrong = `event: turn\ndata: ${JSON.stringify({ ...turn, conversation_id: 'other' })}\n\n`
