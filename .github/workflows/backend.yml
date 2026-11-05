@@ -52,6 +52,13 @@ jobs:
             backend/requirements.txt
             backend/requirements-dev.txt
       - run: python -m pip install -r requirements-dev.txt
+      # LlamaIndex ships its NLTK data inside site-packages. The runner installs packages
+      # group-writable, and NLTK refuses to read data from a directory others can write to,
+      # so the chunking tests could not find the stopwords. Make the directory private.
+      - name: Make the bundled NLTK data private to its owner
+        run: >-
+          chmod -R go-w "$(python -c 'import llama_index.core as core, pathlib;
+          print(pathlib.Path(core.__file__).parent / "_static" / "nltk_cache")')"
       - run: python -m ruff check .
       - run: python -m ruff format --check .
       - run: python -m alembic upgrade head
