@@ -26,6 +26,7 @@ label in its text is invalid.
 Make the answer easy to scan. Start with the direct answer in one sentence. When the answer
 has several items (dates, steps, requirements, differences), give each item its own line
 starting with "- " instead of joining them into one long sentence, and keep each line short.
+Each "- " item must start on a new line (a real line break), never inline after the lead sentence.
 Put a line's labels together at its end, like "[1][2]", not in the middle. Keep any paragraph
 to three sentences or fewer. Use plain text only: no headings, bold, or tables.
 When sources come from several documents, each names its "document"; say which document
@@ -35,6 +36,22 @@ source_numbers must list exactly the unique source labels cited in the answer.
 If sources do not support an answer, set insufficient_evidence=true,
 answer to an empty string, and source_numbers to an empty list. Do not guess.
 """
+
+
+# "...are met: - A. - B." with no line breaks: a list the model wrote inline.
+_INLINE_BULLET = re.compile(r"(?<=[:.!?\]])[ \t]+[-•*][ \t]+(?=\S)")
+
+
+def _split_inline_bullets(answer: str) -> str:
+    """Put "- " items on their own lines when the model ran them together in one line.
+
+    It sometimes writes a list inline even when asked for line breaks. Two or more dashes
+    that follow a colon, full stop or label are a list; a single one could be an ordinary
+    dash, so it is left alone.
+    """
+    if len(_INLINE_BULLET.findall(answer)) < 2:
+        return answer
+    return _INLINE_BULLET.sub("\n- ", answer)
 
 
 class AnswerDraft(BaseModel):
@@ -101,7 +118,7 @@ def _finish(retrieval: SearchResponse, response, started: float) -> AnswerRespon
         return _result(retrieval, INSUFFICIENT_ANSWER, True, [], **usage)
     # The labels written in the answer are the source of truth: the model's separate
     # source_numbers list is sometimes inconsistent with its own text.
-    answer = draft.answer.strip()
+    answer = _split_inline_bullets(draft.answer.strip())
     labels = {int(label) for label in re.findall("\\[(\\d+)\\]", draft.answer)}
     if not labels and answer:
         # Short factual answers often come back with correct source_numbers but no inline

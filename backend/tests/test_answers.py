@@ -128,6 +128,31 @@ class AnswerTests(unittest.TestCase):
         result = generate_answer(self.retrieval)
         self.assertEqual([c.source_number for c in result.citations], [1])
 
+    def test_a_list_written_inline_is_put_on_separate_lines(self):
+        inline = (
+            "Two things apply: - Use FastAPI for the API [1]. - Use PostgreSQL for storage [2]. "
+            "That keeps it simple."
+        )
+        self.respond(AnswerDraft(answer=inline, source_numbers=[1, 2], insufficient_evidence=False))
+        result = generate_answer(self.retrieval)
+        self.assertEqual(
+            result.answer,
+            "Two things apply:\n- Use FastAPI for the API [1].\n"
+            "- Use PostgreSQL for storage [2]. That keeps it simple.",
+        )
+
+    def test_one_dash_or_a_list_that_already_has_line_breaks_is_left_alone(self):
+        for text in (
+            "Use FastAPI for the API [1] - it is fast. Use it [1].",
+            "Two things apply:\n- Use FastAPI [1].\n- Use PostgreSQL [2].",
+            "The range is 5 - 10 minutes [1].",
+        ):
+            with self.subTest(text=text):
+                self.respond(
+                    AnswerDraft(answer=text, source_numbers=[1, 2], insufficient_evidence=False)
+                )
+                self.assertEqual(generate_answer(self.retrieval).answer, text)
+
     def test_invalid_citations_are_retried_once(self):
         def draft(answer):
             return SimpleNamespace(
