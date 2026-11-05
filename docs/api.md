@@ -89,10 +89,10 @@ Summaries, insights and classification need extracted text (`extracted`, `embedd
 
 `question` is 1 to 2,000 characters. `top_k` defaults to 8 (1 to 20). The document must be searchable (`409` otherwise).
 
-- **`/search`** returns the closest chunks: `chunk_id`, `chunk_index`, `page_number`, `text`, `cosine_distance` (lower is closer; not a confidence score). It returns `top_k` chunks even for an unrelated question. It embeds the question, a paid call.
+- **`/search`** returns the closest chunks: `chunk_id`, `chunk_index`, `page_number`, `text`, `cosine_distance` (lower is closer; not a confidence score). It returns up to `top_k` chunks (fewer if the document has fewer) even for an unrelated question. It embeds the question, a paid call.
 - **`/ask`** retrieves and answers without saving anything. Use conversations to keep context. The response has `answer`, `insufficient_evidence`, `citations`, `model` and token counts. **AI**
 
-**Citations.** The answer text contains labels like `[1]`. Each citation has `source_number` (the label), `document_id`, `filename`, `title`, `chunk_id`, `page_number` and the stored `text`, all looked up by the server. When the sources do not support an answer, `insufficient_evidence` is true, `answer` is a fixed message and `citations` is empty. An answer whose labels do not match the retrieved sources is retried once and then returns `502`.
+**Citations.** The answer text contains labels like `[1]`. Each citation has `source_number` (the label), `chunk_id`, `page_number` and the stored `text`, all looked up by the server. For several documents it also has `document_id`, `filename` and `title`; for a single document those three are `null`, because the response's `document_id` already says which one. When the sources do not support an answer, `insufficient_evidence` is true, `answer` is a fixed message and `citations` is empty. An answer whose labels do not match the retrieved sources is retried once and then returns `502`.
 
 <hr>
 
@@ -100,15 +100,15 @@ Summaries, insights and classification need extracted text (`extracted`, `embedd
 
 A conversation holds saved turns. One covers a single document or a chosen set of 2 to 10.
 
-| Method | Route                                 | Purpose                                                                                                                                                  |
-| ------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/documents/{id}/conversations`       | New empty conversation for a searchable document (`201`)                                                                                                 |
-| GET    | `/documents/{id}/conversations`       | Its conversations (`id`, `document_id`, `created_at`, `turn_count`). `has_turns=true` skips unanswered ones                                              |
-| POST   | `/multi-conversations`                | `{"document_ids": [...]}`: 2 to 10 distinct, searchable documents (`404` or `409` otherwise). `document_id` is `null`; the response lists `document_ids` |
-| GET    | `/multi-conversations`                | Multi-document conversations, with the same options                                                                                                      |
-| GET    | `/conversations/{id}`                 | The turns in order, with `limit` and `offset`. Each citation's current `filename` and `title` are filled in, so a rename shows in old answers            |
-| POST   | `/conversations/{id}/messages`        | Ask a question; returns the saved turn (`201`). **AI**                                                                                                   |
-| POST   | `/conversations/{id}/messages/stream` | The same, as server-sent events. **AI**                                                                                                                  |
+| Method | Route                                 | Purpose                                                                                                                                                                       |
+| ------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/documents/{id}/conversations`       | New empty conversation for a searchable document (`201`)                                                                                                                      |
+| GET    | `/documents/{id}/conversations`       | Its conversations (`id`, `document_id`, `created_at`, `turn_count`). `has_turns=true` skips unanswered ones                                                                   |
+| POST   | `/multi-conversations`                | `{"document_ids": [...]}`: 2 to 10 distinct, searchable documents (`404` or `409` otherwise). `document_id` is `null`; the response lists `document_ids`                      |
+| GET    | `/multi-conversations`                | Multi-document conversations, with the same options                                                                                                                           |
+| GET    | `/conversations/{id}`                 | The turns in order, with `limit` and `offset`. In multi-document conversations each citation's current `filename` and `title` are filled in, so a rename shows in old answers |
+| POST   | `/conversations/{id}/messages`        | Ask a question; returns the saved turn (`201`). **AI**                                                                                                                        |
+| POST   | `/conversations/{id}/messages/stream` | The same, as server-sent events. **AI**                                                                                                                                       |
 
 **Messages.** The body is the search request plus an optional `replace_turn`. A turn stores the question, the full response with citation snapshots, the model and token usage. Follow-ups use the latest three turns as context (each clipped), and retrieval uses the question together with the previous turn. History is context only, never evidence.
 
