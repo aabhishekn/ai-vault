@@ -31,7 +31,7 @@ The backend returns 404 for both a missing summary and a missing document. On th
 
 ## Small talk
 
-A message that is only a greeting, thanks, goodbye or "what can you do?" (short, whole-message matches such as `hi`, `thanks a lot`, `bye`) is answered in the browser by `smallTalk.js`: a friendly line, marked as an instant reply, shown after the thread. No conversation is created, no request is sent and nothing is saved, so it costs no API credit. Everything else goes to the documents as before, and the **Not enough evidence** card for a real question adds a hint to name a topic the documents cover.
+A message that is only a greeting, thanks, goodbye, acknowledgement (`ok`, `got it`, `testing`) or "what can you do?" (short, whole-message matches such as `hi`, `thanks a lot`, `bye`) is answered in the browser by `smallTalk.js`: a friendly line, marked as an instant reply, shown after the thread. A typo still counts (`helo`, `how are yout`, `thank yuo`): longer phrases forgive one or two slips (an inserted, missing, changed or swapped letter), while short ones such as `hi`, `ok` and `ty` must be exact, and a message with a digit is never small talk. No conversation is created, no request is sent and nothing is saved, so it costs no API credit. Everything else goes to the documents as before, and the **Not enough evidence** card for a real question adds a hint to name a topic the documents cover.
 
 ## Waiting states
 
