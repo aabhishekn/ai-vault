@@ -2,31 +2,39 @@
 
 Everything about running, configuring and checking AI Vault. Commands run from `backend/` with the virtual environment active unless noted. Setup steps are in the [README](../README.md).
 
+**Contents:** [Services](#services) · [Configuration](#configuration) · [The worker](#the-worker) · [Processing and recovery](#processing-and-recovery) · [Migrations](#migrations) · [Rate limits](#rate-limits) · [Logging](#logging) · [Monitoring](#monitoring) · [Tests and CI](#tests-and-ci)
+
+<hr>
+
 ## Services
 
 `docker compose up -d --wait` (from the repository root) starts PostgreSQL with pgvector (`127.0.0.1:5433`) and Redis (`127.0.0.1:6379`). Redis keeps an append-only file and never evicts keys, so queued jobs are not dropped silently; after a crash it can lose about the last second of writes.
 
 `docker compose stop` stops them. `docker compose down -v` also **deletes** the database and Redis volumes.
 
+<hr>
+
 ## Configuration
 
 Settings come from the repository-root `.env` (copy `.env.example`). Real environment variables override it. Restart the API and worker after changing anything.
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `POSTGRES_PASSWORD` | required | Also `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_HOST`, `POSTGRES_PORT` (defaults `ai_vault`, `ai_vault`, `127.0.0.1`, `5433`) |
-| `REDIS_URL` | `redis://127.0.0.1:6379/0` | Queue, caches, rate limits, live events |
-| `OPENAI_API_KEY` | empty | Needed for embeddings, chat and everything generated |
-| `ENABLE_EMBEDDINGS` | on when a key is set | `true` or `false` forces it. Off means documents stop at `extracted` |
-| `AUTO_GENERATE_CONTENT` | follows `ENABLE_EMBEDDINGS` | Generate summary, insights, category and title after embedding |
-| `ANSWER_MODEL` | `gpt-4.1-mini` | Summaries, insights, classification, comparison, suggestions; also the retry model for chat |
-| `CHAT_MODEL` | `gpt-4.1` | Chat answers. Use `gpt-4.1-mini` for about a fifth of the cost |
-| `OCR_MODEL`, `OCR_MAX_PAGES` | `ANSWER_MODEL`, `10` | Vision model and page limit for scanned PDFs |
-| `AI_RATE_LIMIT_PER_MINUTE`, `AI_DAILY_QUOTA` | `20`, `500` | Per client IP; `0` disables a rule |
-| `UPLOAD_RATE_LIMIT_PER_MINUTE` | `10` | Per client IP; `0` disables |
-| `RATE_LIMIT_ENABLED` | `true` | `false` turns all limits off |
-| `EMBEDDING_CACHE_TTL_SECONDS` | `86400` | Query-embedding cache lifetime; `0` turns it off |
-| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL` |
+| Setting                                      | Default                     | Meaning                                                                                                                      |
+| -------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD`                          | required                    | Also `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_HOST`, `POSTGRES_PORT` (defaults `ai_vault`, `ai_vault`, `127.0.0.1`, `5433`) |
+| `REDIS_URL`                                  | `redis://127.0.0.1:6379/0`  | Queue, caches, rate limits, live events                                                                                      |
+| `OPENAI_API_KEY`                             | empty                       | Needed for embeddings, chat and everything generated                                                                         |
+| `ENABLE_EMBEDDINGS`                          | on when a key is set        | `true` or `false` forces it. Off means documents stop at `extracted`                                                         |
+| `AUTO_GENERATE_CONTENT`                      | follows `ENABLE_EMBEDDINGS` | Generate summary, insights, category and title after embedding                                                               |
+| `ANSWER_MODEL`                               | `gpt-4.1-mini`              | Summaries, insights, classification, comparison, suggestions; also the retry model for chat                                  |
+| `CHAT_MODEL`                                 | `gpt-4.1`                   | Chat answers. Use `gpt-4.1-mini` for about a fifth of the cost                                                               |
+| `OCR_MODEL`, `OCR_MAX_PAGES`                 | `ANSWER_MODEL`, `10`        | Vision model and page limit for scanned PDFs                                                                                 |
+| `AI_RATE_LIMIT_PER_MINUTE`, `AI_DAILY_QUOTA` | `20`, `500`                 | Per client IP; `0` disables a rule                                                                                           |
+| `UPLOAD_RATE_LIMIT_PER_MINUTE`               | `10`                        | Per client IP; `0` disables                                                                                                  |
+| `RATE_LIMIT_ENABLED`                         | `true`                      | `false` turns all limits off                                                                                                 |
+| `EMBEDDING_CACHE_TTL_SECONDS`                | `86400`                     | Query-embedding cache lifetime; `0` turns it off                                                                             |
+| `LOG_LEVEL`                                  | `INFO`                      | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`                                                                            |
+
+<hr>
 
 ## The worker
 
@@ -35,10 +43,12 @@ A separate process does the processing: `python -m app.worker` (leave it running
 `GET /health/queue` shows whether Redis is reachable and how many workers are listening:
 
 ```json
-{"status": "ok", "redis": "connected", "workers": 1, "queued_jobs": 0}
+{ "status": "ok", "redis": "connected", "workers": 1, "queued_jobs": 0 }
 ```
 
 `status` is `no_workers` (HTTP 200) when nothing would pick jobs up, and the web app shows a notice. Redis down returns 503. A worker killed without shutting down stays counted for a few minutes.
+
+<hr>
 
 ## Processing and recovery
 
@@ -57,6 +67,8 @@ A PDF with no text layer, or a PNG/JPG, is drawn to JPEG pages (longest side 200
 
 A scanned PDF over `OCR_MAX_PAGES` pages fails with a message saying so; nothing is read partially. Each page is one paid request, logged as an `ocr` call. A page with no legible text becomes an empty page, and a document with no text at all fails.
 
+<hr>
+
 ## Migrations
 
 ```bash
@@ -67,16 +79,20 @@ python -m alembic check          # fail if the models and migrations drift
 
 `app/db/models.py` is the desired schema and `migrations/versions/` is its history. After changing models: `python -m alembic revision --autogenerate -m "What changed"`, review the file, then upgrade. Do not edit applied migrations. Downgrades drop data; do not run them on data you want.
 
+<hr>
+
 ## Rate limits
 
 Endpoints that spend provider money are limited per client IP with fixed-window counters in Redis. Rejected requests still count, and an exceeded limit returns HTTP 429 with a `Retry-After` header.
 
-| Scope | Endpoints | Default |
-| --- | --- | --- |
-| `ai` | ask, messages (and stream), suggested questions, summary, custom summary, insights, classification, comparisons | 20 per minute, 500 per day |
-| `upload` | `POST /documents`, new versions, reprocess | 10 per minute |
+| Scope    | Endpoints                                                                                                       | Default                    |
+| -------- | --------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `ai`     | ask, messages (and stream), suggested questions, summary, custom summary, insights, classification, comparisons | 20 per minute, 500 per day |
+| `upload` | `POST /documents`, new versions, reprocess                                                                      | 10 per minute              |
 
 Reads, health checks, statistics and metrics are not limited. The limiter fails open (and logs `rate_limiter_unavailable`) if Redis is down. Clients are identified by the direct peer address, so behind a reverse proxy everyone would share the proxy's address; trusting `X-Forwarded-For` needs a known proxy and is not enabled.
+
+<hr>
 
 ## Logging
 
@@ -89,15 +105,19 @@ Every process writes JSON lines to stderr. Events:
 
 Logs hold identifiers, sizes, durations, token counts and outcomes, not document text, questions or answers. Failure tracebacks can include provider error text, so keep logs private. Run uvicorn with `--no-access-log` to avoid duplicate request lines.
 
+<hr>
+
 ## Monitoring
 
-| Endpoint | Tells you |
-| --- | --- |
-| `GET /health`, `/health/db`, `/health/queue` | The API is up, the database answers, a worker is running |
-| `GET /stats/documents` | Documents by status, storage, pages, chunks, vectors |
-| `GET /metrics/processing` | Processing attempts: success rate and durations |
-| `GET /metrics/ai-usage` | Tokens and estimated cost per model (prices in `app/core/pricing.py`) |
-| `GET /metrics/api` | Per-route request counts and latency since the API started |
+| Method | Route                                    | Tells you                                                             |
+| ------ | ---------------------------------------- | --------------------------------------------------------------------- |
+| GET    | `/health`, `/health/db`, `/health/queue` | The API is up, the database answers, a worker is running              |
+| GET    | `/stats/documents`                       | Documents by status, storage, pages, chunks, vectors                  |
+| GET    | `/metrics/processing`                    | Processing attempts: success rate and durations                       |
+| GET    | `/metrics/ai-usage`                      | Tokens and estimated cost per model (prices in `app/core/pricing.py`) |
+| GET    | `/metrics/api`                           | Per-route request counts and latency since the API started            |
+
+<hr>
 
 ## Tests and CI
 
