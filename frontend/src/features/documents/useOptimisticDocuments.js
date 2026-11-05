@@ -12,10 +12,6 @@ import {
 
 const REQUEST_TIMEOUT_MS = 30_000
 
-function isFiltered(filter) {
-  return Boolean(filter.category || filter.tag)
-}
-
 /**
  * Makes upload, delete and "process again" feel instant. Each one shows its result
  * straight away, sends the request, then either writes the confirmed result into the list
@@ -33,7 +29,7 @@ export function useOptimisticDocuments(documents, openId) {
     latest.current = documents
   })
 
-  const filtered = isFiltered(documents.filter)
+  const filtered = Boolean(documents.search)
   const view = useMemo(
     () =>
       documents.state.status === 'success'
@@ -82,13 +78,9 @@ export function useOptimisticDocuments(documents, openId) {
     onFailed: () => setUploading(null),
     onUploaded(document) {
       setUploading(null)
-      const { state, filter, changePage, refreshQuietly, goToPage } =
+      const { state, search, changePage, refreshQuietly, goToPage } =
         latest.current
-      if (
-        state.status === 'success' &&
-        state.page.offset === 0 &&
-        !isFiltered(filter)
-      ) {
+      if (state.status === 'success' && state.page.offset === 0 && !search) {
         changePage((page) => withAddedDocument(page, document))
         refreshQuietly()
       } else {

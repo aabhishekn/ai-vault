@@ -23,13 +23,7 @@ class DocumentResponse(BaseModel):
     version_number: int = 1
     is_latest: bool = True
     category: str | None = None
-    tags: list[str] = []
     created_at: datetime
-
-    @field_validator("tags", mode="before")
-    @classmethod
-    def no_tags_means_empty(cls, value: list[str] | None) -> list[str]:
-        return value or []
 
 
 class DocumentUpdate(BaseModel):
@@ -99,23 +93,7 @@ class InsightsResponse(BaseModel):
 class ClassificationResponse(BaseModel):
     document_id: UUID
     category: str
-    tags: list[str]
     title: str | None = None
-
-
-class TagCount(BaseModel):
-    tag: str
-    count: int
-
-
-class CategoryCount(BaseModel):
-    category: str
-    count: int
-
-
-class TagsOverviewResponse(BaseModel):
-    categories: list[CategoryCount]
-    tags: list[TagCount]
 
 
 class DocumentVersion(BaseModel):

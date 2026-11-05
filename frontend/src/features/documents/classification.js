@@ -1,29 +1,8 @@
-import { ApiError, getJson, requestJson } from '../../lib/api'
+import { ApiError, requestJson } from '../../lib/api'
 
 const isRecord = (value) => typeof value === 'object' && value !== null
 
-function parseCounts(value, key) {
-  if (!Array.isArray(value)) throw new ApiError('Unexpected tag list.')
-  return value.map((item) => {
-    if (
-      !isRecord(item) ||
-      typeof item[key] !== 'string' ||
-      typeof item.count !== 'number'
-    )
-      throw new ApiError('Unexpected tag list.')
-    return { [key]: item[key], count: item.count }
-  })
-}
-
-export async function getTagsOverview(signal) {
-  const data = await getJson('/tags', signal)
-  if (!isRecord(data)) throw new ApiError('Unexpected tag list.')
-  return {
-    categories: parseCounts(data.categories, 'category'),
-    tags: parseCounts(data.tags, 'tag'),
-  }
-}
-
+// Asks the server to name the document's category (and, if it has none yet, its title).
 export async function classifyDocument(id, signal) {
   try {
     const data = await requestJson(
@@ -34,12 +13,12 @@ export async function classifyDocument(id, signal) {
     if (
       !isRecord(data) ||
       data.document_id !== id ||
-      typeof data.category !== 'string' ||
-      !Array.isArray(data.tags) ||
-      !data.tags.every((tag) => typeof tag === 'string')
+      typeof data.category !== 'string'
     )
-      throw new ApiError('The document service returned unexpected tags.')
-    return { category: data.category, tags: data.tags }
+      throw new ApiError(
+        'The document service returned an unexpected category.',
+      )
+    return { category: data.category }
   } catch (error) {
     if (error instanceof ApiError) {
       if (error.status === 409)
@@ -50,6 +29,6 @@ export async function classifyDocument(id, signal) {
         throw new ApiError('Too many AI requests right now. Try again shortly.')
       if (error.status === undefined) throw error
     }
-    throw new ApiError('We couldn’t add tags. Please try again.')
+    throw new ApiError('We couldn’t add a category. Please try again.')
   }
 }

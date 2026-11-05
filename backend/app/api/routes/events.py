@@ -14,7 +14,7 @@ async def document_events(websocket: WebSocket) -> None:
 
     Messages are JSON: ``{"type": "document.status", "document_id": ..., "status": ...}``
     and ``{"type": "document.content", "document_id": ...}`` once the summary, insights
-    and tags are generated. The first message, ``{"type": "ready"}``, confirms the
+    and category are generated. The first message, ``{"type": "ready"}``, confirms the
     subscription is active. Clients refetch after (re)connecting, since events sent
     while disconnected are not replayed.
     """

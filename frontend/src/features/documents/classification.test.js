@@ -4,9 +4,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../lib/api'
 import { listDocuments, isDocument } from './api'
-import { classifyDocument, getTagsOverview } from './classification'
-import { DocumentFilters } from './DocumentFilters'
-import { DocumentTags } from './DocumentTags'
+import { classifyDocument } from './classification'
+import { DocumentCategory } from './DocumentCategory'
 
 afterEach(() => {
   cleanup()
@@ -15,16 +14,15 @@ afterEach(() => {
 const signal = () => new AbortController().signal
 
 describe('classification API', () => {
-  it('posts and returns the category and tags', async () => {
+  it('posts and returns the category', async () => {
     const fetch = vi
       .fn()
       .mockResolvedValue(
-        Response.json({ document_id: 'd', category: 'Legal', tags: ['lease'] }),
+        Response.json({ document_id: 'd', category: 'Resume', title: 'T' }),
       )
     vi.stubGlobal('fetch', fetch)
     await expect(classifyDocument('d', signal())).resolves.toEqual({
-      category: 'Legal',
-      tags: ['lease'],
+      category: 'Resume',
     })
     expect(fetch.mock.calls[0]?.[0]).toBe('/api/documents/d/classification')
     expect(fetch.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' })
@@ -33,7 +31,7 @@ describe('classification API', () => {
   it.each([
     [409, /not ready/],
     [429, /Too many AI/],
-    [500, /couldn’t add tags/],
+    [500, /couldn’t add a category/],
   ])('explains status %i', async (status, message) => {
     vi.stubGlobal(
       'fetch',
@@ -44,36 +42,21 @@ describe('classification API', () => {
     expect(error.message).toMatch(message)
   })
 
-  it('rejects a response for another document or with bad tags', async () => {
+  it('rejects a response for another document or without a category', async () => {
     for (const body of [
-      { document_id: 'x', category: 'Legal', tags: [] },
-      { document_id: 'd', category: 'Legal', tags: [1] },
+      { document_id: 'x', category: 'Legal' },
+      { document_id: 'd', category: 5 },
+      { document_id: 'd' },
     ]) {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(body)))
       await expect(classifyDocument('d', signal())).rejects.toThrow(
-        /unexpected tags/,
+        /unexpected category/,
       )
     }
   })
-
-  it('reads the tag overview', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        Response.json({
-          categories: [{ category: 'Legal', count: 2 }],
-          tags: [{ tag: 'lease', count: 1 }],
-        }),
-      ),
-    )
-    await expect(getTagsOverview(signal())).resolves.toEqual({
-      categories: [{ category: 'Legal', count: 2 }],
-      tags: [{ tag: 'lease', count: 1 }],
-    })
-  })
 })
 
-describe('document list filters and tolerance', () => {
+describe('document list search and tolerance', () => {
   const doc = {
     id: 'a',
     filename: 'a.pdf',
@@ -82,95 +65,82 @@ describe('document list filters and tolerance', () => {
     status: 'embedded',
     created_at: '2026-11-04T00:00:00Z',
   }
-
-  it('sends category and tag as query parameters', async () => {
-    const fetch = vi
-      .fn()
-      .mockResolvedValue(
+  // A fresh response per call: a body can only be read once.
+  const empty = () =>
+    vi.fn(() =>
+      Promise.resolve(
         Response.json({ items: [], total: 0, limit: 10, offset: 0 }),
-      )
+      ),
+    )
+
+  it('sends the search words as q, and nothing when there are none', async () => {
+    const fetch = empty()
     vi.stubGlobal('fetch', fetch)
     await listDocuments({
       limit: 10,
       offset: 0,
       signal: signal(),
-      filter: { category: 'Legal', tag: 'lease' },
+      search: 'lease terms',
     })
-    const url = new URL(String(fetch.mock.calls[0]?.[0]), 'http://x')
-    expect(url.searchParams.get('category')).toBe('Legal')
-    expect(url.searchParams.get('tag')).toBe('lease')
+    await listDocuments({ limit: 10, offset: 0, signal: signal(), search: '' })
+    const first = new URL(String(fetch.mock.calls[0]?.[0]), 'http://x')
+    const second = new URL(String(fetch.mock.calls[1]?.[0]), 'http://x')
+    expect(first.searchParams.get('q')).toBe('lease terms')
+    expect(second.searchParams.has('q')).toBe(false)
+    expect(first.searchParams.has('tag')).toBe(false)
   })
 
-  it('accepts documents with or without tags but rejects malformed ones', () => {
+  it('accepts documents with or without a category but rejects malformed ones', () => {
     expect(isDocument(doc)).toBe(true)
-    expect(isDocument({ ...doc, category: 'Legal', tags: ['x'] })).toBe(true)
-    expect(isDocument({ ...doc, tags: 'x' })).toBe(false)
+    expect(isDocument({ ...doc, category: 'Resume' })).toBe(true)
+    expect(isDocument({ ...doc, category: null })).toBe(true)
     expect(isDocument({ ...doc, category: 5 })).toBe(false)
   })
 })
 
-describe('tag components', () => {
-  it('lets a filter change reset to the chosen value', () => {
-    const onChange = vi.fn()
+describe('document category', () => {
+  it('shows the category as a label', () => {
     render(
-      createElement(DocumentFilters, {
-        overview: {
-          categories: [{ category: 'Legal', count: 2 }],
-          tags: [{ tag: 'lease', count: 1 }],
-        },
-        filter: {},
-        onChange,
+      createElement(DocumentCategory, {
+        id: 'd',
+        status: 'embedded',
+        category: 'Interview Guide',
       }),
     )
-    fireEvent.change(screen.getByLabelText('Tag'), {
-      target: { value: 'lease' },
-    })
-    expect(onChange).toHaveBeenCalledWith({ tag: 'lease' })
+    expect(screen.getByText('Interview Guide')).toBeTruthy()
+    expect(screen.getByText(/Category:/)).toBeTruthy()
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('offers to clear the filters only while some are set', () => {
-    const onChange = vi.fn()
-    const overview = {
-      categories: [{ category: 'Legal', count: 2 }],
-      tags: [{ tag: 'lease', count: 1 }],
-    }
-    const { rerender } = render(
-      createElement(DocumentFilters, { overview, filter: {}, onChange }),
-    )
-    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull()
-    rerender(
-      createElement(DocumentFilters, {
-        overview,
-        filter: { category: 'Legal', tag: 'lease' },
-        onChange,
-      }),
-    )
-    expect(screen.getByLabelText('Category').value).toBe('Legal')
-    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
-    expect(onChange).toHaveBeenCalledWith({})
-  })
-
-  it('shows saved tags, or offers to add them once and shows the result', async () => {
-    const fetch = vi.fn().mockResolvedValue(
-      Response.json({
-        document_id: 'd',
-        category: 'Finance',
-        tags: ['budget'],
-      }),
-    )
+  it('offers to add one once and shows the result', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json({ document_id: 'd', category: 'Finance' }),
+      )
     vi.stubGlobal('fetch', fetch)
-    render(createElement(DocumentTags, { id: 'd', status: 'embedded' }))
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Add category and tags' }),
-    )
+    render(createElement(DocumentCategory, { id: 'd', status: 'embedded' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add category' }))
     expect(await screen.findByText('Finance')).toBeTruthy()
-    expect(screen.getByText('budget')).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
+  it('says why adding one failed and allows another try', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('{}', { status: 429 })),
+    )
+    render(createElement(DocumentCategory, { id: 'd', status: 'ready' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add category' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(
+      /Too many AI/,
+    )
+    expect(screen.getByRole('button', { name: 'Add category' })).toBeTruthy()
+  })
+
   it('offers nothing while the document is still processing', () => {
-    render(createElement(DocumentTags, { id: 'd', status: 'queued' }))
+    render(createElement(DocumentCategory, { id: 'd', status: 'queued' }))
     expect(screen.queryByRole('button')).toBeNull()
   })
 })

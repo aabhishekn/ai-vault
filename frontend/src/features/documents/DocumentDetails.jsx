@@ -8,7 +8,7 @@ import {
 } from '../../lib/format'
 import { DocumentStatusBadge } from './DocumentStatusBadge'
 import { DocumentTitle } from './DocumentTitle'
-import { DocumentTags } from './DocumentTags'
+import { DocumentCategory } from './DocumentCategory'
 import { DocumentActions } from './DocumentActions'
 import { DocumentVersions } from './DocumentVersions'
 import { DocumentSummary } from './DocumentSummary'
@@ -181,12 +181,11 @@ export function DocumentDetails({
                 />
               </TabPanel>
               <TabPanel idBase="document" tab="details" active={tab}>
-                <DocumentTags
+                <DocumentCategory
                   key={`${id}:${contentRevision}`}
                   id={id}
                   status={status}
                   category={state.data.category}
-                  tags={state.data.tags}
                 />
                 <dl className="mt-5 mb-6 grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-panel-border bg-panel-footer p-4 max-[600px]:grid-cols-1 [&_dd]:text-[13px] [&_dd]:leading-[1.6] [&_dd]:wrap-anywhere [&_dt]:mb-1 [&_dt]:text-[11px] [&_dt]:font-semibold [&_dt]:tracking-[0.06em] [&_dt]:text-muted [&_dt]:uppercase">
                   <div className="col-span-full">

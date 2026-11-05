@@ -41,7 +41,7 @@ function serve(items, queue = RUNNING) {
       return Promise.resolve(
         path.includes('/documents')
           ? Response.json({ items, total: items.length, limit: 10, offset: 0 })
-          : Response.json({ categories: [], tags: [] }),
+          : Response.json({}),
       )
     }),
   )
@@ -103,6 +103,91 @@ describe('selecting documents', () => {
       await screen.findByText(/2 documents are still being processed/),
     ).toBeTruthy()
     expect(screen.queryByRole('textbox')).toBeNull()
+  })
+})
+
+describe('searching the list', () => {
+  beforeEach(() => {
+    vi.stubGlobal('WebSocket', IdleSocket)
+  })
+
+  // A server that filters by file name, the way the real one filters by title and name.
+  function serveSearchable(all) {
+    const fetch = vi.fn((url) => {
+      const path = String(url)
+      if (path.includes('/health/queue'))
+        return Promise.resolve(Response.json(RUNNING))
+      if (!path.includes('/documents'))
+        return Promise.resolve(Response.json({}))
+      const q = new URL(path, 'http://x').searchParams.get('q')
+      const items = q ? all.filter((item) => item.filename.includes(q)) : all
+      return Promise.resolve(
+        Response.json({ items, total: items.length, limit: 10, offset: 0 }),
+      )
+    })
+    vi.stubGlobal('fetch', fetch)
+    return fetch
+  }
+
+  const searches = (fetch) =>
+    fetch.mock.calls
+      .map(([url]) => new URL(String(url), 'http://x').searchParams.get('q'))
+      .filter(Boolean)
+  const box = () => screen.getByRole('searchbox', { name: 'Search documents' })
+  const type = (text) => fireEvent.change(box(), { target: { value: text } })
+  const SLOW = { timeout: 2000 }
+
+  it('shows only the matches once typing pauses, and one request for the final words', async () => {
+    const fetch = serveSearchable([
+      documentNamed('a'),
+      documentNamed('b'),
+      documentNamed('c'),
+    ])
+    render(createElement(DocumentWorkspace))
+    await screen.findByRole('button', { name: 'a' })
+    type('b')
+    type('b.')
+    expect(searches(fetch)).toEqual([])
+    await waitFor(() => expect(searches(fetch)).toEqual(['b.']), SLOW)
+    type('b')
+    await waitFor(
+      () => expect(screen.queryByRole('button', { name: 'a' })).toBeNull(),
+      SLOW,
+    )
+    expect(screen.getByRole('button', { name: 'b' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'c' })).toBeNull()
+    expect(screen.getByLabelText('1 documents')).toBeTruthy()
+  })
+
+  it('says nothing matches, and Clear search brings every document back', async () => {
+    serveSearchable([documentNamed('a'), documentNamed('b')])
+    render(createElement(DocumentWorkspace))
+    await screen.findByRole('button', { name: 'a' })
+    type('zzz')
+    expect(
+      await screen.findByText('No documents match “zzz”.', {}, SLOW),
+    ).toBeTruthy()
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Clear search' }).at(-1),
+    )
+    expect(box().value).toBe('')
+    expect(await screen.findByRole('button', { name: 'b' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'a' })).toBeTruthy()
+  })
+
+  it('clears the box with Escape and the clear button, and searches again straight away on Enter', async () => {
+    const fetch = serveSearchable([documentNamed('a'), documentNamed('b')])
+    render(createElement(DocumentWorkspace))
+    await screen.findByRole('button', { name: 'a' })
+    expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull()
+    type('b')
+    fireEvent.submit(box().closest('form'))
+    expect(searches(fetch)).toEqual(['b'])
+    fireEvent.keyDown(box(), { key: 'Escape' })
+    expect(box().value).toBe('')
+    type('a')
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(box().value).toBe('')
   })
 })
 
@@ -204,7 +289,7 @@ describe('optimistic changes', () => {
             offset: 0,
           }),
         )
-      return Promise.resolve(Response.json({ categories: [], tags: [] }))
+      return Promise.resolve(Response.json({}))
     })
     vi.stubGlobal('fetch', fetch)
     return fetch

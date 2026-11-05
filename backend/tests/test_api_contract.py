@@ -51,7 +51,6 @@ class APIContractTests(unittest.TestCase):
             ("POST", "/documents/{document_id}/versions"),
             ("GET", "/documents/{document_id}/versions"),
             ("POST", "/documents/{document_id}/classification"),
-            ("GET", "/tags"),
             ("POST", "/documents/{document_id}/suggested-questions"),
             ("POST", "/documents/{document_id}/conversations"),
             ("POST", "/multi-conversations"),

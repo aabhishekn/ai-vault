@@ -67,4 +67,63 @@ describe('useReadyDocuments', () => {
     await waitFor(() => expect(fetch).toHaveBeenCalled())
     expect(result.current.ready.map((entry) => entry.id)).toEqual(['a', 'b'])
   })
+
+  describe('while the list is being searched', () => {
+    const library = [item('a'), item('b'), item('c', 'queued')]
+    const serveLibrary = () => {
+      const fetch = vi.fn(() =>
+        Promise.resolve(
+          Response.json({ items: library, total: 3, limit: 100, offset: 0 }),
+        ),
+      )
+      vi.stubGlobal('fetch', fetch)
+      return fetch
+    }
+    const ids = (result) => result.current.ready.map((entry) => entry.id)
+
+    it('keeps the whole library, not just the matches', async () => {
+      const fetch = serveLibrary()
+      const everything = success(library)
+      const matches = success([item('a')], 1)
+      const { result, rerender } = renderHook(
+        ({ state, searching }) => useReadyDocuments(state, searching),
+        { initialProps: { state: everything, searching: false } },
+      )
+      expect(fetch).not.toHaveBeenCalled()
+      rerender({ state: matches, searching: true })
+      // Straight away: what the chat could ask about before the search began.
+      expect(ids(result)).toEqual(['a', 'b'])
+      expect(result.current.total).toBe(3)
+      await waitFor(() => expect(fetch).toHaveBeenCalled())
+      expect(String(fetch.mock.calls[0][0])).toContain('limit=100')
+      expect(String(fetch.mock.calls[0][0])).not.toContain('q=')
+      expect(ids(result)).toEqual(['a', 'b'])
+      expect(result.current).toMatchObject({ total: 3, waiting: 1 })
+    })
+
+    it('does not say the vault is empty when a search finds nothing', async () => {
+      serveLibrary()
+      const { result, rerender } = renderHook(
+        ({ state, searching }) => useReadyDocuments(state, searching),
+        { initialProps: { state: success(library), searching: false } },
+      )
+      rerender({ state: success([], 0), searching: true })
+      expect(result.current).toMatchObject({ total: 3, anyReady: true })
+      await waitFor(() => expect(ids(result)).toEqual(['a', 'b']))
+      expect(result.current.total).toBe(3)
+    })
+
+    it('follows the visible list again once the search is cleared', async () => {
+      serveLibrary()
+      const { result, rerender } = renderHook(
+        ({ state, searching }) => useReadyDocuments(state, searching),
+        { initialProps: { state: success(library), searching: false } },
+      )
+      rerender({ state: success([item('a')], 1), searching: true })
+      await waitFor(() => expect(ids(result)).toEqual(['a', 'b']))
+      rerender({ state: success([item('a'), item('d')], 2), searching: false })
+      expect(ids(result)).toEqual(['a', 'd'])
+      expect(result.current.total).toBe(2)
+    })
+  })
 })

@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter
 
 from app.api.rate_limit import limit
-from app.schemas.documents import ClassificationResponse, TagsOverviewResponse
+from app.schemas.documents import ClassificationResponse
 from app.services import classification as service
 
 router = APIRouter(tags=["classification"])
@@ -21,8 +21,3 @@ def get_classification(document_id: UUID) -> ClassificationResponse:
 )
 def create_classification(document_id: UUID) -> ClassificationResponse:
     return service.create_classification(document_id)
-
-
-@router.get("/tags", response_model=TagsOverviewResponse)
-def tags_overview() -> TagsOverviewResponse:
-    return service.tags_overview()

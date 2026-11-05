@@ -41,11 +41,10 @@ def delete_document(document_id: UUID, all_versions: bool = False) -> None:
 def list_documents(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    category: str | None = Query(default=None, max_length=40),
-    tag: str | None = Query(default=None, max_length=40),
+    q: str | None = Query(default=None, max_length=100),
     include_old_versions: bool = False,
 ) -> DocumentListResponse:
-    return service.list_documents(limit, offset, category, tag, include_old_versions)
+    return service.list_documents(limit, offset, q, include_old_versions)
 
 
 @router.post(

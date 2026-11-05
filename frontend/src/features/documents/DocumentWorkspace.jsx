@@ -56,7 +56,7 @@ export function DocumentWorkspace() {
   const optimistic = useOptimisticDocuments(documents, selected)
   // What the chat asks about: the ticked documents, else everything that is ready.
   // Read from what is on screen, so a rename or delete shows in the chat's scope at once.
-  const library = useReadyDocuments(optimistic.view)
+  const library = useReadyDocuments(optimistic.view, Boolean(documents.search))
   const scope = chatScope(chosen, library.ready)
   const shown = view ?? (library.loaded && !library.anyReady ? 'docs' : 'chat')
 

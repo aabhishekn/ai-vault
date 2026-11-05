@@ -5,7 +5,7 @@ import { listDocuments } from './api'
 const PAGE_SIZE = 10
 
 export function useDocuments() {
-  const [query, setQuery] = useState({ offset: 0, revision: 0, filter: {} })
+  const [query, setQuery] = useState({ offset: 0, revision: 0, search: '' })
   const [state, setState] = useState({ status: 'loading' })
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export function useDocuments() {
         const page = await listDocuments({
           limit: PAGE_SIZE,
           offset: query.offset,
-          filter: query.filter,
+          search: query.search,
           signal,
         })
         if (controller.signal.aborted) return
@@ -73,10 +73,10 @@ export function useDocuments() {
     setQuery((previous) => ({ ...previous, offset }))
   }
 
-  // Changing the filter always returns to the first page.
-  function setFilter(filter) {
-    setState({ status: 'loading' })
-    setQuery((previous) => ({ ...previous, offset: 0, filter }))
+  // A new search always returns to the first page. The list on screen stays until the
+  // results arrive, so typing never flashes a loading state.
+  function setSearch(search) {
+    setQuery((previous) => ({ ...previous, offset: 0, search }))
   }
 
   return {
@@ -85,7 +85,7 @@ export function useDocuments() {
     refreshQuietly,
     changePage,
     goToPage,
-    filter: query.filter,
-    setFilter,
+    search: query.search,
+    setSearch,
   }
 }

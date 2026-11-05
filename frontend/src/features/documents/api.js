@@ -33,9 +33,6 @@ export function isDocument(value) {
     (value.category === undefined ||
       value.category === null ||
       typeof value.category === 'string') &&
-    (value.tags === undefined ||
-      (Array.isArray(value.tags) &&
-        value.tags.every((tag) => typeof tag === 'string'))) &&
     typeof value.created_at === 'string' &&
     Number.isFinite(Date.parse(value.created_at))
   )
@@ -66,13 +63,13 @@ export function parseDocumentPage(data) {
   }
 }
 
-export async function listDocuments({ limit, offset, signal, filter = {} }) {
+// `search` narrows the list to documents matching every word (title, file name or category).
+export async function listDocuments({ limit, offset, signal, search = '' }) {
   const query = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
   })
-  if (filter.category) query.set('category', filter.category)
-  if (filter.tag) query.set('tag', filter.tag)
+  if (search) query.set('q', search)
   const page = parseDocumentPage(await getJson(`/documents?${query}`, signal))
   if (page.limit !== limit || page.offset !== offset) {
     throw new ApiError(

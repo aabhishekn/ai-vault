@@ -1,26 +1,40 @@
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
-import { useState } from 'react'
-import { DocumentFilters } from './DocumentFilters'
-import { hasFilterChoices } from './filters'
 import { DocumentRow } from './DocumentRow'
-import { useTagsOverview } from './useTagsOverview'
+
+// How long typing has to pause before the list is searched.
+const SEARCH_DELAY_MS = 300
+const MAX_SEARCH_LENGTH = 100
 
 export function DocumentList({
   state,
   refresh,
   goToPage,
-  filter,
-  setFilter,
+  search,
+  setSearch,
   onSelect,
   chosen,
   onChoose,
 }) {
   const loading = state.status === 'loading'
   const page = state.status === 'success' ? state.page : null
-  const overview = useTagsOverview(page)
-  const [showFilters, setShowFilters] = useState(false)
-  const activeFilters =
-    Number(Boolean(filter.category)) + Number(Boolean(filter.tag))
+  // What is typed in the box; the list follows it once typing pauses.
+  const [text, setText] = useState(search)
+  const onSearch = useRef(setSearch)
+  useEffect(() => {
+    onSearch.current = setSearch
+  })
+  useEffect(() => {
+    const words = text.trim()
+    if (words === search) return
+    const timer = setTimeout(() => onSearch.current(words), SEARCH_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [text, search])
+
+  function clearSearch() {
+    setText('')
+    setSearch('')
+  }
 
   return (
     <section
@@ -41,14 +55,6 @@ export function DocumentList({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {hasFilterChoices(overview, filter) && (
-            <Button
-              onClick={() => setShowFilters((previous) => !previous)}
-              aria-expanded={showFilters}
-            >
-              Filter{activeFilters > 0 ? ` · ${activeFilters}` : ''}
-            </Button>
-          )}
           <Button
             onClick={refresh}
             disabled={loading}
@@ -72,13 +78,64 @@ export function DocumentList({
         </div>
       </div>
 
-      {showFilters && hasFilterChoices(overview, filter) && (
-        <DocumentFilters
-          overview={overview}
-          filter={filter}
-          onChange={setFilter}
-        />
-      )}
+      <form
+        role="search"
+        className="shrink-0 border-b border-rule px-4 py-3"
+        onSubmit={(event) => {
+          event.preventDefault()
+          setSearch(text.trim())
+        }}
+      >
+        <div className="relative">
+          <svg
+            viewBox="0 0 20 20"
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            aria-hidden="true"
+          >
+            <circle cx="9" cy="9" r="5.5" />
+            <path d="M13.2 13.2L17 17" strokeLinecap="round" />
+          </svg>
+          <input
+            type="search"
+            aria-label="Search documents"
+            placeholder="Search by title, file name or category"
+            maxLength={MAX_SEARCH_LENGTH}
+            autoComplete="off"
+            value={text}
+            className="w-full appearance-none rounded-lg border border-panel-border bg-surface py-2 pr-9 pl-9 text-[13px] placeholder:text-muted focus-visible:border-focus [&::-webkit-search-cancel-button]:hidden"
+            onChange={(event) => setText(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && text) {
+                event.preventDefault()
+                clearSearch()
+              }
+            }}
+          />
+          {text && (
+            <button
+              type="button"
+              className="absolute top-1/2 right-1.5 grid size-7 -translate-y-1/2 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted hover:bg-[#efede4] hover:text-ink"
+              aria-label="Clear search"
+              title="Clear search"
+              onClick={clearSearch}
+            >
+              <svg
+                viewBox="0 0 20 20"
+                className="size-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                aria-hidden="true"
+              >
+                <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </form>
 
       {loading && (
         <div
@@ -125,12 +182,28 @@ export function DocumentList({
             className="inline-grid size-10 place-items-center rounded-full bg-[#f0eee6] text-[26px] font-normal text-[#7f7d75]"
             aria-hidden="true"
           >
-            +
+            {search ? (
+              <svg
+                viewBox="0 0 20 20"
+                className="size-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              >
+                <circle cx="9" cy="9" r="5.5" />
+                <path d="M13.2 13.2L17 17" strokeLinecap="round" />
+              </svg>
+            ) : (
+              '+'
+            )}
           </span>
-          {filter.category || filter.tag ? (
+          {search ? (
             <>
-              <h3>Nothing matches this filter.</h3>
-              <p>Try a different category or tag.</p>
+              <h3>No documents match “{search}”.</h3>
+              <p>Check the spelling, or try fewer words.</p>
+              <Button className="mt-5" onClick={clearSearch}>
+                Clear search
+              </Button>
             </>
           ) : (
             <>

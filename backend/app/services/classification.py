@@ -1,9 +1,9 @@
-"""Category and tags for a document, generated once and saved on it."""
+"""A category and title for a document, generated once and saved on it."""
 
 from uuid import UUID
 
 from openai import APIError
-from sqlalchemy import func, select, text, update
+from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -19,12 +19,7 @@ from app.core.errors import (
 from app.db.database import engine
 from app.db.models import Document
 from app.db.queries import get_document_or_raise
-from app.schemas.documents import (
-    CategoryCount,
-    ClassificationResponse,
-    TagCount,
-    TagsOverviewResponse,
-)
+from app.schemas.documents import ClassificationResponse
 
 EXCERPT_CHARACTERS = 4000
 
@@ -38,7 +33,6 @@ def get_classification(document_id: UUID) -> ClassificationResponse:
             return ClassificationResponse(
                 document_id=document_id,
                 category=document.category,
-                tags=document.tags or [],
                 title=document.title,
             )
     except SQLAlchemyError:
@@ -49,7 +43,7 @@ def create_classification(document_id: UUID) -> ClassificationResponse:
     """Classify once; later calls return the saved result without a provider request.
 
     The same request also writes a title. A document classified before titles existed is
-    asked once more for its title alone; its category and tags are left as they were. A title
+    asked once more for its title alone; its category is left as it was. A title
     a person set is never replaced.
     """
     try:
@@ -61,7 +55,6 @@ def create_classification(document_id: UUID) -> ClassificationResponse:
                 return ClassificationResponse(
                     document_id=document_id,
                     category=document.category,
-                    tags=document.tags or [],
                     title=document.title,
                 )
             title_only = document.category is not None
@@ -83,11 +76,11 @@ def create_classification(document_id: UUID) -> ClassificationResponse:
             raise InvalidAIResponseError("Classification returned an invalid response") from None
         with Session(engine) as session:
             if not title_only:
-                # If a concurrent request saved first, its category and tags stand.
+                # If a concurrent request saved first, its category stands.
                 session.execute(
                     update(Document)
                     .where(Document.id == document_id, Document.category.is_(None))
-                    .values(category=result.category, tags=result.tags)
+                    .values(category=result.category)
                 )
             if result.title:
                 session.execute(
@@ -96,40 +89,13 @@ def create_classification(document_id: UUID) -> ClassificationResponse:
                     .values(title=result.title, title_source="ai")
                 )
             saved = session.execute(
-                select(Document.category, Document.tags, Document.title).where(
-                    Document.id == document_id
-                )
+                select(Document.category, Document.title).where(Document.id == document_id)
             ).first()
             session.commit()
             if saved is None:  # deleted while the provider was answering
                 raise NotFoundError("Document not found")
             return ClassificationResponse(
-                document_id=document_id, category=saved[0], tags=saved[1] or [], title=saved[2]
-            )
-    except SQLAlchemyError:
-        raise DependencyUnavailableError("Classification database unavailable") from None
-
-
-def tags_overview() -> TagsOverviewResponse:
-    """How many documents carry each category and tag, for building filters."""
-    try:
-        with Session(engine) as session:
-            categories = session.execute(
-                select(Document.category, func.count())
-                .where(Document.category.is_not(None))
-                .group_by(Document.category)
-                .order_by(func.count().desc(), Document.category)
-            ).all()
-            tags = session.execute(
-                text(
-                    "SELECT tag, count(*) AS n FROM documents, "
-                    "jsonb_array_elements_text(tags) AS tag "
-                    "GROUP BY tag ORDER BY n DESC, tag LIMIT 100"
-                )
-            ).all()
-            return TagsOverviewResponse(
-                categories=[CategoryCount(category=c, count=n) for c, n in categories],
-                tags=[TagCount(tag=t, count=n) for t, n in tags],
+                document_id=document_id, category=saved[0], title=saved[1]
             )
     except SQLAlchemyError:
         raise DependencyUnavailableError("Classification database unavailable") from None

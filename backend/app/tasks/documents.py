@@ -198,7 +198,7 @@ def _record_failure(context: ProcessingContext, error: Exception) -> None:
 
 
 def _generate_content(document_id: UUID) -> dict[str, str]:
-    """Best effort: a summary, insights and tags are conveniences, never a reason to fail a document.
+    """Best effort: a summary, insights and a category are conveniences, never a reason to fail a document.
 
     The document is already searchable when this runs, and anything that fails here can still be
     generated on demand from the API. Results that already exist are reused, not regenerated.

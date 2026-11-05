@@ -58,6 +58,14 @@ curl 'http://localhost:8000/documents?limit=10&offset=0'
 
 This is offset pagination: the next page uses `offset + limit`. Concurrent uploads can shift page boundaries; cursor pagination can be introduced if needed at scale.
 
+### Search
+
+`GET /documents?q=resume` keeps only documents whose **title, file name or category** contain every word of `q` (case-insensitive, any order, partial words match). `q` is at most 100 characters and at most 8 words count; a blank `q` lists everything. `%` and `_` are matched literally, not as wildcards. `total` reflects the search, so pagination works as usual, and it combines with `include_old_versions`. It is a plain database query: no AI request and no cost.
+
+```bash
+curl 'http://localhost:8000/documents?q=lease%20agreement'
+```
+
 ## Local Redis
 
 Start Redis from the repository root:
@@ -476,23 +484,21 @@ The server requires at least one citation, each within the retrieved sources; th
 
 The response has `summary`, the `options` used and `cached`. A custom summary is **not saved on the document**: the document keeps one default summary (`/summary`). Variants are cached in Redis for 7 days under a hash of the model and options, so repeating a style returns `cached: true` without a provider call. The `focus` text is sent as data next to the document, never inside the instructions, and the prompt tells the model to treat it as a preference only and to say so briefly when the document has little on the topic. Uses the `ai` rate limit; returns 409 until text is extracted.
 
-## Category and tags
+## Category
 
-Each document can carry one `category` and 3–6 `tags`, generated once by the model and saved on the document.
+Each document can carry one `category`: a short label of one to three words (for example `Resume`, `Lease Agreement` or `Technical Design`), chosen freely by the model and saved on the document. There is no fixed list. The server tidies the label (whitespace, stray punctuation) and rejects one longer than 40 characters. There are no tags.
 
-- `POST /documents/{document_id}/classification` generates and saves them (or returns the saved result, with no provider call). `GET` on the same path reads them and returns 404 until they exist. The workers also do this automatically after the summary and insights, as a best-effort step that can never fail the document.
-- Categories are a fixed list: `Legal`, `Finance`, `Technical`, `Policy`, `Research`, `Business`, `Education`, `Other`. The model's choice is validated against it. Tags are lowercase, trimmed, de-duplicated and at most 30 characters.
+- `POST /documents/{document_id}/classification` generates and saves the category and title (or returns the saved result, with no provider call). `GET` on the same path reads them and returns 404 until a category exists. The workers also do this automatically after the summary and insights, as a best-effort step that can never fail the document.
 - The source is the saved summary and insights (a small request). Documents with neither fall back to the first 4,000 characters of text.
-- `GET /documents` accepts `category=Legal` and `tag=lease` (both optional, combinable); `total` reflects the filter. Documents include `category` (nullable), `tags` (empty when unclassified) and `title` (see below).
-- `GET /tags` returns `categories` and `tags` with document counts (most used first, 100 tags at most) for building filters.
+- Documents include `category` (nullable until classified) and `title` (see below). The category is searchable through `GET /documents?q=` (see **Search** above).
 
-Both columns are indexed (a GIN index for tags), so filtering stays fast as the library grows. Migration `b7d3e1a94c20` adds them; existing documents stay unclassified until `POST /classification` is called or they are reprocessed.
+Migration `b7d3e1a94c20` added the category and tag columns; migration `f8b3c5d19a27` removed tags and the category index, leaving the free-form `category` column. Existing documents keep the category they already had; ones with none stay unclassified until `POST /classification` is called or they are reprocessed.
 
 ## Document titles
 
 File names such as `System_ Case Study.pdf` read badly, so a document can carry a `title` (up to 120 characters) and a `title_source` (`ai` or `user`). Both are `null` until one is set, and clients then show the file name.
 
-- **AI titles cost nothing extra.** The classification request that picks the category and tags also writes a title of at most 10 words (a missing or unusable title never fails classification). The workers do this automatically with the summary and insights. A document classified before titles existed is asked once, for its title alone, the next time `POST /documents/{id}/classification` is called; its category and tags are left as they were.
+- **AI titles cost nothing extra.** The classification request that picks the category also writes a title of at most 10 words (a missing or unusable title never fails classification). The workers do this automatically with the summary and insights. A document classified before titles existed is asked once, for its title alone, the next time `POST /documents/{id}/classification` is called; its category is left as it was.
 - `PATCH /documents/{document_id}` with `{"title": "Q3 Plan"}` sets a title and marks it `user`; `{"title": null}` (or blank) clears it so the file name shows again. Whitespace is tidied, titles over 120 characters get 422, and an unknown document gets 404. It returns the document and publishes `document.updated`.
 - **A person's title always wins.** The AI never replaces a `user` title, and renaming applies to every version of the document, because the title names the document, not one file. A new version inherits a `user` title; an `ai` title is written afresh from the new version's content.
 - Versions and the classification response include `title`. Citations and comparison results still name the source file.
@@ -501,7 +507,7 @@ Migration `e6f1a4c92d58` adds the two nullable columns (and a check that `title_
 
 ## Document versions
 
-A document can have several versions. Each version is a normal document of its own (its own file, processing, embeddings, summary, insights, tags and chats), linked to the others by a shared `group_id`. The first upload is version 1 and its id names the group.
+A document can have several versions. Each version is a normal document of its own (its own file, processing, embeddings, summary, insights, category and chats), linked to the others by a shared `group_id`. The first upload is version 1 and its id names the group.
 
 - `POST /documents/{document_id}/versions` takes a PDF as multipart `file` (same rules and `upload` rate limit as `POST /documents`) and creates the next version, returning it with HTTP 201 and queueing processing. The id of any version works.
 - `GET /documents/{document_id}/versions` lists every version, newest first: `id`, `version_number`, `filename`, `size_bytes`, `status`, `is_latest` and `created_at`.
@@ -515,7 +521,7 @@ Uploading a new version never changes or removes an older one, so a conversation
 
 `DELETE /documents/{document_id}` returns 204 and permanently removes a document:
 
-- Its chunks and embeddings, saved chat conversations, processing attempts and stored PDF go with it. The summary, insights, category and tags live on the document row and go too.
+- Its chunks and embeddings, saved chat conversations, processing attempts and stored PDF go with it. The summary, insights and category live on the document row and go too.
 - A multi-document conversation that included it is deleted as well (its answers quote the deleted file); the other documents are untouched.
 - By default only that version is deleted. Deleting the newest version makes the one before it current again. Add `?all_versions=true` to delete every version of the document (the id of any version works). The web UI uses this.
 - A document a worker is processing right now returns 409 and nothing is deleted; try again when it finishes. A job abandoned by a dead worker does not count as running.
@@ -556,7 +562,7 @@ Messages are JSON text frames:
 | --- | --- |
 | `{"type": "ready"}` | Sent once the subscription is active. |
 | `{"type": "document.status", "document_id": "...", "status": "processing"}` | A document moved to `queued`, `processing`, `extracted`, `embedded` or `failed`. |
-| `{"type": "document.content", "document_id": "..."}` | The automatic summary, insights and tags finished (or were skipped), so they can be fetched. |
+| `{"type": "document.content", "document_id": "..."}` | The automatic summary, insights, category and title finished (or were skipped), so they can be fetched. |
 | `{"type": "document.deleted", "document_id": "..."}` | A document (one version) was deleted, so lists should be refetched. |
 | `{"type": "document.updated", "document_id": "..."}` | A person changed a document's details (for example renamed it). |
 

@@ -5,7 +5,7 @@ from typing import BinaryIO
 from uuid import UUID, uuid4
 
 from redis.exceptions import RedisError
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -207,22 +207,41 @@ def rename_document(document_id: UUID, title: str | None) -> DocumentResponse:
     return response
 
 
+MAX_SEARCH_WORDS = 8
+
+
+def _matches_search(query: str):
+    """Every word of the search must be in the title, the file name or the category, in any case.
+
+    `%` and `_` in the search are plain characters, not wildcards.
+    """
+    conditions = []
+    for word in query.split()[:MAX_SEARCH_WORDS]:
+        escaped = word.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
+        conditions.append(
+            or_(
+                Document.title.ilike(pattern, escape="\\"),
+                Document.filename.ilike(pattern, escape="\\"),
+                Document.category.ilike(pattern, escape="\\"),
+            )
+        )
+    return and_(*conditions)
+
+
 def list_documents(
     limit: int = 20,
     offset: int = 0,
-    category: str | None = None,
-    tag: str | None = None,
+    q: str | None = None,
     include_old_versions: bool = False,
 ) -> DocumentListResponse:
-    """Newest first; `category` and `tag` narrow the list (and its total).
+    """Newest first; `q` narrows the list (and its total) to documents matching every word.
 
     Only the latest version of each document is listed unless `include_old_versions`.
     """
     filters = [] if include_old_versions else [Document.is_latest]
-    if category:
-        filters.append(Document.category == category)
-    if tag:
-        filters.append(Document.tags.contains([" ".join(tag.lower().split())]))
+    if q and q.strip():
+        filters.append(_matches_search(q))
     try:
         with Session(engine) as session:
             total = session.scalar(select(func.count()).select_from(Document).where(*filters))

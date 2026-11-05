@@ -6,7 +6,6 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
-    Index,
     String,
     Text,
     UniqueConstraint,
@@ -38,8 +37,6 @@ class Document(Base):
             "status IN ('queued', 'processing', 'extracted', 'embedded', 'ready', 'failed')",
             name="ck_documents_status",
         ),
-        # Serves `tags @> '["x"]'` filters (see the category and tags migration).
-        Index("ix_documents_tags", "tags", postgresql_using="gin"),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     filename: Mapped[str] = mapped_column(String(255))
@@ -61,8 +58,7 @@ class Document(Base):
     extracted_pages: Mapped[list[dict] | None] = mapped_column(JSONB)
     summary: Mapped[str | None] = mapped_column(Text)
     insights: Mapped[list[dict] | None] = mapped_column(JSONB)
-    category: Mapped[str | None] = mapped_column(String(40), index=True)
-    tags: Mapped[list[str] | None] = mapped_column(JSONB)
+    category: Mapped[str | None] = mapped_column(String(40))
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

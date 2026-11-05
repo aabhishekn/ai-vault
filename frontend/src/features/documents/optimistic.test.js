@@ -142,10 +142,13 @@ describe('confirmed changes', () => {
 
   it('replaces a document with the server’s version of it', () => {
     const result = withReplacedDocument(
-      page([{ ...doc('a', 'failed'), tags: ['x'] }, doc('b')]),
+      page([{ ...doc('a', 'failed'), category: 'Legal' }, doc('b')]),
       doc('a', 'queued'),
     )
-    expect(result.items[0]).toMatchObject({ status: 'queued', tags: ['x'] })
+    expect(result.items[0]).toMatchObject({
+      status: 'queued',
+      category: 'Legal',
+    })
     const loaded = page([doc('b')])
     expect(withReplacedDocument(loaded, doc('a'))).toBe(loaded)
   })
