@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from openai import APIError
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,7 @@ from app.schemas.chat import (
     ConversationResponse,
     ConversationSummary,
     ConversationTurnResponse,
+    MessageRequest,
     SearchRequest,
     SearchResponse,
 )
@@ -179,22 +180,32 @@ def get_conversation(
 
 @dataclass(frozen=True)
 class _Prepared:
-    version: int
+    version: int  # turns kept before the new one; the new turn is number version + 1
+    current: int  # turns the conversation had when this was prepared
     history: list[dict[str, str]]
     retrieval: SearchResponse
 
 
-def _prepare_message(conversation_id: UUID, request: SearchRequest) -> _Prepared:
+def _prepare_message(conversation_id: UUID, request: SearchRequest | MessageRequest) -> _Prepared:
     """Load context and retrieve sources; shared by the normal and streaming paths."""
+    replace = getattr(request, "replace_turn", None)
     with Session(engine) as session:
         conversation = session.get(Conversation, conversation_id)
         if conversation is None:
             raise NotFoundError("Conversation not found")
         document_ids = conversation.document_ids
-        version = conversation.turn_count
+        current = conversation.turn_count
+        if replace is not None and replace > current:
+            raise ConflictError("That question is no longer in the conversation. Reload it.")
+        # Editing turn N answers it again from the turns before it, as if the rest were
+        # never asked; they are removed only once the new answer is saved.
+        version = current if replace is None else replace - 1
         recent = session.scalars(
             select(ConversationTurn)
-            .where(ConversationTurn.conversation_id == conversation_id)
+            .where(
+                ConversationTurn.conversation_id == conversation_id,
+                ConversationTurn.turn_number <= version,
+            )
             .order_by(ConversationTurn.turn_number.desc())
             .limit(MAX_CONTEXT_TURNS)
         ).all()
@@ -216,22 +227,35 @@ def _prepare_message(conversation_id: UUID, request: SearchRequest) -> _Prepared
     else:
         retrieval = search_documents(document_ids, scoped)
     retrieval.question = request.question
-    return _Prepared(version, history, retrieval)
+    return _Prepared(version, current, history, retrieval)
 
 
 def _save_turn(
-    conversation_id: UUID, version: int, answer: AnswerResponse
+    conversation_id: UUID, version: int, answer: AnswerResponse, current: int | None = None
 ) -> ConversationTurnResponse:
+    """Save the answer as turn version + 1, replacing any turns after `version`.
+
+    `current` is how many turns the conversation had when the question was prepared; the save
+    is refused if it has changed since, so two edits or sends never overwrite each other.
+    """
+    current = version if current is None else current
     with Session(engine) as session:
         claimed = session.scalar(
             update(Conversation)
-            .where(Conversation.id == conversation_id, Conversation.turn_count == version)
+            .where(Conversation.id == conversation_id, Conversation.turn_count == current)
             .values(turn_count=version + 1)
             .returning(Conversation.id)
         )
         if claimed is None:
             raise ConflictError(
                 "Conversation changed while answering. Reload history before retrying."
+            )
+        if current > version:
+            session.execute(
+                delete(ConversationTurn).where(
+                    ConversationTurn.conversation_id == conversation_id,
+                    ConversationTurn.turn_number > version,
+                )
             )
         turn = ConversationTurn(
             conversation_id=conversation_id,
@@ -253,11 +277,11 @@ def _translate_errors(error: Exception) -> AppError:
     return InvalidAIResponseError("Answer generation returned an incomplete or invalid answer")
 
 
-def send_message(conversation_id: UUID, request: SearchRequest) -> ConversationTurnResponse:
+def send_message(conversation_id: UUID, request: MessageRequest) -> ConversationTurnResponse:
     try:
         prepared = _prepare_message(conversation_id, request)
         answer = generate_answer(prepared.retrieval, history=prepared.history)
-        return _save_turn(conversation_id, prepared.version, answer)
+        return _save_turn(conversation_id, prepared.version, answer, prepared.current)
     except (SQLAlchemyError, APIError, ConfigurationError, ValueError) as error:
         raise _translate_errors(error) from None
 
@@ -270,7 +294,7 @@ class StreamEvent:
     data: dict
 
 
-def stream_message(conversation_id: UUID, request: SearchRequest) -> Iterator[StreamEvent]:
+def stream_message(conversation_id: UUID, request: MessageRequest) -> Iterator[StreamEvent]:
     """Like :func:`send_message`, but yields the answer text as it is written.
 
     Problems found before generation starts (unknown conversation, document not
@@ -289,7 +313,7 @@ def stream_message(conversation_id: UUID, request: SearchRequest) -> Iterator[St
                 if kind == "delta":
                     yield StreamEvent("delta", {"text": value})
                 else:
-                    turn = _save_turn(conversation_id, prepared.version, value)
+                    turn = _save_turn(conversation_id, prepared.version, value, prepared.current)
                     yield StreamEvent("turn", turn.model_dump(mode="json"))
         except AppError as error:
             yield StreamEvent("error", {"detail": error.detail, "status": error.status_code})

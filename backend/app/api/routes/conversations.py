@@ -11,8 +11,8 @@ from app.schemas.chat import (
     ConversationListResponse,
     ConversationResponse,
     ConversationTurnResponse,
+    MessageRequest,
     MultiConversationRequest,
-    SearchRequest,
 )
 from app.services import conversations as service
 
@@ -65,7 +65,7 @@ def get_conversation(
     status_code=201,
     dependencies=[limit("ai")],
 )
-def send_message(conversation_id: UUID, request: SearchRequest) -> ConversationTurnResponse:
+def send_message(conversation_id: UUID, request: MessageRequest) -> ConversationTurnResponse:
     return service.send_message(conversation_id, request)
 
 
@@ -75,7 +75,7 @@ def _server_sent_events(events: Iterator[service.StreamEvent]) -> Iterator[str]:
 
 
 @router.post("/conversations/{conversation_id}/messages/stream", dependencies=[limit("ai")])
-def stream_message(conversation_id: UUID, request: SearchRequest) -> StreamingResponse:
+def stream_message(conversation_id: UUID, request: MessageRequest) -> StreamingResponse:
     events = service.stream_message(conversation_id, request)
     return StreamingResponse(
         _server_sent_events(events),

@@ -12,6 +12,7 @@ from app.db.models import Conversation, ConversationTurn, Document, DocumentChun
 from app.schemas.chat import (
     AnswerCitation,
     AnswerResponse,
+    MessageRequest,
     SearchMatch,
     SearchRequest,
     SearchResponse,
@@ -158,6 +159,81 @@ class ConversationTests(unittest.TestCase):
         saved = conversations.get_conversation(self.conversation.id, limit=20, offset=0)
         self.assertEqual(saved.total, 1)
         self.assertEqual(len(saved.turns), 1)
+
+    def edit(self, question, turn):
+        return conversations.send_message(
+            self.conversation.id, MessageRequest(question=question, replace_turn=turn)
+        )
+
+    def questions(self):
+        saved = conversations.get_conversation(self.conversation.id, limit=20, offset=0)
+        return saved.total, [turn.response.question for turn in saved.turns]
+
+    def test_editing_the_last_question_replaces_it_and_answers_from_the_turns_before(self):
+        with patch.object(conversations, "search_document", side_effect=self.retrieve):
+            with patch.object(
+                conversations, "generate_answer", side_effect=self.answer
+            ) as generator:
+                self.send("First")
+                self.send("Secnd")
+                edited = self.edit("Second", 2)
+        self.assertEqual(edited.turn_number, 2)
+        self.assertEqual(self.questions(), (2, ["First", "Second"]))
+        # The replaced turn is not part of the context its replacement is answered from.
+        self.assertEqual(
+            [item["question"] for item in generator.call_args.kwargs["history"]], ["First"]
+        )
+
+    def test_editing_an_earlier_question_drops_every_turn_after_it(self):
+        with patch.object(conversations, "search_document", side_effect=self.retrieve):
+            with patch.object(conversations, "generate_answer", side_effect=self.answer):
+                for question in ("One", "Two", "Three"):
+                    self.send(question)
+                self.edit("Uno", 1)
+                self.assertEqual(self.questions(), (1, ["Uno"]))
+                # Numbering carries on from the edited turn.
+                self.assertEqual(self.send("Dos").turn_number, 2)
+        self.assertEqual(self.questions(), (2, ["Uno", "Dos"]))
+
+    def test_a_failed_edit_leaves_the_conversation_as_it_was(self):
+        with patch.object(conversations, "search_document", side_effect=self.retrieve):
+            with patch.object(conversations, "generate_answer", side_effect=self.answer):
+                self.send("One")
+                self.send("Two")
+            with patch.object(
+                conversations, "generate_answer", side_effect=ConfigurationError("private")
+            ):
+                with self.assertRaises(AppError) as error:
+                    self.edit("Changed", 1)
+        self.assertEqual(error.exception.status_code, 503)
+        self.assertEqual(self.questions(), (2, ["One", "Two"]))
+
+    def test_editing_a_turn_that_does_not_exist_is_a_conflict(self):
+        with patch.object(conversations, "search_document", side_effect=self.retrieve):
+            with patch.object(conversations, "generate_answer", side_effect=self.answer):
+                self.send("One")
+                with self.assertRaises(AppError) as error:
+                    self.edit("Changed", 5)
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual(self.questions(), (1, ["One"]))
+
+    def test_an_edit_is_refused_if_the_conversation_changed_while_it_was_answered(self):
+        with patch.object(conversations, "search_document", side_effect=self.retrieve):
+            with patch.object(conversations, "generate_answer", side_effect=self.answer):
+                self.send("One")
+                self.send("Two")
+
+            def meanwhile(retrieval, *, history):
+                # Another request adds a turn while this edit is being answered.
+                with patch.object(conversations, "generate_answer", side_effect=self.answer):
+                    self.send("Three")
+                return self.answer(retrieval, history=history)
+
+            with patch.object(conversations, "generate_answer", side_effect=meanwhile):
+                with self.assertRaises(AppError) as error:
+                    self.edit("Changed", 2)
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual(self.questions(), (3, ["One", "Two", "Three"]))
 
     def test_unknown_conversation_makes_no_provider_calls_and_delete_cascades(self):
         with patch.object(conversations, "search_document") as retrieval:

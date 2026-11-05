@@ -154,7 +154,7 @@ def test_problems_before_streaming_keep_their_http_status(error, status):
 
 def test_failure_after_streaming_starts_becomes_an_error_event():
     cid = uuid4()
-    prepared = service._Prepared(0, [], retrieval())
+    prepared = service._Prepared(0, 0, [], retrieval())
 
     def broken(*args, **kwargs):
         yield "delta", "partial"
@@ -171,7 +171,7 @@ def test_failure_after_streaming_starts_becomes_an_error_event():
 
 def test_turn_is_saved_only_with_the_final_answer():
     cid = uuid4()
-    prepared = service._Prepared(2, [], retrieval())
+    prepared = service._Prepared(2, 2, [], retrieval())
     final = SimpleNamespace()
     saved = SimpleNamespace(model_dump=lambda mode: {"id": "turn-3"})
     with patch.object(service, "_prepare_message", return_value=prepared):
@@ -181,7 +181,20 @@ def test_turn_is_saved_only_with_the_final_answer():
             with patch.object(service, "_save_turn", return_value=saved) as save:
                 events = list(service.stream_message(cid, SimpleNamespace(question="Q", top_k=3)))
     assert [e.name for e in events] == ["delta", "turn"]
-    save.assert_called_once_with(cid, 2, final)
+    save.assert_called_once_with(cid, 2, final, 2)
+
+
+def test_an_edited_question_is_saved_in_place_of_the_turns_it_replaces():
+    cid = uuid4()
+    # Turn 2 of 4 is edited: the new answer is turn 2, and the save checks for 4 turns.
+    prepared = service._Prepared(1, 4, [], retrieval())
+    final = SimpleNamespace()
+    saved = SimpleNamespace(model_dump=lambda mode: {"id": "turn-2"})
+    with patch.object(service, "_prepare_message", return_value=prepared):
+        with patch.object(service, "stream_answer", return_value=iter([("final", final)])):
+            with patch.object(service, "_save_turn", return_value=saved) as save:
+                list(service.stream_message(cid, SimpleNamespace(question="Q", top_k=3)))
+    save.assert_called_once_with(cid, 1, final, 4)
 
 
 def test_streamed_answer_without_labels_uses_its_declared_sources():

@@ -10,6 +10,11 @@ class SearchRequest(BaseModel):
     top_k: int = Field(default=3, ge=1, le=10)
 
 
+class MessageRequest(SearchRequest):
+    # Edit a question: answer this one in place of turn N, dropping N and any turns after it.
+    replace_turn: int | None = Field(default=None, ge=1)
+
+
 class SearchMatch(BaseModel):
     # Set when searching several documents, so each passage can name where it came from.
     document_id: UUID | None = None
