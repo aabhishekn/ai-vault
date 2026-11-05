@@ -64,40 +64,6 @@ export function ChatPane({
       className={`min-h-0 min-w-0 flex-1 flex-col bg-surface ${className}`}
       aria-label="Chat"
     >
-      {scope.kind !== 'none' && (
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-rule px-6 py-3 max-[600px]:px-4">
-          <div
-            className="flex min-w-0 flex-wrap items-center gap-2"
-            role="group"
-            aria-label="Asking"
-          >
-            <span className="text-[12px] text-muted">Asking</span>
-            {scope.kind === 'all' ? (
-              <Chip>All documents ({scope.items.length})</Chip>
-            ) : (
-              scope.items.map((item) => (
-                <Chip
-                  key={item.id}
-                  label={`Stop asking about ${item.name}`}
-                  onRemove={picked ? () => onUntick(item.id) : undefined}
-                >
-                  {item.name}
-                </Chip>
-              ))
-            )}
-            {scope.truncated && (
-              <span className="text-[11px] text-muted">
-                newest {MAX_SCOPE} of {scope.total} · tick documents to choose
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {picked && <Button onClick={onUseAll}>Use all documents</Button>}
-            {canCompare && <Button onClick={onCompare}>Compare</Button>}
-          </div>
-        </div>
-      )}
-
       {scope.kind === 'none' ? (
         <div className="m-auto max-w-[420px] px-6 py-10 text-center">
           <p className="font-serif text-[clamp(30px,4vw,40px)] leading-[1.1] tracking-[-0.03em]">
@@ -131,6 +97,39 @@ export function ChatPane({
           key={scope.key}
           id={scope.kind === 'single' ? scope.ids[0] : null}
           documentIds={scope.ids}
+          header={
+            <div
+              className="flex min-w-0 flex-wrap items-center gap-2"
+              role="group"
+              aria-label="Asking"
+            >
+              <span className="text-[12px] text-muted">Asking</span>
+              {scope.kind === 'all' ? (
+                <Chip>All documents ({scope.items.length})</Chip>
+              ) : (
+                scope.items.map((item) => (
+                  <Chip
+                    key={item.id}
+                    label={`Stop asking about ${item.name}`}
+                    onRemove={picked ? () => onUntick(item.id) : undefined}
+                  >
+                    {item.name}
+                  </Chip>
+                ))
+              )}
+              {scope.truncated && (
+                <span className="text-[11px] text-muted">
+                  newest {MAX_SCOPE} of {scope.total} · tick documents to choose
+                </span>
+              )}
+            </div>
+          }
+          actions={
+            <>
+              {picked && <Button onClick={onUseAll}>Use all documents</Button>}
+              {canCompare && <Button onClick={onCompare}>Compare</Button>}
+            </>
+          }
           placeholder={`Ask ${scopeLabel(scope)}…`}
           starters={MULTI_STARTERS}
         />

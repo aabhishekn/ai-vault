@@ -9,9 +9,12 @@ import { useSuggestedQuestions } from './useSuggestedQuestions'
 // One conversation: the thread, a few starters while it is empty, and the question box.
 // Render it with key={scope.key}. With an `id` it is that document's conversation (its
 // latest saved one is restored); with `documentIds` it spans those documents instead.
+// `header` and `actions` fill the bar above the thread, next to its **New chat** button.
 export function ChatThread({
   id = null,
   documentIds,
+  header = null,
+  actions = null,
   documentStatus = 'ready',
   placeholder = 'Ask a question…',
   starters = [],
@@ -33,6 +36,7 @@ export function ChatThread({
   const locked = busy || restoring
   const eligible = canAskDocument(documentStatus)
   const empty = turns.length === 0 && !restoring && !busy
+  const canStartNew = turns.length > 0
 
   async function submit(event) {
     event.preventDefault()
@@ -70,6 +74,12 @@ export function ChatThread({
       element.style.height = `${Math.min(element.scrollHeight, 160)}px`
   }, [question])
 
+  function newChat() {
+    startNewConversation()
+    setQuestion('')
+    input.current?.focus()
+  }
+
   function fill(text) {
     setQuestion(text)
     input.current?.focus()
@@ -84,6 +94,28 @@ export function ChatThread({
       <h2 id="question-heading" className="sr-only">
         Conversation
       </h2>
+      {(header || actions || canStartNew) && (
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-rule px-6 py-3 max-[600px]:px-4">
+          <div className="min-w-0">{header}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            {actions}
+            {canStartNew && (
+              <Button disabled={busy} onClick={newChat}>
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <path d="M10 4v12M4 10h12" strokeLinecap="round" />
+                </svg>
+                New chat
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       <div
         ref={scroller}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6 max-[600px]:px-4"
@@ -241,25 +273,13 @@ export function ChatThread({
             </svg>
           </button>
         </div>
-        <div className="mt-2 flex items-start justify-between gap-3 text-[11px] leading-[1.6] text-muted">
-          <p id="question-cost">
-            Your question, recent conversation and relevant passages are sent to
-            your configured AI provider. API charges may apply.
-          </p>
-          {turns.length > 0 && !busy && (
-            <button
-              type="button"
-              className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[11px] font-semibold text-ink underline underline-offset-4 [font:inherit] hover:text-earth"
-              onClick={() => {
-                startNewConversation()
-                setQuestion('')
-                input.current?.focus()
-              }}
-            >
-              New conversation
-            </button>
-          )}
-        </div>
+        <p
+          id="question-cost"
+          className="mt-2 text-[11px] leading-[1.6] text-muted"
+        >
+          Your question, recent conversation and relevant passages are sent to
+          your configured AI provider. API charges may apply.
+        </p>
       </form>
     </section>
   )

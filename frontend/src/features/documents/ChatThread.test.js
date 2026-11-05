@@ -334,6 +334,21 @@ describe('restoring a saved conversation', () => {
     await screen.findByText('SQL is required [1].')
     expect(posts(fetch)).toEqual(['/api/conversations/c0/messages/stream'])
   })
+  it('puts New chat in the bar above the thread, and keeps it off while an answer is written', async () => {
+    mockApi(() => new Promise(() => {}), { saved })
+    render(createElement(ChatThread, { id: 'a', documentStatus: 'embedded' }))
+    await screen.findByText('Earlier answer is required [1].')
+    const button = screen.getByRole('button', { name: 'New chat' })
+    expect(button.disabled).toBe(false)
+    // It sits above the conversation, not beside the question box.
+    expect(
+      button.compareDocumentPosition(screen.getByRole('log')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    enter(question)
+    ask()
+    await waitFor(() => expect(button.disabled).toBe(true))
+  })
   it('starts a fresh conversation on request while the old one stays saved', async () => {
     const fetch = mockApi(
       (asked) => Promise.resolve(turnResponse('a', asked, 1)),
@@ -341,12 +356,10 @@ describe('restoring a saved conversation', () => {
     )
     render(createElement(ChatThread, { id: 'a', documentStatus: 'embedded' }))
     await screen.findByText('Earlier answer is required [1].')
-    fireEvent.click(screen.getByRole('button', { name: 'New conversation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }))
     expect(screen.queryByText('Earlier answer is required [1].')).toBeNull()
     expect(screen.getByText('Your question')).toBeTruthy()
-    expect(
-      screen.queryByRole('button', { name: 'New conversation' }),
-    ).toBeNull()
+    expect(screen.queryByRole('button', { name: 'New chat' })).toBeNull()
     enter(question)
     ask()
     await screen.findByText('Python is required [1].')
@@ -361,9 +374,7 @@ describe('restoring a saved conversation', () => {
     })
     await renderChat()
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(
-      screen.queryByRole('button', { name: 'New conversation' }),
-    ).toBeNull()
+    expect(screen.queryByRole('button', { name: 'New chat' })).toBeNull()
     enter(question)
     ask()
     expect(await screen.findByText('Python is required [1].')).toBeTruthy()
