@@ -1,16 +1,18 @@
+import difflib
 import json
 import re
+import unicodedata
 from collections.abc import Iterator
 from time import perf_counter
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.ai.client import create_client
-from app.core.config import get_answer_model
+from app.core.config import get_answer_model, get_chat_model
 from app.core.logging import log_ai_call
 from app.schemas.chat import AnswerCitation, AnswerResponse, SearchResponse
 
-MAX_ATTEMPTS = 2  # one retry when the model forgets to cite
+MAX_ANSWER_TOKENS = 1500  # room for one entry per document in a library-wide answer
 INSUFFICIENT_ANSWER = (
     "I couldn't find enough information in the retrieved document text to answer this question."
 )
@@ -29,11 +31,26 @@ starting with "- " instead of joining them into one long sentence, and keep each
 Each "- " item must start on a new line (a real line break), never inline after the lead sentence.
 Put a line's labels together at its end, like "[1][2]", not in the middle. Keep any paragraph
 to three sentences or fewer. Use plain text only: no headings, bold, or tables.
-When sources come from several documents, each names its "document"; say which document
-a fact comes from when it matters, and note when documents disagree.
+When there are several documents, the sources are grouped under "documents", each with its
+name; say which document a fact comes from when it matters, and note when documents
+disagree. A source number labels one passage, not a document: a document can have several
+sources, so refer to documents by their name, never as "Document 1".
+When the question asks about every or each document, give one entry per document in
+"documents" (not one per source), using all of that document's sources, and say which
+documents the sources do not cover. For "all of something", list every item the sources show.
+Keep each fact with the person, company or section it belongs to: a line belongs to the
+heading above it in the same passage. A passage can begin in the middle of a section, so do
+not assume its first lines belong to a heading that only appears later in the passage.
+Put explanations in your own words and quote only short phrases; copying long passages
+verbatim can make the provider cut the answer off. Copy names, numbers, dates and amounts
+exactly as the sources write them; never round,
+convert or infer them. The source text was extracted from PDFs and can have broken spacing
+or odd characters (such as "T ekion" for "Tekion"); read through those.
 Use only supplied source numbers. Do not invent citations, page numbers, or facts.
-source_numbers must list exactly the unique source labels cited in the answer.
-If sources do not support an answer, set insufficient_evidence=true,
+source_numbers must list exactly the unique source labels cited in the answer, each once, and
+never more than 20.
+If the sources answer only part of the question, answer that part and say what the documents
+do not cover. Only when they support nothing relevant, set insufficient_evidence=true,
 answer to an empty string, and source_numbers to an empty list. Do not guess.
 """
 
@@ -52,6 +69,54 @@ def _split_inline_bullets(answer: str) -> str:
     if len(_INLINE_BULLET.findall(answer)) < 2:
         return answer
     return _INLINE_BULLET.sub("\n- ", answer)
+
+
+# Control characters except tab, line breaks and carriage return, plus invisible ones (soft
+# hyphen, zero-width space, word joiner, byte-order mark) that the model sometimes slips into
+# a name.
+_CONTROL_CHARACTERS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u00ad\u200b\u2060\ufeff]")
+
+
+_WORD = re.compile(r"[^\W\d_]+")
+
+
+def _unaccented(word: str) -> str:
+    decomposed = unicodedata.normalize("NFD", word)
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
+
+
+def restore_accented_words(answer: str, texts: list[str]) -> str:
+    """Put names with accents back the way the sources spell them.
+
+    Models often mangle a name such as "Börm" when copying it ("Bõrm", "Bö rm", "Böhm").
+    A word in the answer that the sources do not contain, but that matches a source word
+    with accents once accents are ignored or by one or two letters, is replaced by that word.
+    """
+    known = {word for text in texts for word in _WORD.findall(text)}
+    accented = {word for word in known if not word.isascii()}
+    if not accented:
+        return answer
+    for word in accented:
+        # "Bö rm" -> "Börm": the model sometimes breaks the word after the accented letter.
+        for cut in range(1, len(word)):
+            answer = answer.replace(f"{word[:cut]} {word[cut:]}", word)
+    lowered = {word.casefold() for word in known}
+    by_plain: dict[str, str] = {}
+    for word in sorted(accented):
+        by_plain.setdefault(_unaccented(word), word)
+
+    def fix(match: re.Match) -> str:
+        word = match.group(0)
+        if word.casefold() in lowered:
+            return word
+        if (plain := _unaccented(word)) in by_plain:
+            return by_plain[plain]
+        # A word that itself carries a stray accent is a mangled copy, so allow a looser match.
+        cutoff = 0.6 if not word.isascii() else 0.8
+        close = difflib.get_close_matches(word, accented, n=1, cutoff=cutoff)
+        return close[0] if close else word
+
+    return _WORD.sub(fix, answer)
 
 
 class AnswerDraft(BaseModel):
@@ -86,13 +151,33 @@ def _result(
 
 
 def _request_input(retrieval: SearchResponse, history: list[dict[str, str]] | None) -> str:
-    sources = [
-        {"source_number": number, "text": match.text}
-        | ({"document": match.title or match.filename} if match.title or match.filename else {})
-        for number, match in enumerate(retrieval.matches, start=1)
-    ]
+    """The question, the passages and the chat history, as the model reads them.
+
+    Passages from several documents are grouped under their document. A flat list of
+    passages makes "summarise each document" come back as one line per passage.
+    """
+    named = any(match.title or match.filename for match in retrieval.matches)
+    if not named:
+        sources = [
+            {"source_number": number, "text": match.text}
+            for number, match in enumerate(retrieval.matches, start=1)
+        ]
+        return json.dumps(
+            {"question": retrieval.question, "sources": sources, "history": history or []}
+        )
+    documents: dict[object, dict] = {}
+    for number, match in enumerate(retrieval.matches, start=1):
+        group = documents.setdefault(
+            match.document_id,
+            {"document": match.title or match.filename or "Untitled", "sources": []},
+        )
+        group["sources"].append({"source_number": number, "text": match.text})
     return json.dumps(
-        {"question": retrieval.question, "sources": sources, "history": history or []}
+        {
+            "question": retrieval.question,
+            "documents": list(documents.values()),
+            "history": history or [],
+        }
     )
 
 
@@ -109,6 +194,9 @@ def _finish(retrieval: SearchResponse, response, started: float) -> AnswerRespon
     draft = response.output_parsed
     if response.status != "completed" or draft is None or response.usage is None:
         raise ValueError("Answer generation did not produce a complete structured response")
+    # The model sometimes copies an odd PDF character as NUL or another control character;
+    # PostgreSQL cannot store NUL and none of them belongs in an answer.
+    draft.answer = _CONTROL_CHARACTERS.sub("", draft.answer)
     usage = {
         "model": response.model,
         "input_tokens": response.usage.input_tokens,
@@ -118,7 +206,11 @@ def _finish(retrieval: SearchResponse, response, started: float) -> AnswerRespon
         return _result(retrieval, INSUFFICIENT_ANSWER, True, [], **usage)
     # The labels written in the answer are the source of truth: the model's separate
     # source_numbers list is sometimes inconsistent with its own text.
-    answer = _split_inline_bullets(draft.answer.strip())
+    answer = _split_inline_bullets(
+        restore_accented_words(
+            draft.answer.strip(), [match.text for match in retrieval.matches] + [retrieval.question]
+        )
+    )
     labels = {int(label) for label in re.findall("\\[(\\d+)\\]", draft.answer)}
     if not labels and answer:
         # Short factual answers often come back with correct source_numbers but no inline
@@ -147,27 +239,42 @@ def _finish(retrieval: SearchResponse, response, started: float) -> AnswerRespon
     return _result(retrieval, answer, False, citations, **usage)
 
 
+def _models() -> list[str]:
+    """The model for each attempt: the chat model first, then a fallback for the retry.
+
+    The provider sometimes stops the stronger model mid-answer (a content filter on long
+    verbatim passages), and asking the same model again would stop it in the same place.
+    """
+    return [get_chat_model(), get_answer_model()]
+
+
 def generate_answer(
-    retrieval: SearchResponse, *, history: list[dict[str, str]] | None = None
+    retrieval: SearchResponse,
+    *,
+    history: list[dict[str, str]] | None = None,
+    models: list[str] | None = None,
 ) -> AnswerResponse:
     """Generate one grounded answer; citation metadata comes from retrieved chunks."""
     if not retrieval.matches:
         return _result(retrieval, INSUFFICIENT_ANSWER, True, [])
-    for attempt in range(MAX_ATTEMPTS):
+    attempts = models or _models()
+    for attempt, model in enumerate(attempts):
         started = perf_counter()
-        with create_client() as client:
-            response = client.responses.parse(
-                model=get_answer_model(),
-                instructions=INSTRUCTIONS,
-                input=_request_input(retrieval, history),
-                text_format=AnswerDraft,
-                max_output_tokens=800,
-                store=False,
-            )
         try:
+            with create_client() as client:
+                response = client.responses.parse(
+                    model=model,
+                    instructions=INSTRUCTIONS,
+                    input=_request_input(retrieval, history),
+                    text_format=AnswerDraft,
+                    max_output_tokens=MAX_ANSWER_TOKENS,
+                    store=False,
+                )
             return _finish(retrieval, response, started)
-        except CitationError:
-            if attempt == MAX_ATTEMPTS - 1:
+        except (CitationError, ValidationError):
+            # No usable citations, or the output was cut off mid-way (the model sometimes
+            # loops while writing a list). Asking again usually works.
+            if attempt == len(attempts) - 1:
                 raise
     raise AssertionError("unreachable")
 
@@ -247,24 +354,26 @@ def stream_answer(
         return
     started = perf_counter()
     extractor = AnswerTextStream()
-    with create_client() as client:
-        with client.responses.stream(
-            model=get_answer_model(),
-            instructions=INSTRUCTIONS,
-            input=_request_input(retrieval, history),
-            text_format=AnswerDraft,
-            max_output_tokens=800,
-            store=False,
-        ) as stream:
-            for event in stream:
-                if event.type == "response.output_text.delta":
-                    text = extractor.feed(event.delta)
-                    if text:
-                        yield "delta", text
-            response = stream.get_final_response()
     try:
+        with create_client() as client:
+            with client.responses.stream(
+                model=get_chat_model(),
+                instructions=INSTRUCTIONS,
+                input=_request_input(retrieval, history),
+                text_format=AnswerDraft,
+                max_output_tokens=MAX_ANSWER_TOKENS,
+                store=False,
+            ) as stream:
+                for event in stream:
+                    if event.type == "response.output_text.delta":
+                        text = extractor.feed(event.delta)
+                        if text:
+                            yield "delta", text
+                response = stream.get_final_response()
         final = _finish(retrieval, response, started)
-    except CitationError:
-        # The streamed preview had no usable citations; answer again without streaming.
-        final = generate_answer(retrieval, history=history)
+    except (CitationError, ValidationError):
+        # The streamed preview had no usable citations or was cut off; answer again without
+        # streaming, with the fallback model (which itself retries once).
+        fallback = get_answer_model()
+        final = generate_answer(retrieval, history=history, models=[fallback, fallback])
     yield "final", final

@@ -3,11 +3,21 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+# Passages sent to the model with a question. Too few and a list or a longer explanation is
+# cut short; many more and the answer gets slower and less focused.
+DEFAULT_TOP_K = 8
+
 
 class SearchRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     question: str = Field(min_length=1, max_length=2000)
-    top_k: int = Field(default=3, ge=1, le=10)
+    top_k: int = Field(default=DEFAULT_TOP_K, ge=1, le=20)
+
+    @field_validator("question", mode="before")
+    @classmethod
+    def drop_nul_characters(cls, value):
+        # PostgreSQL cannot store NUL in text or JSON; a question of only NULs is then empty.
+        return value.replace("\x00", "") if isinstance(value, str) else value
 
 
 class MessageRequest(SearchRequest):

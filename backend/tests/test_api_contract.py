@@ -187,7 +187,7 @@ class APIContractTests(unittest.TestCase):
 
     def test_request_validation_happens_before_services(self):
         with patch("app.services.search.search_document") as search:
-            for body in [{"question": " "}, {"question": "Q", "top_k": 11}]:
+            for body in [{"question": " "}, {"question": "Q", "top_k": 21}]:
                 response = self.client.post(f"/documents/{self.identifier}/search", json=body)
                 self.assertEqual(response.status_code, 422)
             search.assert_not_called()

@@ -56,7 +56,7 @@ class ConversationTests(unittest.TestCase):
             session.execute(delete(Document).where(Document.id == self.document_id))
             session.commit()
 
-    def retrieve(self, document_id, request):
+    def retrieve(self, document_id, request, context=None):
         self.assertEqual(document_id, self.document_id)
         return SearchResponse(
             document_id=document_id,
@@ -103,7 +103,11 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual(
             history, [{"question": "Which backend framework?", "answer": "Use FastAPI [1]."}]
         )
-        self.assertIn("Which backend framework?", retrieval.call_args.args[1].question)
+        # The question is searched as asked; the previous turn travels separately as context,
+        # so a change of subject is not pulled back to the old one.
+        self.assertEqual(retrieval.call_args.args[1].question, "Why use it?")
+        self.assertIn("Which backend framework?", retrieval.call_args.kwargs["context"])
+        self.assertIn("Use FastAPI [1].", retrieval.call_args.kwargs["context"])
         self.assertEqual(second.response.question, "Why use it?")
         saved = conversations.get_conversation(self.conversation.id, limit=1, offset=1)
         self.assertEqual(saved.total, 2)

@@ -73,7 +73,7 @@ describe('conversation API', () => {
       `/api/conversations/${conversationId}/messages`,
       {
         method: 'POST',
-        body: JSON.stringify({ question, top_k: 3 }),
+        body: JSON.stringify({ question }),
         signal: abort,
         headers: {
           Accept: 'application/json',
@@ -315,9 +315,9 @@ describe('streamed messages', () => {
   })
 
   it.each([
-    [undefined, { question, top_k: 3 }],
-    [null, { question, top_k: 3 }],
-    [2, { question, top_k: 3, replace_turn: 2 }],
+    [undefined, { question }],
+    [null, { question }],
+    [2, { question, replace_turn: 2 }],
   ])('sends replace_turn only for an edit (%s)', async (replaceTurn, body) => {
     const fetch = vi.fn().mockResolvedValue(streamOf(turnEvent, 1000))
     vi.stubGlobal('fetch', fetch)

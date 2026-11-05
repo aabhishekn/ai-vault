@@ -76,7 +76,7 @@ export async function sendMessage(
     const data = await requestJson(
       `/conversations/${encodeURIComponent(conversationId)}/messages`,
       signal,
-      { method: 'POST', json: { question: normalized, top_k: 3 } },
+      { method: 'POST', json: { question: normalized } },
     )
     return parseTurn(data, documentId, conversationId, normalized)
   } catch (error) {
@@ -150,7 +150,6 @@ export async function sendMessageStream(
         },
         body: JSON.stringify({
           question: normalized,
-          top_k: 3,
           ...(replaceTurn === null ? {} : { replace_turn: replaceTurn }),
         }),
       },

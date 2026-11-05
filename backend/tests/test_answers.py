@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
 
+from pydantic import ValidationError
+
 from app.ai import answer_generation as answer_generation
 from app.ai.answer_generation import INSUFFICIENT_ANSWER, AnswerDraft, generate_answer
 from app.core.errors import AppError, ConfigurationError, NotFoundError
@@ -34,7 +36,8 @@ class AnswerTests(unittest.TestCase):
             ],
         )
         self.env = patch.dict(
-            "os.environ", {"OPENAI_API_KEY": "test-only", "ANSWER_MODEL": "gpt-4.1-mini"}
+            "os.environ",
+            {"OPENAI_API_KEY": "test-only", "ANSWER_MODEL": "gpt-4.1-mini", "CHAT_MODEL": ""},
         )
         self.env.start()
         self.dotenv = patch("app.core.config.load_dotenv")
@@ -70,11 +73,47 @@ class AnswerTests(unittest.TestCase):
         self.assertEqual(result.input_tokens, 100)
         kwargs = self.client.responses.parse.call_args.kwargs
         self.assertFalse(kwargs["store"])
-        self.assertEqual(kwargs["max_output_tokens"], 800)
+        self.assertEqual(kwargs["max_output_tokens"], 1500)
         self.assertIn("untrusted data", kwargs["instructions"])
         payload = json.loads(kwargs["input"])
         self.assertEqual(payload["question"], self.retrieval.question)
         self.assertEqual(payload["sources"][0]["text"], self.retrieval.matches[0].text)
+
+    def test_a_nul_character_in_the_answer_is_removed_so_the_turn_can_be_saved(self):
+        # The model sometimes copies an odd PDF character (as in "B¨orm") as NUL.
+        self.respond(
+            AnswerDraft(
+                answer="He worked at B\x00rm Bruckmeier [1].",
+                source_numbers=[1],
+                insufficient_evidence=False,
+            )
+        )
+        result = generate_answer(self.retrieval)
+        self.assertNotIn("\x00", result.answer)
+        self.assertEqual(result.answer, "He worked at Brm Bruckmeier [1].")
+
+    def test_invisible_characters_inside_a_name_are_removed_and_the_name_restored(self):
+        self.retrieval.matches[0].text = "Developer at Börm Bruckmeier, Pune."
+        self.respond(
+            AnswerDraft(
+                answer="He worked at B\u00f6rm\ufeffrm Bruckmeier [1].",
+                source_numbers=[1],
+                insufficient_evidence=False,
+            )
+        )
+        self.assertEqual(
+            generate_answer(self.retrieval).answer, "He worked at Börm Bruckmeier [1]."
+        )
+
+    def test_other_control_characters_go_too_but_line_breaks_stay(self):
+        self.respond(
+            AnswerDraft(
+                answer="Intro:\n- One \x08[1]\n- Two\x1f [1]",
+                source_numbers=[1],
+                insufficient_evidence=False,
+            )
+        )
+        self.assertEqual(generate_answer(self.retrieval).answer, "Intro:\n- One [1]\n- Two [1]")
 
     def test_insufficient_evidence_returns_fixed_answer_without_citations(self):
         self.respond(
@@ -176,6 +215,43 @@ class AnswerTests(unittest.TestCase):
         self.respond(
             AnswerDraft(answer="Invented [9].", source_numbers=[9], insufficient_evidence=False)
         )
+        with self.assertRaises(ValueError):
+            generate_answer(self.retrieval)
+        self.assertEqual(self.client.responses.parse.call_count, 2)
+
+    def test_output_cut_off_mid_list_is_asked_again_once(self):
+        # The model sometimes loops while writing source_numbers until the token limit,
+        # so the JSON ends mid-list and cannot be parsed.
+        with self.assertRaises(ValidationError) as cut_off:
+            AnswerDraft.model_validate_json('{"answer":"Dates [1]","source_numbers":[1,2,3')
+        good = SimpleNamespace(
+            output_parsed=AnswerDraft(
+                answer="Use FastAPI [1].", source_numbers=[1], insufficient_evidence=False
+            ),
+            status="completed",
+            model="gpt-4.1-mini",
+            usage=SimpleNamespace(input_tokens=100, output_tokens=20),
+        )
+        self.client.responses.parse.side_effect = [cut_off.exception, good]
+        result = generate_answer(self.retrieval)
+        self.assertEqual(result.answer, "Use FastAPI [1].")
+        self.assertEqual(self.client.responses.parse.call_count, 2)
+        # The provider can stop the stronger model in the same place every time (a content
+        # filter on long verbatim passages), so the retry uses the fallback model.
+        models = [call.kwargs["model"] for call in self.client.responses.parse.call_args_list]
+        self.assertEqual(models, ["gpt-4.1", "gpt-4.1-mini"])
+
+    def test_chat_model_defaults_to_the_stronger_model_and_can_be_changed(self):
+        from app.core.config import get_chat_model
+
+        self.assertEqual(get_chat_model(), "gpt-4.1")
+        with patch.dict("os.environ", {"CHAT_MODEL": " gpt-4.1-mini "}):
+            self.assertEqual(get_chat_model(), "gpt-4.1-mini")
+
+    def test_output_cut_off_twice_gives_up(self):
+        with self.assertRaises(ValidationError) as cut_off:
+            AnswerDraft.model_validate_json('{"answer":"Dates [1]","source_numbers":[1,2,3')
+        self.client.responses.parse.side_effect = [cut_off.exception, cut_off.exception]
         with self.assertRaises(ValueError):
             generate_answer(self.retrieval)
         self.assertEqual(self.client.responses.parse.call_count, 2)

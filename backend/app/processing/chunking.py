@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from llama_index.core.node_parser import SentenceSplitter
 
-from app.processing.pdf_extraction import ExtractedPage
+from app.processing.pdf_extraction import ExtractedPage, clean_text
 
 
 @dataclass(frozen=True)
@@ -39,8 +39,10 @@ def chunk_pages(
     )
     chunks = []
     for page in pages:
-        for text in splitter.split_text(page.text):
-            text = " ".join(text.split())
+        # Line breaks stay: they separate a heading from the lines under it, which tells
+        # the model which company or section a bullet belongs to.
+        for text in splitter.split_text(clean_text(page.text)):
+            text = "\n".join(" ".join(line.split()) for line in text.splitlines() if line.strip())
             if text:
                 chunks.append(
                     TextChunk(chunk_index=len(chunks), page_number=page.page_number, text=text)

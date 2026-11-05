@@ -16,6 +16,14 @@ class PricingTests(unittest.TestCase):
             estimate_cost_usd("gpt-4.1-mini", 1000, 1000),
         )
 
+    def test_a_variant_of_a_priced_model_is_not_priced_as_the_base_model(self):
+        self.assertIsNone(estimate_cost_usd("gpt-4.1-nano", 10, 10))
+        self.assertEqual(estimate_cost_usd("gpt-4.1", 1_000_000, 1_000_000), 10.0)
+        self.assertEqual(
+            estimate_cost_usd("gpt-4.1-2025-04-14", 1000, 1000),
+            estimate_cost_usd("gpt-4.1", 1000, 1000),
+        )
+
     def test_similar_prefix_is_not_a_match(self):
         self.assertIsNone(estimate_cost_usd("gpt-4.1-minimal", 10, 10))
 

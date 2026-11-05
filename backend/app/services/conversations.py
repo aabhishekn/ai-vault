@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
 from uuid import UUID
@@ -33,6 +34,7 @@ from app.schemas.chat import (
 from app.services.search import require_searchable, search_document, search_documents
 
 MAX_CONTEXT_TURNS = 3
+logger = logging.getLogger(__name__)
 
 
 def create_conversation(document_id: UUID) -> ConversationResponse:
@@ -216,16 +218,17 @@ def _prepare_message(conversation_id: UUID, request: SearchRequest | MessageRequ
             }
             for turn in reversed(recent)
         ]
-    search_question = request.question
+    # A follow-up may lean on the last turn ("and the second one?"), or change the subject.
+    # Retrieval looks at both the bare question and the question with that turn as context.
+    context = None
     if history:
         previous = history[-1]
-        context = f"\nPrevious question: {previous['question'][:800]}\nPrevious answer: {previous['answer'][:500]}"
-        search_question = (search_question + context)[:2000]
-    scoped = SearchRequest(question=search_question, top_k=request.top_k)
+        context = f"Previous question: {previous['question'][:400]}\nPrevious answer: {previous['answer'][:300]}"
+    scoped = SearchRequest(question=request.question, top_k=request.top_k)
     if len(document_ids) == 1:
-        retrieval = search_document(document_ids[0], scoped)
+        retrieval = search_document(document_ids[0], scoped, context=context)
     else:
-        retrieval = search_documents(document_ids, scoped)
+        retrieval = search_documents(document_ids, scoped, context=context)
     retrieval.question = request.question
     return _Prepared(version, current, history, retrieval)
 
@@ -270,6 +273,8 @@ def _save_turn(
 
 
 def _translate_errors(error: Exception) -> AppError:
+    # The client gets a short, safe message; the real cause goes to the log.
+    logger.warning("conversation_failed: %s: %s", type(error).__name__, str(error)[:300])
     if isinstance(error, SQLAlchemyError):
         return DependencyUnavailableError("Conversation database unavailable")
     if isinstance(error, APIError | ConfigurationError):

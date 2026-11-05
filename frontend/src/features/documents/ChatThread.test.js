@@ -500,9 +500,7 @@ describe('editing a question', () => {
     fireEvent.change(editor(), { target: { value: edited } })
     fireEvent.click(screen.getByRole('button', { name: 'Save and resend' }))
     expect(await screen.findByText(said('SQL is required [1].'))).toBeTruthy()
-    expect(sends(fetch)).toEqual([
-      { question: edited, top_k: 3, replace_turn: 2 },
-    ])
+    expect(sends(fetch)).toEqual([{ question: edited, replace_turn: 2 }])
     expect(
       screen.queryByText(said('Second answer is required [1].')),
     ).toBeNull()

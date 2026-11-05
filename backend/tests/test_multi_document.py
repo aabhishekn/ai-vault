@@ -95,8 +95,8 @@ def retrieval():
 
 def test_sources_name_their_document_and_citations_keep_it():
     found = retrieval()
-    sources = json.loads(_request_input(found, None))["sources"]
-    assert [item["document"] for item in sources] == ["a.pdf", "b.pdf"]
+    documents = json.loads(_request_input(found, None))["documents"]
+    assert [item["document"] for item in documents] == ["a.pdf", "b.pdf"]
     draft = AnswerDraft(
         answer="A costs 5 [1]. B costs 9 [2].", source_numbers=[1, 2], insufficient_evidence=False
     )
@@ -120,17 +120,31 @@ def test_single_document_sources_carry_no_document_field():
     found = retrieval()
     for match in found.matches:
         match.filename = None
-    assert all(
-        "document" not in item for item in json.loads(_request_input(found, None))["sources"]
-    )
+    sent = json.loads(_request_input(found, None))
+    assert "documents" not in sent
+    assert all("document" not in item for item in sent["sources"])
+
+
+def test_passages_of_one_document_are_grouped_so_each_document_is_one_entry():
+    found = retrieval()
+    first = found.matches[0]
+    extra = first.model_copy(update={"chunk_id": uuid4(), "text": "A also has a warranty."})
+    found.matches = [first, extra, found.matches[1]]  # grouped, as the search returns them
+    documents = json.loads(_request_input(found, None))["documents"]
+    assert [
+        (item["document"], [s["source_number"] for s in item["sources"]]) for item in documents
+    ] == [
+        ("a.pdf", [1, 2]),
+        ("b.pdf", [3]),
+    ]
 
 
 def test_sources_use_a_document_title_when_it_has_one():
     found = retrieval()
     found.matches[0].title = "Lease Agreement"
-    sources = json.loads(_request_input(found, None))["sources"]
+    documents = json.loads(_request_input(found, None))["documents"]
     # The title is what the document is called to people; the file name is the fallback.
-    assert [item["document"] for item in sources] == ["Lease Agreement", "b.pdf"]
+    assert [item["document"] for item in documents] == ["Lease Agreement", "b.pdf"]
     draft = AnswerDraft(
         answer="A costs 5 [1]. B costs 9 [2].", source_numbers=[1, 2], insufficient_evidence=False
     )
@@ -153,8 +167,8 @@ def test_a_title_alone_still_labels_a_source():
     found = retrieval()
     found.matches[0].filename = None
     found.matches[0].title = "Lease Agreement"
-    sources = json.loads(_request_input(found, None))["sources"]
-    assert sources[0]["document"] == "Lease Agreement"
+    documents = json.loads(_request_input(found, None))["documents"]
+    assert documents[0]["document"] == "Lease Agreement"
 
 
 def test_top_k_grows_to_let_every_document_contribute_but_stays_bounded():
@@ -168,7 +182,7 @@ def test_top_k_grows_to_let_every_document_contribute_but_stays_bounded():
         search.search_documents(ids, SearchRequest(question="q", top_k=3))
         assert retrieve.call_args.args[3] == 8
         search.search_documents([uuid4() for _ in range(9)], SearchRequest(question="q", top_k=3))
-        assert retrieve.call_args.args[3] == 10
+        assert retrieve.call_args.args[3] == 12
 
 
 @requires_database

@@ -18,11 +18,13 @@ from tests.support import requires_database
 class SearchValidationTests(unittest.TestCase):
     def test_question_and_limit_validation(self):
         self.assertEqual(SearchRequest(question="  Leave policy?  ").question, "Leave policy?")
+        self.assertEqual(SearchRequest(question="Q").top_k, 8)
+        self.assertEqual(SearchRequest(question="Q", top_k=20).top_k, 20)
         for data in [
             {"question": " "},
             {"question": "x" * 2001},
             {"question": "Q", "top_k": 0},
-            {"question": "Q", "top_k": 11},
+            {"question": "Q", "top_k": 21},
         ]:
             with self.subTest(data_length=len(data["question"])):
                 with self.assertRaises(ValidationError):

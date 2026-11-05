@@ -43,6 +43,15 @@ def get_answer_model() -> str:
     return model
 
 
+def get_chat_model() -> str:
+    """The model that answers questions in chat.
+
+    Answers are where a wrong detail does the most harm, so they use a stronger model than the
+    summaries and other generated content (ANSWER_MODEL). Set CHAT_MODEL to change it.
+    """
+    return os.getenv("CHAT_MODEL", "").strip() or "gpt-4.1"
+
+
 def embeddings_enabled() -> bool:
     """Explicit ENABLE_EMBEDDINGS wins; when unset, embeddings run only if an API key exists."""
     if not os.getenv("ENABLE_EMBEDDINGS", "").strip():

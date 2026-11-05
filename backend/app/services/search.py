@@ -1,3 +1,4 @@
+import re
 from uuid import UUID
 
 from llama_index.core import VectorStoreIndex
@@ -69,14 +70,96 @@ def _retrieve(document_ids: list[UUID], question: str, vector: list[float], top_
     return retriever.retrieve(QueryBundle(query_str=question, embedding=vector))
 
 
-def search_document(document_id: UUID, request: SearchRequest) -> SearchResponse:
+RRF_K = 60  # reciprocal-rank fusion constant; 60 is the usual choice
+# A follow-up search adds the previous turn as context, so up to this many times top_k
+# passages are kept: the right ones may come from either search.
+CONTEXT_EXTRA = 1.5
+
+
+def _fuse(rankings: list[list], limit: int) -> list:
+    """Merge several rankings of the same chunks (reciprocal-rank fusion).
+
+    A chunk that several searches found ranks above one that only a single search found,
+    and ties keep the first search's order.
+    """
+    scores: dict[str, float] = {}
+    best: dict[str, object] = {}
+    for ranking in rankings:
+        for rank, item in enumerate(ranking):
+            key = item.node.node_id
+            scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + rank + 1)
+            seen = best.get(key)
+            if seen is None or (
+                item.node.metadata["cosine_distance"] < seen.node.metadata["cosine_distance"]
+            ):
+                best[key] = item
+    ordered = sorted(scores, key=lambda key: scores[key], reverse=True)
+    return [best[key] for key in ordered[:limit]]
+
+
+def _retrieve_for(document_ids: list[UUID], question: str, context: str | None, top_k: int) -> list:
+    """Retrieve for the question itself and, in a follow-up, for the question with the
+    previous turn as context.
+
+    Searching only with the context drags in the old topic when the person changes the
+    subject, and searching only the bare question misses "and the second one?". Using
+    both, then fusing, handles either.
+    """
+    rankings = [_retrieve(document_ids, question, _embed_query(question), top_k)]
+    if context:
+        contextual = f"{question}\n{context}"[:2000]
+        rankings.append(_retrieve(document_ids, contextual, _embed_query(contextual), top_k))
+        return _fuse(rankings, int(top_k * CONTEXT_EXTRA))
+    return rankings[0]
+
+
+# Questions about every document ("summarize each document", "what do they have in common")
+# need a passage from each of them, which nearest-neighbour search over the whole set does
+# not give: a few documents can fill every slot.
+_ALL_DOCUMENTS = re.compile(
+    r"\b(each|every|both|compare|comparison|common|differ\w*|across"
+    r"|(all|the)\s+(of\s+)?(these\s+|my\s+|those\s+|the\s+)?(documents|docs|files))\b",
+    re.IGNORECASE,
+)
+PASSAGES_PER_DOCUMENT = 2
+
+
+def asks_about_every_document(question: str) -> bool:
+    return _ALL_DOCUMENTS.search(question) is not None
+
+
+def _grouped_by_document(found: list) -> list:
+    """Passages of one document next to each other, documents in order of their best passage,
+    so source numbers run in order within a document."""
+    order: dict[str, list] = {}
+    for item in found:
+        order.setdefault(item.node.metadata[DOCUMENT_ID], []).append(item)
+    return [item for group in order.values() for item in group]
+
+
+def _without_repeats(found: list) -> list:
+    """Drop passages whose text repeats an earlier one (the same file uploaded twice would
+    otherwise fill several slots with one passage)."""
+    seen: set[str] = set()
+    kept = []
+    for item in found:
+        text = " ".join(item.node.get_content().split()).casefold()
+        if text not in seen:
+            seen.add(text)
+            kept.append(item)
+    return kept
+
+
+def search_document(
+    document_id: UUID, request: SearchRequest, context: str | None = None
+) -> SearchResponse:
     try:
         with Session(engine) as session:
             require_searchable(session, document_id)
-        query_vector = _embed_query(request.question)
+        found = _retrieve_for([document_id], request.question, context, request.top_k)
+        # The document may have been deleted or changed while the question was embedded.
         with Session(engine) as session:
             require_searchable(session, document_id)
-        found = _retrieve([document_id], request.question, query_vector, request.top_k)
         return SearchResponse(
             document_id=document_id,
             question=request.question,
@@ -99,7 +182,7 @@ def search_document(document_id: UUID, request: SearchRequest) -> SearchResponse
         raise InvalidAIResponseError("Invalid response from embedding service") from None
 
 
-MAX_MULTI_TOP_K = 10
+MAX_MULTI_TOP_K = 12
 
 
 def _name(names: dict, item, field: str) -> str | None:
@@ -108,7 +191,9 @@ def _name(names: dict, item, field: str) -> str | None:
     return getattr(row, field) if row is not None else None
 
 
-def search_documents(document_ids: list[UUID], request: SearchRequest) -> SearchResponse:
+def search_documents(
+    document_ids: list[UUID], request: SearchRequest, context: str | None = None
+) -> SearchResponse:
     """Search several documents at once; each match names the document it came from."""
     try:
         with Session(engine) as session:
@@ -122,10 +207,21 @@ def search_documents(document_ids: list[UUID], request: SearchRequest) -> Search
                     )
                 )
             }
-        query_vector = _embed_query(request.question)
         # Leave room for every document to contribute, within a bounded prompt.
         top_k = min(MAX_MULTI_TOP_K, max(request.top_k, 2 * len(document_ids)))
-        found = _retrieve(document_ids, request.question, query_vector, top_k)
+        if asks_about_every_document(request.question):
+            # The best passages of each document, so a few documents cannot fill every slot.
+            vector = _embed_query(request.question)
+            found = [
+                item
+                for document_id in document_ids
+                for item in passages_of_document(
+                    document_id, request.question, vector, PASSAGES_PER_DOCUMENT
+                )
+            ]
+        else:
+            found = _without_repeats(_retrieve_for(document_ids, request.question, context, top_k))
+        found = _grouped_by_document(found)
         return SearchResponse(
             document_id=None,
             question=request.question,

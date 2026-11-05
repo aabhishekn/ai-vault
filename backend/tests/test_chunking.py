@@ -10,7 +10,7 @@ class ChunkingTests(unittest.TestCase):
         self.assertEqual([chunk.text for chunk in chunks], ["a b c d e", "d e f g h", "g h i"])
         self.assertEqual([chunk.chunk_index for chunk in chunks], [0, 1, 2])
 
-    def test_keeps_original_page_numbers_and_normalizes_whitespace(self):
+    def test_keeps_original_page_numbers_and_normalizes_spaces_but_keeps_lines(self):
         chunks = chunk_pages(
             [
                 ExtractedPage(1, "First\n  page\ttext"),
@@ -20,7 +20,7 @@ class ChunkingTests(unittest.TestCase):
         )
         self.assertEqual(
             [(chunk.chunk_index, chunk.page_number, chunk.text) for chunk in chunks],
-            [(0, 1, "First page text"), (1, 3, "Third page")],
+            [(0, 1, "First\npage text"), (1, 3, "Third page")],
         )
         self.assertEqual(chunk_pages([]), [])
 
