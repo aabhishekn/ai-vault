@@ -23,6 +23,11 @@ Give a concise answer. Write the citation labels inside the answer text itself: 
 sentence that states a fact with the label of its supporting source, for example
 "FastAPI is recommended [1]. PostgreSQL stores the data [2]." An answer with no [n]
 label in its text is invalid.
+Make the answer easy to scan. Start with the direct answer in one sentence. When the answer
+has several items (dates, steps, requirements, differences), give each item its own line
+starting with "- " instead of joining them into one long sentence, and keep each line short.
+Put a line's labels together at its end, like "[1][2]", not in the middle. Keep any paragraph
+to three sentences or fewer. Use plain text only: no headings, bold, or tables.
 When sources come from several documents, each names its "document"; say which document
 a fact comes from when it matters, and note when documents disagree.
 Use only supplied source numbers. Do not invent citations, page numbers, or facts.

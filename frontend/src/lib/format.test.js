@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { displayTitle, documentTitle } from './format'
+import { displayTitle, documentTitle, readableText } from './format'
 
 describe('documentTitle', () => {
   it.each([
@@ -33,5 +33,14 @@ describe('displayTitle', () => {
     expect(displayTitle({ title: null, filename: 'x_y.pdf' })).toBe('x y')
     expect(displayTitle({ filename: 'Notes.pdf' })).toBe('Notes')
     expect(displayTitle({ title: '', filename: 'Notes.pdf' })).toBe('Notes')
+  })
+})
+
+describe('readableText', () => {
+  it('turns symbol-font bullets into real ones and leaves other text alone', () => {
+    expect(readableText('Resume or CV \uF0B7 Duration \u00B7 45 minutes')).toBe(
+      'Resume or CV • Duration \u00B7 45 minutes',
+    )
+    expect(readableText('Plain text.')).toBe('Plain text.')
   })
 })

@@ -47,3 +47,9 @@ export function formatDuration(ms) {
 export function formatPercent(ratio) {
   return ratio === null ? '—' : `${Math.round(ratio * 100)}%`
 }
+
+// Text read out of a document for display. Word and some PDF makers draw bullets from a
+// symbol font, which comes out as private-use characters that show as empty boxes.
+export function readableText(text) {
+  return text.replace(/[\uE000-\uF8FF]/g, '•')
+}

@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { Button } from '../../components/Button'
 import { Working } from '../../components/Working'
+import { readableText } from '../../lib/format'
 import { canGenerateInsights } from './insights'
 
 import { useDocumentInsights } from './useDocumentInsights'
@@ -94,7 +95,7 @@ export function DocumentInsights({ id, documentStatus }) {
                 Page {insight.page_number}
               </p>
               <blockquote className="border-l-2 border-[#ddd9ca] pl-3 [&_p]:text-xs [&_p]:leading-[1.8] [&_p]:whitespace-pre-wrap [&_p]:text-muted">
-                <p>{insight.evidence}</p>
+                <p>{readableText(insight.evidence)}</p>
               </blockquote>
             </li>
           ))}

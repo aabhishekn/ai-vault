@@ -1,7 +1,6 @@
 import { useId, useState } from 'react'
-import { documentTitle } from '../../lib/format'
-
-const LABEL = /\[(\d+)\]/g
+import { documentTitle, readableText } from '../../lib/format'
+import { groupSources, parseAnswer, splitCitations } from './answerText'
 
 // What a person asked: a soft bubble on the right, so a thread reads as a conversation.
 export function QuestionBubble({ text }) {
@@ -13,34 +12,63 @@ export function QuestionBubble({ text }) {
   )
 }
 
-// One paragraph of an answer. A label such as [2] that names a real source becomes a button
-// that opens that source; any other bracketed number stays as text.
-function Paragraph({ text, known, onCite }) {
-  const parts = []
-  let last = 0
-  for (const match of text.matchAll(LABEL)) {
-    const number = Number(match[1])
-    if (!known.has(number)) continue
-    if (match.index > last) parts.push(text.slice(last, match.index))
-    parts.push(
-      <button
-        key={match.index}
-        type="button"
-        className="mx-px cursor-pointer rounded-[5px] border-0 bg-[#f3e3d9] px-1 py-px align-baseline font-sans text-[11px] font-semibold text-earth hover:bg-[#ead3c4]"
-        aria-label={`Show source ${number}`}
-        onClick={() => onCite(number)}
-      >
-        [{number}]
-      </button>,
-    )
-    last = match.index + match[0].length
-  }
-  parts.push(text.slice(last))
+// Source labels that sit together, such as [1][8][9], are one capsule whose parts each open
+// their own source.
+function Citations({ numbers, onCite }) {
   return (
-    <p className="font-serif text-[16px] leading-[1.75] whitespace-pre-wrap">
-      {parts}
-    </p>
+    <span className="mx-0.5 inline-flex rounded-md bg-[#f3e3d9] align-[0.12em] whitespace-nowrap">
+      {numbers.map((number) => (
+        <button
+          key={number}
+          type="button"
+          className="cursor-pointer border-0 bg-transparent px-1.5 py-[3px] font-sans text-[10.5px] leading-none font-semibold text-earth not-first:border-l not-first:border-[#e8cdbd] first:rounded-l-md last:rounded-r-md hover:bg-[#ead3c4]"
+          aria-label={`Show source ${number}`}
+          onClick={() => onCite(number)}
+        >
+          [{number}]
+        </button>
+      ))}
+    </span>
   )
+}
+
+// Text with its source labels turned into clickable capsules. A label that names no real
+// source stays as text.
+function Text({ text, known, onCite }) {
+  return splitCitations(text, known).map((part, index) =>
+    part.type === 'cite' ? (
+      <Citations key={index} numbers={part.numbers} onCite={onCite} />
+    ) : (
+      part.value
+    ),
+  )
+}
+
+// One block of an answer: a paragraph, or a list of short points.
+function Block({ block, known, onCite }) {
+  if (block.type === 'paragraph')
+    return (
+      <p className="font-serif text-[16px] leading-[1.75] whitespace-pre-wrap">
+        <Text text={block.text} known={known} onCite={onCite} />
+      </p>
+    )
+  const List = block.type === 'numbers' ? 'ol' : 'ul'
+  return (
+    <List
+      className={`grid gap-2 pl-6 font-serif text-[16px] leading-[1.7] marker:font-sans marker:text-earth ${block.type === 'numbers' ? 'list-decimal marker:text-[14px] marker:font-semibold' : 'list-disc'}`}
+    >
+      {block.items.map((item, index) => (
+        <li key={index} className="pl-1">
+          <Text text={item} known={known} onCite={onCite} />
+        </li>
+      ))}
+    </List>
+  )
+}
+
+// The short label on a source chip; the document's name is the heading above its chips.
+function chipLabel(citation) {
+  return `[${citation.source_number}] · Page ${citation.page_number}`
 }
 
 function sourceLabel(citation) {
@@ -76,9 +104,7 @@ export function AnswerResult({ result }) {
     )
   }
 
-  const paragraphs = result.answer
-    .split(/\n{2,}/)
-    .filter((text) => text.trim() !== '')
+  const blocks = parseAnswer(result.answer)
 
   return (
     <div className="wrap-anywhere">
@@ -95,8 +121,8 @@ export function AnswerResult({ result }) {
       ) : (
         <div className="mt-4 grid gap-3">
           <h4 className="sr-only">Answer</h4>
-          {paragraphs.map((text, index) => (
-            <Paragraph key={index} text={text} known={known} onCite={cite} />
+          {blocks.map((block, index) => (
+            <Block key={index} block={block} known={known} onCite={cite} />
           ))}
         </div>
       )}
@@ -105,21 +131,35 @@ export function AnswerResult({ result }) {
           <h4 className="mb-2 text-[11px] font-semibold tracking-[0.04em] text-muted uppercase">
             Sources
           </h4>
-          <ol className="flex list-none flex-wrap gap-2">
-            {result.citations.map((citation) => (
-              <li key={citation.source_number} className="max-w-full">
-                <button
-                  type="button"
-                  className="max-w-full cursor-pointer truncate rounded-full border border-evidence-border bg-surface px-3 py-1.5 text-[12px] font-semibold text-earth hover:border-earth aria-expanded:border-earth aria-expanded:bg-[#f3e3d9]"
-                  aria-expanded={open.has(citation.source_number)}
-                  aria-controls={panelId(citation.source_number)}
-                  onClick={() => toggle(citation.source_number)}
-                >
-                  {sourceLabel(citation)}
-                </button>
-              </li>
+          <div className="grid gap-3">
+            {groupSources(result.citations).map((group) => (
+              <div key={group.filename} className="grid gap-1.5">
+                {group.filename && (
+                  <p
+                    className="truncate text-[13px] font-semibold"
+                    title={group.filename}
+                  >
+                    {documentTitle(group.filename)}
+                  </p>
+                )}
+                <ol className="flex list-none flex-wrap gap-2">
+                  {group.citations.map((citation) => (
+                    <li key={citation.source_number} className="max-w-full">
+                      <button
+                        type="button"
+                        className="max-w-full cursor-pointer truncate rounded-full border border-evidence-border bg-surface px-3 py-1.5 text-[12px] font-semibold text-earth hover:border-earth aria-expanded:border-earth aria-expanded:bg-[#f3e3d9]"
+                        aria-expanded={open.has(citation.source_number)}
+                        aria-controls={panelId(citation.source_number)}
+                        onClick={() => toggle(citation.source_number)}
+                      >
+                        {chipLabel(citation)}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </div>
             ))}
-          </ol>
+          </div>
           {result.citations
             .filter((citation) => open.has(citation.source_number))
             .map((citation) => (
@@ -131,7 +171,7 @@ export function AnswerResult({ result }) {
                 <span className="mb-1 block text-[11px] font-semibold text-earth">
                   {sourceLabel(citation)}
                 </span>
-                {citation.text}
+                {readableText(citation.text)}
               </blockquote>
             ))}
         </div>
