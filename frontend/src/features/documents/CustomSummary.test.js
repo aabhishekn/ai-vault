@@ -16,7 +16,7 @@ afterEach(() => {
 })
 
 describe('custom summary form', () => {
-  it('sends the chosen options once and shows the result', async () => {
+  it('sends the chosen options once and hands the result on', async () => {
     const fetch = vi.fn().mockResolvedValue(
       Response.json({
         document_id: 'd',
@@ -25,27 +25,34 @@ describe('custom summary form', () => {
       }),
     )
     vi.stubGlobal('fetch', fetch)
-    render(createElement(CustomSummary, { id: 'd' }))
-    fireEvent.change(screen.getByLabelText('Length'), {
-      target: { value: 'short' },
-    })
-    fireEvent.change(screen.getByLabelText('Tone'), {
-      target: { value: 'executive' },
-    })
+    const onGenerated = vi.fn()
+    render(createElement(CustomSummary, { id: 'd', onGenerated }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Short' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Executive' }))
     fireEvent.change(screen.getByLabelText('Focus (optional)'), {
       target: { value: 'risks' },
     })
     fireEvent.click(
       screen.getByRole('button', { name: 'Generate custom summary' }),
     )
-    expect(await screen.findByText('A brief executive summary.')).toBeTruthy()
-    expect(screen.getByText(/reused from earlier/)).toBeTruthy()
+    await waitFor(() => expect(onGenerated).toHaveBeenCalledTimes(1))
+    expect(onGenerated).toHaveBeenCalledWith({
+      summary: 'A brief executive summary.',
+      cached: true,
+      options: { length: 'short', tone: 'executive', focus: 'risks' },
+    })
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
       length: 'short',
       tone: 'executive',
       focus: 'risks',
     })
+  })
+
+  it('starts at medium length and a neutral tone', () => {
+    render(createElement(CustomSummary, { id: 'd' }))
+    expect(screen.getByRole('radio', { name: 'Medium' }).checked).toBe(true)
+    expect(screen.getByRole('radio', { name: 'Neutral' }).checked).toBe(true)
   })
 
   it('shows a readable error and lets you try again', async () => {
@@ -60,13 +67,16 @@ describe('custom summary form', () => {
         }),
       )
     vi.stubGlobal('fetch', fetch)
-    render(createElement(CustomSummary, { id: 'd' }))
+    const onGenerated = vi.fn()
+    render(createElement(CustomSummary, { id: 'd', onGenerated }))
     const button = () =>
       screen.getByRole('button', { name: 'Generate custom summary' })
     fireEvent.click(button())
     expect((await screen.findByRole('alert')).textContent).toMatch(/not ready/)
+    expect(onGenerated).not.toHaveBeenCalled()
     fireEvent.click(button())
-    await waitFor(() => expect(screen.getByText('Second try.')).toBeTruthy())
+    await waitFor(() => expect(onGenerated).toHaveBeenCalledTimes(1))
+    expect(onGenerated.mock.calls[0][0].summary).toBe('Second try.')
     expect(screen.queryByRole('alert')).toBeNull()
   })
 })

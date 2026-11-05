@@ -4,6 +4,17 @@ export const LENGTHS = ['short', 'medium', 'long']
 export const TONES = ['neutral', 'formal', 'casual', 'executive']
 export const MAX_FOCUS_LENGTH = 200
 
+export function titleCase(value) {
+  return value[0]?.toUpperCase() + value.slice(1)
+}
+
+// The chosen options in a few words, such as "Short · Formal · Focus: risks".
+export function describeOptions({ length, tone, focus }) {
+  const parts = [titleCase(length), titleCase(tone)]
+  if (focus.trim()) parts.push(`Focus: ${focus.trim()}`)
+  return parts.join(' · ')
+}
+
 export const DEFAULT_OPTIONS = {
   length: 'medium',
   tone: 'neutral',

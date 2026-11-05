@@ -18,13 +18,16 @@ export function useCustomSummary(id) {
         options,
         AbortSignal.any([controller.signal, AbortSignal.timeout(120_000)]),
       )
-      if (!controller.signal.aborted) setState({ status: 'success', data })
+      if (controller.signal.aborted) return null
+      setState({ status: 'success', data })
+      return data
     } catch (error) {
       if (!controller.signal.aborted)
         setState({
           status: 'error',
           message: error instanceof Error ? error.message : 'Summary failed.',
         })
+      return null
     } finally {
       if (active.current === controller) active.current = null
     }

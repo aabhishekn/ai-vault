@@ -106,4 +106,54 @@ describe('generated content UI', () => {
     ).toBeNull()
     expect(fetch).toHaveBeenCalledTimes(1)
   })
+
+  it('shows a custom summary in place of the saved one and goes back to it', async () => {
+    const fetch = vi.fn((url, options) =>
+      Promise.resolve(
+        options?.method === 'POST'
+          ? Response.json({
+              document_id: document.id,
+              summary: 'A short, formal take.',
+              cached: true,
+            })
+          : Response.json({
+              document_id: document.id,
+              summary: 'Saved summary text.',
+            }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetch)
+    render(
+      createElement(DocumentSummary, {
+        id: document.id,
+        documentStatus: 'embedded',
+      }),
+    )
+    expect(await screen.findByText('Saved summary text.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('radio', { name: 'Short' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Formal' }))
+    fireEvent.change(screen.getByLabelText('Focus (optional)'), {
+      target: { value: 'risks' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Generate custom summary' }),
+    )
+    // The custom text takes the saved summary's place, and says what it is.
+    expect(await screen.findByText('A short, formal take.')).toBeTruthy()
+    expect(screen.queryByText('Saved summary text.')).toBeNull()
+    expect(screen.getByText('Custom summary')).toBeTruthy()
+    expect(
+      screen.getByText(/Short · Formal · Focus: risks · reused from earlier/),
+    ).toBeTruthy()
+    expect(
+      screen.getByText(/Done\. The custom summary is shown above/),
+    ).toBeTruthy()
+    // Going back needs no request: the saved summary was never replaced.
+    const requests = fetch.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Show saved summary' }))
+    expect(screen.getByText('Saved summary text.')).toBeTruthy()
+    expect(screen.queryByText('A short, formal take.')).toBeNull()
+    expect(screen.queryByText('Custom summary')).toBeNull()
+    expect(fetch.mock.calls).toHaveLength(requests)
+  })
 })
