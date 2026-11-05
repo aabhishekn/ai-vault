@@ -21,6 +21,7 @@ export function useDocumentChat(id, documentStatus, documentIds) {
     pendingQuestion: null,
     streamingText: '',
     error: null,
+    replacing: null, // the turn an edit is replacing, while its new answer is written
   })
   const [restored, setRestored] = useState(false)
   const activeRequest = useRef(null)
@@ -46,6 +47,7 @@ export function useDocumentChat(id, documentStatus, documentIds) {
           pendingQuestion: null,
           streamingText: '',
           error: null,
+          replacing: null,
         })
       })
       // Restoring is a convenience: if it fails, asking a new question still works.
@@ -64,8 +66,9 @@ export function useDocumentChat(id, documentStatus, documentIds) {
     [],
   )
 
-  // Resolves true only when the question was answered and saved.
-  async function send(question) {
+  // Resolves true only when the question was answered and saved. With `replaceTurn` the
+  // answer takes that turn's place and the turns after it go; until it is saved they stay.
+  async function send(question, replaceTurn = null) {
     if (activeRequest.current || !canAskDocument(documentStatus)) return false
     const message = validateQuestion(question)
     if (message) {
@@ -83,6 +86,7 @@ export function useDocumentChat(id, documentStatus, documentIds) {
       pendingQuestion: question.trim(),
       streamingText: '',
       error: null,
+      replacing: replaceTurn,
     }))
     try {
       // The conversation is created lazily so merely opening details costs nothing.
@@ -99,13 +103,20 @@ export function useDocumentChat(id, documentStatus, documentIds) {
             ...previous,
             streamingText: previous.streamingText + text,
           })),
+        replaceTurn,
       )
       if (controller.signal.aborted) return false
       setState((previous) => ({
-        turns: [...previous.turns, turn],
+        turns: [
+          ...(replaceTurn === null
+            ? previous.turns
+            : previous.turns.filter((item) => item.turnNumber < replaceTurn)),
+          turn,
+        ],
         pendingQuestion: null,
         streamingText: '',
         error: null,
+        replacing: null,
       }))
       return true
     } catch (error) {
@@ -114,6 +125,7 @@ export function useDocumentChat(id, documentStatus, documentIds) {
           ...previous,
           pendingQuestion: null,
           streamingText: '',
+          replacing: null,
           error:
             error instanceof ApiError
               ? error.message
@@ -134,6 +146,7 @@ export function useDocumentChat(id, documentStatus, documentIds) {
       pendingQuestion: null,
       streamingText: '',
       error: null,
+      replacing: null,
     })
   }
 

@@ -456,6 +456,148 @@ describe('restoring a saved conversation', () => {
   })
 })
 
+describe('editing a question', () => {
+  const saved = {
+    id: 'c0',
+    turns: [
+      { question: 'Earlier question?', text: 'Earlier answer' },
+      { question: 'Earlier follow-up?', text: 'Second answer' },
+    ],
+  }
+  const edited = 'Earlier follow-up, reworded?'
+  const editButtons = () =>
+    screen.queryAllByRole('button', { name: 'Edit question' })
+  const editor = () =>
+    screen.getByRole('textbox', { name: 'Edit your question' })
+  const sends = (fetch) =>
+    fetch.mock.calls
+      .filter(([url]) => String(url).endsWith('/messages/stream'))
+      .map(([, init]) => JSON.parse(init.body))
+
+  async function open(message) {
+    const fetch = mockApi(message, { saved })
+    render(createElement(ChatThread, { id: 'a', documentStatus: 'embedded' }))
+    await screen.findByText(said('Second answer is required [1].'))
+    return fetch
+  }
+
+  it('offers editing on the last question only', async () => {
+    await open(() => new Promise(() => {}))
+    expect(editButtons()).toHaveLength(1)
+    const last = screen.getByText('Earlier follow-up?').closest('li')
+    expect(last.contains(editButtons()[0])).toBe(true)
+  })
+
+  it('resends the edited question in place of the old one and drops the old answer', async () => {
+    const fetch = await open((asked) =>
+      Promise.resolve(turnResponse('a', asked, 2, 'c0')),
+    )
+    fireEvent.click(editButtons()[0])
+    expect(editor().value).toBe('Earlier follow-up?')
+    expect(
+      screen.queryByText('Earlier follow-up?', { selector: 'p' }),
+    ).toBeNull()
+    fireEvent.change(editor(), { target: { value: edited } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save and resend' }))
+    expect(await screen.findByText(said('SQL is required [1].'))).toBeTruthy()
+    expect(sends(fetch)).toEqual([
+      { question: edited, top_k: 3, replace_turn: 2 },
+    ])
+    expect(
+      screen.queryByText(said('Second answer is required [1].')),
+    ).toBeNull()
+    expect(
+      screen.getByText(said('Earlier answer is required [1].')),
+    ).toBeTruthy()
+    expect(screen.getByText(edited)).toBeTruthy()
+    expect(
+      screen.queryByRole('textbox', { name: 'Edit your question' }),
+    ).toBeNull()
+    expect(editButtons()).toHaveLength(1)
+  })
+
+  it('sends with Enter, and not an empty or unchanged question', async () => {
+    const fetch = await open((asked) =>
+      Promise.resolve(turnResponse('a', asked, 2, 'c0')),
+    )
+    fireEvent.click(editButtons()[0])
+    const save = screen.getByRole('button', { name: 'Save and resend' })
+    expect(save.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(save)
+    fireEvent.keyDown(editor(), { key: 'Enter' })
+    fireEvent.change(editor(), { target: { value: '   ' } })
+    fireEvent.keyDown(editor(), { key: 'Enter' })
+    expect(sends(fetch)).toEqual([])
+    fireEvent.change(editor(), { target: { value: edited } })
+    expect(save.getAttribute('aria-disabled')).toBe('false')
+    fireEvent.keyDown(editor(), { key: 'Enter', shiftKey: true })
+    expect(sends(fetch)).toEqual([])
+    fireEvent.keyDown(editor(), { key: 'Enter' })
+    await screen.findByText(said('SQL is required [1].'))
+    expect(sends(fetch)).toHaveLength(1)
+  })
+
+  it('cancels with the button or Escape and sends nothing', async () => {
+    const fetch = await open(() => new Promise(() => {}))
+    fireEvent.click(editButtons()[0])
+    fireEvent.change(editor(), { target: { value: edited } })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByText('Earlier follow-up?')).toBeTruthy()
+    fireEvent.click(editButtons()[0])
+    expect(editor().value).toBe('Earlier follow-up?')
+    fireEvent.keyDown(editor(), { key: 'Escape' })
+    expect(screen.getByText('Earlier follow-up?')).toBeTruthy()
+    expect(
+      screen.queryByRole('textbox', { name: 'Edit your question' }),
+    ).toBeNull()
+    expect(sends(fetch)).toEqual([])
+  })
+
+  it('hides the replaced answer while the new one is written, then offers no edit', async () => {
+    await open(() => new Promise(() => {}))
+    fireEvent.click(editButtons()[0])
+    fireEvent.change(editor(), { target: { value: edited } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save and resend' }))
+    await screen.findByRole('status')
+    expect(screen.getByText(edited)).toBeTruthy()
+    expect(
+      screen.queryByText(said('Second answer is required [1].')),
+    ).toBeNull()
+    expect(
+      screen.getByText(said('Earlier answer is required [1].')),
+    ).toBeTruthy()
+    expect(editButtons()).toHaveLength(0)
+  })
+
+  it('brings the old answer and the edited text back when the resend fails', async () => {
+    await open(() => Promise.resolve(Response.json({}, { status: 503 })))
+    fireEvent.click(editButtons()[0])
+    fireEvent.change(editor(), { target: { value: edited } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save and resend' }))
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'couldn’t complete',
+    )
+    expect(
+      screen.getByText(said('Second answer is required [1].')),
+    ).toBeTruthy()
+    expect(editor().value).toBe(edited)
+  })
+
+  it('closes the editor when a new question is asked instead', async () => {
+    await open((asked) => Promise.resolve(turnResponse('a', asked, 3, 'c0')))
+    fireEvent.click(editButtons()[0])
+    fireEvent.change(screen.getByLabelText('Your follow-up question'), {
+      target: { value: followUp },
+    })
+    ask()
+    await screen.findByText(said('SQL is required [1].'))
+    expect(
+      screen.queryByRole('textbox', { name: 'Edit your question' }),
+    ).toBeNull()
+    expect(screen.getByText('Earlier follow-up?')).toBeTruthy()
+  })
+})
+
 describe('suggested questions', () => {
   it('offers suggestions that fill the question box without sending it', async () => {
     const fetch = vi.fn((url) => {

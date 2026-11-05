@@ -314,6 +314,24 @@ describe('streamed messages', () => {
     await expect(result).rejects.toThrow(/could not be found/)
   })
 
+  it.each([
+    [undefined, { question, top_k: 3 }],
+    [null, { question, top_k: 3 }],
+    [2, { question, top_k: 3, replace_turn: 2 }],
+  ])('sends replace_turn only for an edit (%s)', async (replaceTurn, body) => {
+    const fetch = vi.fn().mockResolvedValue(streamOf(turnEvent, 1000))
+    vi.stubGlobal('fetch', fetch)
+    await sendMessageStream(
+      documentId,
+      conversationId,
+      question,
+      signal(),
+      vi.fn(),
+      replaceTurn,
+    )
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual(body)
+  })
+
   it('rejects a turn for another conversation', async () => {
     const wrong = `event: turn\ndata: ${JSON.stringify({ ...turn, conversation_id: 'other' })}\n\n`
     const { result } = run(streamOf(wrong, 50))

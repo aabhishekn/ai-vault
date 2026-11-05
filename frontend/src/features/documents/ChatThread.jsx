@@ -3,6 +3,7 @@ import { Button } from '../../components/Button'
 import { Working } from '../../components/Working'
 import { AnswerResult, QuestionBubble } from './AnswerResult'
 import { canAskDocument, MAX_QUESTION_LENGTH } from './answers'
+import { QuestionEditor } from './QuestionEditor'
 import { smallTalkReply } from './smallTalk'
 
 import { useDocumentChat } from './useDocumentChat'
@@ -24,11 +25,14 @@ export function ChatThread({
   const [question, setQuestion] = useState('')
   // A greeting and its instant reply: shown after the thread, never sent or saved.
   const [chitchat, setChitchat] = useState(null)
+  // The question being edited: which turn, and the text in its editor.
+  const [editing, setEditing] = useState(null)
   const {
     turns,
     pendingQuestion,
     streamingText,
     error,
+    replacing,
     restoring,
     send,
     startNewConversation,
@@ -41,10 +45,17 @@ export function ChatThread({
   const eligible = canAskDocument(documentStatus)
   const empty = turns.length === 0 && !restoring && !busy
   const canStartNew = turns.length > 0
+  // While an edit is being answered, the turn it replaces (and any after it) is out of view.
+  const shownTurns =
+    replacing === null
+      ? turns
+      : turns.filter((turn) => turn.turnNumber < replacing)
+  const lastTurn = turns.at(-1)
 
   async function submit(event) {
     event.preventDefault()
     if (!eligible || locked) return
+    setEditing(null)
     const reply = smallTalkReply(
       question,
       id !== null ? 'this document' : 'your documents',
@@ -75,7 +86,7 @@ export function ChatThread({
     )
     if (latest?.scrollIntoView) latest.scrollIntoView({ block: 'start' })
     else element.scrollTop = element.scrollHeight
-  }, [turns.length, restoring])
+  }, [lastTurn?.id, restoring])
   useEffect(() => {
     const element = scroller.current
     if (element && (busy || chitchat)) element.scrollTop = element.scrollHeight
@@ -90,8 +101,18 @@ export function ChatThread({
       element.style.height = `${Math.min(element.scrollHeight, 160)}px`
   }, [question])
 
+  // Ask an edited question again in place of the turn it came from. If that fails the editor
+  // comes back with the text, and the old answer was never removed.
+  async function resend(turn, text) {
+    setEditing(null)
+    setChitchat(null)
+    if (!(await send(text, turn.turnNumber)))
+      setEditing({ id: turn.id, draft: text })
+  }
+
   function newChat() {
     startNewConversation()
+    setEditing(null)
     setChitchat(null)
     setQuestion('')
     input.current?.focus()
@@ -205,9 +226,30 @@ export function ChatThread({
           className="mx-auto w-full max-w-[760px]"
         >
           <ol className="grid list-none gap-10">
-            {turns.map((turn) => (
+            {shownTurns.map((turn) => (
               <li key={turn.id}>
-                <AnswerResult result={turn.answer} />
+                <AnswerResult
+                  result={turn.answer}
+                  onEdit={
+                    turn === lastTurn && eligible && !locked && !editing
+                      ? () =>
+                          setEditing({
+                            id: turn.id,
+                            draft: turn.answer.question,
+                          })
+                      : undefined
+                  }
+                  editor={
+                    editing?.id === turn.id ? (
+                      <QuestionEditor
+                        original={turn.answer.question}
+                        draft={editing.draft}
+                        onSave={(text) => void resend(turn, text)}
+                        onCancel={() => setEditing(null)}
+                      />
+                    ) : undefined
+                  }
+                />
               </li>
             ))}
           </ol>
@@ -225,7 +267,7 @@ export function ChatThread({
             </div>
           )}
           {busy && (
-            <div className={turns.length > 0 ? 'mt-10' : ''}>
+            <div className={shownTurns.length > 0 ? 'mt-10' : ''}>
               <QuestionBubble text={pendingQuestion} />
               {streamingText ? (
                 <div className="mt-4 wrap-anywhere" aria-live="off">

@@ -129,8 +129,9 @@ function sourceLabel(citation) {
 }
 
 // A question's answer: the text with clickable source labels, then the sources as compact
-// chips that each open the passage the answer was drawn from.
-export function AnswerResult({ result }) {
+// chips that each open the passage the answer was drawn from. `onEdit` adds an edit button
+// to the question; `editor` shows an editor in its place.
+export function AnswerResult({ result, onEdit, editor }) {
   const idBase = useId()
   const [open, setOpen] = useState(() => new Set())
   const known = new Set(result.citations.map((item) => item.source_number))
@@ -158,7 +159,35 @@ export function AnswerResult({ result }) {
 
   return (
     <div className="wrap-anywhere">
-      <QuestionBubble text={result.question} />
+      {editor ?? (
+        <div className="flex items-start justify-end gap-1.5">
+          {onEdit && (
+            <button
+              type="button"
+              className="mt-1.5 grid size-8 shrink-0 cursor-pointer place-items-center rounded-lg border-0 bg-transparent text-muted hover:bg-[#efede4] hover:text-ink"
+              aria-label="Edit question"
+              title="Edit question"
+              onClick={onEdit}
+            >
+              <svg
+                viewBox="0 0 20 20"
+                className="size-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                aria-hidden="true"
+              >
+                <path
+                  d="M13.5 3.5l3 3M3.5 16.5l.8-3.2L14 3.6a1.4 1.4 0 012 0l.4.4a1.4 1.4 0 010 2L6.7 15.7l-3.2.8z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          )}
+          <QuestionBubble text={result.question} />
+        </div>
+      )}
       {result.insufficient_evidence ? (
         <div className="mt-4 rounded-xl border border-panel-border bg-panel-footer px-4 py-3">
           <h4 className="mb-1 text-[13px] font-semibold">

@@ -454,6 +454,8 @@ Search, ask and conversation messages embed the question before searching. The v
 | `turn` | the saved turn, same shape as the `/messages` response | Final event. Contains the validated answer, citations and token usage; clients should show it instead of the streamed text. |
 | `error` | `{"detail": "...", "status": 502}` | Generation or saving failed after streaming began. |
 
+To edit a question, send the new text with `"replace_turn": N` (to either messages endpoint; `N` is a turn number from 1). The answer is generated as if turn `N` had not happened: only turns before `N` are used as context. When it is saved, turn `N` and every turn after it are deleted and the new turn is saved as number `N`, in one transaction, so the conversation never holds a mix of old and new. If generation fails, nothing is deleted. A `replace_turn` beyond the current turn count returns 409, and the version check also returns 409 if another message was saved meanwhile. Edited-out turns are gone for good; there is no undo.
+
 Problems found before generation starts (unknown conversation 404, document not searchable 409, retrieval or database failure 503) return a normal HTTP error because the status line has not been sent yet. The turn is saved only after the complete answer passes citation validation, so a dropped connection or an `error` event leaves the conversation unchanged and the question can be asked again. The version check and rate limit are the same as `/messages`.
 
 Implementation: the model returns structured JSON with `answer` first, and the server decodes the `answer` string from the raw JSON deltas as they arrive. Request latency in `/metrics/api` measures time to the first byte for this route, not the full stream.

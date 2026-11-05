@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AnswerResult } from './AnswerResult'
 
 afterEach(cleanup)
@@ -138,5 +138,41 @@ describe('answer layout', () => {
       ).toBeNull()
       expect(screen.getByText('Passage 1.')).toBeTruthy()
     })
+  })
+})
+
+describe('editing the question', () => {
+  const result = {
+    question: 'What is due?',
+    answer: 'Form A [1].',
+    insufficient_evidence: false,
+    citations: [source(1, 'a.pdf', 1)],
+  }
+
+  it('has no edit button unless an edit handler is given', () => {
+    render(createElement(AnswerResult, { result }))
+    expect(screen.queryByRole('button', { name: 'Edit question' })).toBeNull()
+    expect(screen.getByText('What is due?')).toBeTruthy()
+  })
+
+  it('offers an edit button that calls the handler', () => {
+    const onEdit = vi.fn()
+    render(createElement(AnswerResult, { result, onEdit }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit question' }))
+    expect(onEdit).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the editor in place of the question and keeps the answer', () => {
+    render(
+      createElement(AnswerResult, {
+        result,
+        onEdit: vi.fn(),
+        editor: createElement('div', null, 'editor here'),
+      }),
+    )
+    expect(screen.getByText('editor here')).toBeTruthy()
+    expect(screen.queryByText('What is due?')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Edit question' })).toBeNull()
+    expect(screen.getByText(/Form A/)).toBeTruthy()
   })
 })

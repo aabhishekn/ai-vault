@@ -122,7 +122,8 @@ function parseEvent(block) {
 }
 
 /**
- * Sends a question and reports the answer text as the server writes it.
+ * Sends a question and reports the answer text as the server writes it. With `replaceTurn`
+ * it is an edit: the answer takes that turn's place and any turns after it are dropped.
  * The streamed text is only a preview: the returned turn is the saved, validated
  * answer with its citations, and callers should show that instead.
  */
@@ -132,6 +133,7 @@ export async function sendMessageStream(
   question,
   signal,
   onText,
+  replaceTurn = null,
 ) {
   const validationError = validateQuestion(question)
   if (validationError) throw new ApiError(validationError)
@@ -146,7 +148,11 @@ export async function sendMessageStream(
           Accept: 'text/event-stream',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ question: normalized, top_k: 3 }),
+        body: JSON.stringify({
+          question: normalized,
+          top_k: 3,
+          ...(replaceTurn === null ? {} : { replace_turn: replaceTurn }),
+        }),
       },
     )
     if (!response.ok)
