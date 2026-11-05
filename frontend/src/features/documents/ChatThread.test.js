@@ -134,6 +134,10 @@ async function renderChat(id = 'a', documentStatus = 'embedded') {
   return view
 }
 
+// An answer's text is split around its clickable source labels, so match the paragraph.
+const said = (text) => (_, element) =>
+  element?.tagName === 'P' && element.textContent === text
+
 describe('conversation UI', () => {
   it('only submits on demand, blocks duplicates, renders evidence, and returns focus', async () => {
     let resolve
@@ -160,7 +164,9 @@ describe('conversation UI', () => {
     await act(async () => {
       resolve(turnResponse('a', question))
     })
-    expect(await screen.findByText('Python is required [1].')).toBeTruthy()
+    expect(
+      await screen.findByText(said('Python is required [1].')),
+    ).toBeTruthy()
     fireEvent.click(screen.getByText('[1] · Page 2'))
     expect(screen.getByText('Python is required.')).toBeTruthy()
     await waitFor(() =>
@@ -175,13 +181,15 @@ describe('conversation UI', () => {
     await renderChat()
     enter(question)
     ask()
-    expect(await screen.findByText('Python is required [1].')).toBeTruthy()
+    expect(
+      await screen.findByText(said('Python is required [1].')),
+    ).toBeTruthy()
     expect(screen.getByRole('textbox').value).toBe('')
     expect(screen.getByText('Your follow-up question')).toBeTruthy()
     enter(followUp)
     ask()
-    expect(await screen.findByText('SQL is required [1].')).toBeTruthy()
-    expect(screen.getByText('Python is required [1].')).toBeTruthy()
+    expect(await screen.findByText(said('SQL is required [1].'))).toBeTruthy()
+    expect(screen.getByText(said('Python is required [1].'))).toBeTruthy()
     expect(posts(fetch)).toEqual([
       '/api/documents/a/conversations',
       '/api/conversations/c1/messages/stream',
@@ -197,16 +205,16 @@ describe('conversation UI', () => {
     await renderChat()
     enter(question)
     ask()
-    await screen.findByText('Python is required [1].')
+    await screen.findByText(said('Python is required [1].'))
     enter(followUp)
     ask()
     expect((await screen.findByRole('alert')).textContent).toContain(
       'couldn’t complete',
     )
-    expect(screen.getByText('Python is required [1].')).toBeTruthy()
+    expect(screen.getByText(said('Python is required [1].'))).toBeTruthy()
     expect(screen.getByRole('textbox').value).toBe(followUp)
     ask()
-    expect(await screen.findByText('SQL is required [1].')).toBeTruthy()
+    expect(await screen.findByText(said('SQL is required [1].'))).toBeTruthy()
     expect(screen.queryByRole('alert')).toBeNull()
   })
   it('explains and blocks questions when text is not indexed, without looking for history', async () => {
@@ -298,7 +306,7 @@ describe('conversation UI', () => {
     await act(async () => {
       resolve(turnResponse('a', question))
     })
-    expect(screen.queryByText('Python is required [1].')).toBeNull()
+    expect(screen.queryByText(said('Python is required [1].'))).toBeNull()
     await waitFor(() =>
       expect(screen.getByRole('textbox').hasAttribute('disabled')).toBe(false),
     )
@@ -324,20 +332,22 @@ describe('restoring a saved conversation', () => {
     expect(screen.getByText('Loading your previous conversation…')).toBeTruthy()
     expect(screen.getByRole('textbox').hasAttribute('disabled')).toBe(true)
     expect(
-      await screen.findByText('Earlier answer is required [1].'),
+      await screen.findByText(said('Earlier answer is required [1].')),
     ).toBeTruthy()
-    expect(screen.getByText('Second answer is required [1].')).toBeTruthy()
+    expect(
+      screen.getByText(said('Second answer is required [1].')),
+    ).toBeTruthy()
     expect(screen.queryByText('Loading your previous conversation…')).toBeNull()
     expect(screen.getByText('Your follow-up question')).toBeTruthy()
     enter(followUp)
     ask()
-    await screen.findByText('SQL is required [1].')
+    await screen.findByText(said('SQL is required [1].'))
     expect(posts(fetch)).toEqual(['/api/conversations/c0/messages/stream'])
   })
   it('puts New chat in the bar above the thread, and keeps it off while an answer is written', async () => {
     mockApi(() => new Promise(() => {}), { saved })
     render(createElement(ChatThread, { id: 'a', documentStatus: 'embedded' }))
-    await screen.findByText('Earlier answer is required [1].')
+    await screen.findByText(said('Earlier answer is required [1].'))
     const button = screen.getByRole('button', { name: 'New chat' })
     expect(button.disabled).toBe(false)
     // It sits above the conversation, not beside the question box.
@@ -355,18 +365,36 @@ describe('restoring a saved conversation', () => {
       { saved },
     )
     render(createElement(ChatThread, { id: 'a', documentStatus: 'embedded' }))
-    await screen.findByText('Earlier answer is required [1].')
+    await screen.findByText(said('Earlier answer is required [1].'))
     fireEvent.click(screen.getByRole('button', { name: 'New chat' }))
-    expect(screen.queryByText('Earlier answer is required [1].')).toBeNull()
+    expect(
+      screen.queryByText(said('Earlier answer is required [1].')),
+    ).toBeNull()
     expect(screen.getByText('Your question')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'New chat' })).toBeNull()
     enter(question)
     ask()
-    await screen.findByText('Python is required [1].')
+    await screen.findByText(said('Python is required [1].'))
     expect(posts(fetch)).toEqual([
       '/api/documents/a/conversations',
       '/api/conversations/c1/messages/stream',
     ])
+  })
+  it('opens at the start of the newest answer, not at a source of an earlier one', async () => {
+    const scrollIntoView = vi.fn()
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView
+    try {
+      mockApi((asked) => Promise.resolve(turnResponse('a', asked, 1)), {
+        saved,
+      })
+      render(createElement(ChatThread, { id: 'a', documentStatus: 'embedded' }))
+      await screen.findByText(said('Second answer is required [1].'))
+      const target = scrollIntoView.mock.contexts.at(-1)
+      expect(target.tagName).toBe('LI')
+      expect(target.textContent).toContain('Second answer is required')
+    } finally {
+      delete window.HTMLElement.prototype.scrollIntoView
+    }
   })
   it('lets you ask a new question when nothing is saved or restoring fails', async () => {
     mockApi((asked) => Promise.resolve(turnResponse('a', asked)), {
@@ -377,7 +405,9 @@ describe('restoring a saved conversation', () => {
     expect(screen.queryByRole('button', { name: 'New chat' })).toBeNull()
     enter(question)
     ask()
-    expect(await screen.findByText('Python is required [1].')).toBeTruthy()
+    expect(
+      await screen.findByText(said('Python is required [1].')),
+    ).toBeTruthy()
   })
   it('loads history only once per open document', async () => {
     const fetch = mockApi(
@@ -389,10 +419,12 @@ describe('restoring a saved conversation', () => {
     const { rerender } = render(
       createElement(ChatThread, { id: 'a', documentStatus: 'embedded' }),
     )
-    await screen.findByText('Earlier answer is required [1].')
+    await screen.findByText(said('Earlier answer is required [1].'))
     const reads = fetch.mock.calls.length
     rerender(createElement(ChatThread, { id: 'a', documentStatus: 'ready' }))
-    expect(screen.getByText('Earlier answer is required [1].')).toBeTruthy()
+    expect(
+      screen.getByText(said('Earlier answer is required [1].')),
+    ).toBeTruthy()
     expect(fetch.mock.calls.length).toBe(reads)
   })
 })
@@ -510,7 +542,9 @@ describe('streaming answers', () => {
     expect(await screen.findByText('Python is')).toBeTruthy()
     expect(screen.queryByText(/Sources$/)).toBeNull()
     await act(async () => finish?.())
-    expect(await screen.findByText('Python is required [1].')).toBeTruthy()
+    expect(
+      await screen.findByText(said('Python is required [1].')),
+    ).toBeTruthy()
     expect(screen.getByText('Sources')).toBeTruthy()
     expect(screen.queryByText(/Answering/)).toBeNull()
     vi.unstubAllGlobals()

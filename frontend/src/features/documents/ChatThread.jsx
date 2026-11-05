@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
-import { AnswerResult } from './AnswerResult'
+import { AnswerResult, QuestionBubble } from './AnswerResult'
 import { canAskDocument, MAX_QUESTION_LENGTH } from './answers'
 
 import { useDocumentChat } from './useDocumentChat'
@@ -56,7 +56,9 @@ export function ChatThread({
   useEffect(() => {
     const element = scroller.current
     if (!element) return
-    const latest = element.querySelector('ol > li:last-child')
+    const latest = element.querySelector(
+      ':scope > [role="log"] > ol > li:last-child',
+    )
     if (latest?.scrollIntoView) latest.scrollIntoView({ block: 'start' })
     else element.scrollTop = element.scrollHeight
   }, [turns.length, restoring])
@@ -118,7 +120,7 @@ export function ChatThread({
       )}
       <div
         ref={scroller}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6 max-[600px]:px-4"
+        className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6 max-[600px]:px-4"
       >
         {restoring && (
           <p className="text-[13px] leading-[1.8] text-muted" role="status">
@@ -181,39 +183,48 @@ export function ChatThread({
             )}
           </div>
         )}
-        <div role="log" aria-label="Conversation" aria-live="polite">
-          <ol className="grid list-none gap-8">
+        <div
+          role="log"
+          aria-label="Conversation"
+          aria-live="polite"
+          className="mx-auto w-full max-w-[760px]"
+        >
+          <ol className="grid list-none gap-10">
             {turns.map((turn) => (
               <li key={turn.id}>
                 <AnswerResult result={turn.answer} />
               </li>
             ))}
           </ol>
-          {busy && !streamingText && (
-            <p
-              className="mt-6 text-[13px] leading-[1.8] text-muted"
-              role="status"
-            >
-              Finding relevant passages for “{pendingQuestion}”. Keep this view
-              open; this may take a moment.
-            </p>
-          )}
-          {busy && streamingText && (
-            <div className="mt-6 wrap-anywhere" aria-live="off">
-              <p className="mb-2 text-[11px] font-semibold text-muted">
-                Answering “{pendingQuestion}”
-              </p>
-              <p className="text-[14px] leading-[1.9] whitespace-pre-wrap">
-                {streamingText}
-              </p>
-              <p className="mt-2 text-xs text-muted">
-                Sources appear once the answer is complete.
-              </p>
+          {busy && (
+            <div className={turns.length > 0 ? 'mt-10' : ''}>
+              <QuestionBubble text={pendingQuestion} />
+              {streamingText ? (
+                <div className="mt-4 wrap-anywhere" aria-live="off">
+                  <p className="font-serif text-[16px] leading-[1.75] whitespace-pre-wrap">
+                    {streamingText}
+                  </p>
+                  <p className="mt-2 text-xs text-muted">
+                    Sources appear once the answer is complete.
+                  </p>
+                </div>
+              ) : (
+                <p
+                  className="mt-4 text-[13px] leading-[1.8] text-muted"
+                  role="status"
+                >
+                  Finding relevant passages. Keep this view open; this may take
+                  a moment.
+                </p>
+              )}
             </div>
           )}
         </div>
         {error && (
-          <p className="mt-4 text-[13px] leading-[1.8] text-error" role="alert">
+          <p
+            className="mx-auto mt-4 w-full max-w-[760px] text-[13px] leading-[1.8] text-error"
+            role="alert"
+          >
             {error}
           </p>
         )}
