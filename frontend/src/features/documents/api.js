@@ -1,5 +1,5 @@
 import { ApiError, getJson } from '../../lib/api'
-import { DOCUMENT_STATUSES } from './types'
+import { DOCUMENT_STATUSES } from './status'
 
 function isRecord(value) {
   return typeof value === 'object' && value !== null

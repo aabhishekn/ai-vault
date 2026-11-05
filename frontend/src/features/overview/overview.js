@@ -1,5 +1,5 @@
 import { ApiError, getJson } from '../../lib/api'
-import { DOCUMENT_STATUSES } from '../documents/types'
+import { DOCUMENT_STATUSES } from '../documents/status'
 
 const unexpected = () =>
   new ApiError(

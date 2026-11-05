@@ -1,4 +1,4 @@
-import { useResource } from '../../hooks/useResource'
+import { useResource } from '../../lib/useResource'
 import { getDocumentStatistics, getProcessingMetrics } from './overview'
 
 const STATS_ERROR =

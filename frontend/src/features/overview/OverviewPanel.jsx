@@ -5,7 +5,7 @@ import {
   formatFileSize,
   formatPercent,
 } from '../../lib/format'
-import { DOCUMENT_STATUSES } from '../documents/types'
+import { DOCUMENT_STATUSES } from '../documents/status'
 import { STATUS_LABELS } from '../documents/status'
 
 import { useOverview } from './useOverview'

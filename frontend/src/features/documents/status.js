@@ -1,3 +1,12 @@
+export const DOCUMENT_STATUSES = [
+  'queued',
+  'processing',
+  'extracted',
+  'embedded',
+  'ready',
+  'failed',
+]
+
 export const STATUS_LABELS = {
   // Only ever shown for an upload that is still on its way to the server.
   uploading: 'Uploading',
@@ -15,4 +24,9 @@ export const DOCUMENT_STATUS_HINTS = {
   processing: 'Being processed now.',
   extracted: 'Text is extracted, but questions need the search index.',
   failed: 'Processing failed. The file is still saved.',
+}
+
+// Questions need the search index, which a document has once it is embedded.
+export function canAskDocument(status) {
+  return status === 'embedded' || status === 'ready'
 }

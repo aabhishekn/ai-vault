@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../lib/api'
 import { getDocument, listDocuments, parseDocumentPage } from './api'
-import { DOCUMENT_STATUSES } from './types'
+import { DOCUMENT_STATUSES } from './status'
 
 const document = {
   id: '27787af5-f007-4689-aae1-4f551946babe',
