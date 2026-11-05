@@ -1,56 +1,110 @@
-# Backend architecture
+# Architecture
 
-## Follow one request
+How the backend is put together and why. For endpoints see [api.md](api.md); for running it see [operations.md](operations.md).
 
-`app.main` builds FastAPI, installs the shared service-error handler, and registers the API router. A route validates path/query/body input and calls a service. Services return typed response schemas and raise explicit application errors. The HTTP boundary translates those errors to the existing JSON `detail` format.
+## Code boundaries
 
-SQLAlchemy sessions are scoped to the transaction that needs them. Services use `app.db.queries` for shared document lookup; database queries remain near their owning workflow. No generic repository hierarchy or dependency-injection framework is required for the current application size.
+A request flows one way: **route → service → database or provider**.
 
-The same services can be called from a future CLI or test without creating an HTTP request. API routes do not import SQLAlchemy, Redis, OpenAI, task internals, or ORM models. Architecture tests enforce these import boundaries.
+| Layer | Does | Must not |
+| --- | --- | --- |
+| `api/routes/` | Validates input, calls one service, returns a typed response | Touch SQLAlchemy, Redis, OpenAI or ORM models |
+| `services/` | The workflow: queries, transactions, calls to `ai/` | Import FastAPI. They raise explicit errors that one handler turns into HTTP responses |
+| `ai/` | One module per AI feature: prompt, output schema, validation | Touch the database |
+| `processing/` | Pure text work: PDF and image reading, chunking | Call the network |
+| `tasks/` | The RQ job and its transaction boundaries | |
 
-## Shared infrastructure
+Architecture tests (`tests/test_architecture.py`) enforce the import rules. Two more rules: network calls never happen inside a database transaction, and applied migrations are never edited.
 
-`core.config` owns repository paths, environment loading, common model dimensions/status sets, and configuration access. Environment variables override `.env`; restart processes after changing that file. Credentials are never embedded in connection strings committed to Git.
+To add a feature: a schema in `schemas/`, a route in `api/routes/`, the workflow in `services/`, the provider call in `ai/`, a migration only if stored data changes, and tests for the failure and concurrency cases.
 
-`ai.client.create_client()` owns API-key validation, timeout and retry configuration. Each AI helper keeps its own prompt, output schema and validation. Embedding model/dimension constants are shared by the model column and provider helper. Zero/non-finite vectors and mismatched models are rejected before storage or cosine search.
+## Processing pipeline
 
-`services.document_content` owns the shared read-cache/generate/save lifecycle for summaries and insights. Feature services supply the generation callback. Network work happens after the read session closes. A conditional update preserves an earlier saved result during concurrent generation.
+The worker job (`tasks/documents.py`) runs in short stages so a failure never loses earlier work:
 
-## Processing transactions
+1. **Claim** the document with one conditional update and record a processing attempt. A duplicate job finds it already claimed and skips.
+2. **Read** the file outside any transaction: PDF text per page, or vision transcription for scans and pictures.
+3. **Save** pages and chunks in one transaction. With embeddings off, the job ends here at `extracted`.
+4. **Embed** the chunks in batches of 64, again outside a transaction.
+5. **Save** all vectors, the `embedded` status and the successful attempt together.
+6. **Generate** summary, insights, category and title, each independently and best effort. This runs after the attempt is recorded, so it can never fail the document.
 
-The RQ entry point is `app.tasks.documents.extract_document`. Its helpers make transaction boundaries visible:
+On an ordinary error, the document and its attempt are marked failed together, with the extracted text kept. Chunks never cross a page, so every citation has an exact page. Chunking uses LlamaIndex's `SentenceSplitter` page by page, with sizes counted in words.
 
-1. Atomically claim a queued/failed document and create its processing attempt. Duplicate jobs return without creating an attempt.
-2. Extract the PDF and build chunks outside database transactions.
-3. Replace pages/chunks in one transaction. With embeddings disabled, finish the attempt there.
-4. Generate embedding batches without a database session; retain observed usage in the processing context.
-5. Save every vector, final status and successful attempt together. On an ordinary exception, record document/attempt failure together.
+## Retrieval and answers
 
-A `ProcessingContext` carries attempt identity, monotonic start time and observed usage. Separate helpers own claiming, path validation, text persistence, batching, vector persistence, and failure recording. This keeps the entry point readable while retaining atomicity guarantees.
-
-## Conversation transactions
-
-Read the latest bounded history, then close the session before retrieval and generation. Save the paired question/answer turn with an optimistic conversation-count update. A conflicting request gets 409 rather than appending an answer based on stale history. Stored citations include snapshots so history remains readable independently of provider state.
-
-## How to extend
-
-Add an HTTP contract under `schemas/` and a route under `api/routes/`. Put workflow logic in `services/`, provider interaction in `ai/`, and pure parsing/text transformations in `processing/`. Add a migration only when persistent schema changes. Preserve old migration bodies; a refactor should produce no Alembic drift. Keep network calls outside transactions and add behavior-focused tests for new failure or concurrency cases.
-
-## Current limits
-
-PostgreSQL commits and Redis enqueueing are not atomic: if the queue is down at upload the document stays `queued`, and `POST /documents/{id}/reprocess` (or the worker's startup recovery for abandoned jobs) re-queues it. A force-killed worker leaves its attempt running until it is older than twice the job timeout, after which it is closed as failed and the document is queued again. API latency statistics are held in memory per process (`GET /metrics/api`) and reset on restart. Request idempotency and durable accounting for summary, insight and stateless answer usage remain future work (that usage is logged as `ai_call` events).
-
-Word-sized chunks are not token limits. Summary/insight input has a documented size cap. Citation/source-ID validation ensures references exist, not that every generated claim follows from its evidence. The complete API reference describes these operational limits.
-
-## Retrieval framework
-
-LlamaIndex handles the document-specific steps and our code keeps the guarantees:
+LlamaIndex handles the document-specific steps; our code keeps the guarantees.
 
 | Step | Implementation |
 | --- | --- |
-| Chunking | `SentenceSplitter` run on one page at a time (`app/processing/chunking.py`), so a chunk never crosses a page. Sizes are counted in words, so no tokenizer model is downloaded |
-| Embedding | `VaultEmbedding` (`app/ai/embed_model.py`) is a LlamaIndex `BaseEmbedding` that calls our `generate_embeddings`. LlamaIndex batches; we keep the provider's exact token counts, validation and retry policy |
-| Storage | The existing `document_chunks` table. Ingestion writes it in staged transactions (text first, vectors later), so a failed embedding never loses extracted text |
-| Retrieval | `ChunkVectorStore` (`app/db/vector_store.py`) is a read-only LlamaIndex vector store over that table. `VectorStoreIndex.as_retriever` with a `document_id` metadata filter returns the closest chunks. A search without exactly one `document_id` filter is refused |
-| Query embedding cache | Redis, keyed by the normalised question, in front of the embed model |
-| Answers | The OpenAI SDK with structured output (`app/ai/answer_generation.py`). `llama-index-llms-openai` needs `openai<3` while this project uses 3.x, so LlamaIndex's LLM and query-engine classes are not used |
+| Embedding | `VaultEmbedding` is a LlamaIndex embed model that calls our OpenAI helper, keeping exact token counts and retry policy. Query vectors are cached in Redis. |
+| Storage | The `document_chunks` table, with a `vector(1536)` column. |
+| Retrieval | `ChunkVectorStore` is a read-only LlamaIndex vector store over that table; `VectorStoreIndex` retrieves with a `document_id` filter. A search that is not filtered to specific documents is refused. |
+| Answers | The OpenAI SDK with structured output. LlamaIndex's OpenAI package needs an older SDK than this project uses, so its LLM classes are not used. |
+
+**One question, step by step**
+
+1. Retrieve the 8 closest chunks (`top_k`, up to 20). There is no distance cutoff; the model abstains through an `insufficient_evidence` flag.
+2. For a follow-up, search twice (the bare question, and the question plus a slice of the previous turn) and fuse the two rankings, so a change of subject is not dragged back to the old topic. No separate "rewrite the question" model call.
+3. Across several documents, one query covers all of them (at most 12 passages, repeated text dropped). A question about *each* or *every* document, or one that compares them, instead takes the 2 best passages of every document so a few cannot fill every slot.
+4. The model sees the sources grouped by document, the question, and the last three turns as untrusted context (history resolves "those", never counts as evidence).
+5. The model returns `answer`, `source_numbers` and `insufficient_evidence`. The `[n]` labels written in the answer decide which sources are cited. Each must be a real source; otherwise the question is asked once more, and then rejected (HTTP 502) rather than shown.
+6. The server attaches page, quote, document and chunk id from the stored chunk, never from the model.
+7. If the structured output is cut off, the retry uses `ANSWER_MODEL`, since the same model would stop in the same place.
+
+Small server-side repairs follow: control characters are stripped (PostgreSQL cannot store NUL), and names with accents that the model mangled are restored from the sources.
+
+**Streaming.** The streaming endpoint decodes the `answer` text from the model's JSON as it arrives and sends it as `delta` events. The turn is saved only after the full answer passes validation, so a dropped connection leaves the conversation unchanged.
+
+**Editing a question** replaces that turn and every turn after it, in one transaction and only once the new answer is saved. Keeping a single linear history matches the context window and the stored turn numbers; branches would need a tree of turns.
+
+**Concurrency.** The database session is closed before retrieval and generation. A turn is saved with an optimistic check on the conversation's turn count, so two simultaneous messages cannot both append to the same history: one gets 409.
+
+## Generated content
+
+| Feature | Model sees | Server guarantees |
+| --- | --- | --- |
+| Summary | The extracted text (at most 60,000 characters, otherwise 413) | Complete, non-blank, at most 4,000 characters |
+| Insights | Numbered excerpts of 240 characters | The model picks an excerpt id; the server copies the real quote and page and rejects unknown ids |
+| Category and title | The saved summary and insights, not the full text | Category of 1 to 3 words, at most 40 characters; a person's own title is never replaced |
+| Custom summary | The text plus length, tone and focus (focus is passed as data, not instructions) | Not saved on the document |
+| Comparison | Per document: summary, insights and its 4 best passages for the focus | Document numbers map back to ids; impossible drafts are rejected |
+| Suggested questions | Summary and insights | 3 to 4 questions |
+
+Every prompt declares document text, questions and history untrusted data. The pattern is the same everywhere: **the model produces judgments, the server produces facts.**
+
+## Caching
+
+| What | Where | Lifetime |
+| --- | --- | --- |
+| Summary, insights, category, title | Document row | Saved once, reused |
+| Query embeddings | Redis, keyed by model and normalised question | `EMBEDDING_CACHE_TTL_SECONDS` (24 h) |
+| Custom summaries, suggested questions, comparisons | Redis, keyed by model and inputs | 7 days |
+
+Answers are not cached: they depend on the conversation and cost more to get wrong. A Redis outage only costs a regeneration; a cache can never fail a request.
+
+## Data model
+
+| Table | Holds |
+| --- | --- |
+| `documents` | Metadata, status, extracted pages, summary, insights, category, title, and version fields (`group_id`, `version_number`, `is_latest`, `content_hash`) |
+| `document_chunks` | Chunk text, page, index, embedding and its model |
+| `processing_attempts` | One row per processing run: outcome, duration, embedding tokens |
+| `conversations`, `conversation_turns` | Saved chats; each turn stores the full answer with citation snapshots, model and token usage |
+| `conversation_documents` | Which documents a multi-document conversation covers |
+
+**Versions.** Every version is a full document of its own, linked by a shared `group_id`, so an old conversation always points at the exact file it was asked about. Uploading identical bytes to the latest version is rejected by hash.
+
+**Deletes.** Chunks, attempts and single-document conversations cascade. A multi-document conversation that included the document is deleted too, because its answers quote the deleted file. The stored file is removed after the commit.
+
+## Live updates
+
+The worker is a separate process, so it cannot reach browsers directly. When a status changes, the worker (or an API request) publishes an event on the Redis channel `vault:events`; each WebSocket connection subscribes in the API process and forwards what it receives. Events are not stored or replayed, so the frontend treats each as a hint to refetch and refetches everything after a reconnect. Publishing is best effort and never fails the work it reports.
+
+## Known limits
+
+- Citation checks prove a source exists, not that every claim follows from it.
+- Word-based chunks are not token budgets.
+- PostgreSQL and Redis are not atomic: see recovery in [operations.md](operations.md#processing-and-recovery).
+- API latency statistics live in memory and reset on restart. Token usage for summaries, insights and one-shot `/ask` is logged, not stored.
+- No request idempotency: a retried request can be charged twice.
