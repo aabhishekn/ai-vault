@@ -128,6 +128,28 @@ describe('tag components', () => {
     expect(onChange).toHaveBeenCalledWith({ tag: 'lease' })
   })
 
+  it('offers to clear the filters only while some are set', () => {
+    const onChange = vi.fn()
+    const overview = {
+      categories: [{ category: 'Legal', count: 2 }],
+      tags: [{ tag: 'lease', count: 1 }],
+    }
+    const { rerender } = render(
+      createElement(DocumentFilters, { overview, filter: {}, onChange }),
+    )
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull()
+    rerender(
+      createElement(DocumentFilters, {
+        overview,
+        filter: { category: 'Legal', tag: 'lease' },
+        onChange,
+      }),
+    )
+    expect(screen.getByLabelText('Category').value).toBe('Legal')
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(onChange).toHaveBeenCalledWith({})
+  })
+
   it('shows saved tags, or offers to add them once and shows the result', async () => {
     const fetch = vi.fn().mockResolvedValue(
       Response.json({
