@@ -72,7 +72,7 @@ function ProcessingStats({ data }) {
   if (data.totalAttempts === 0)
     return (
       <p className="text-[13px] leading-[1.8] text-muted">
-        No processing attempts recorded yet. Upload a PDF to see timing and
+        No processing attempts recorded yet. Upload a document to see timing and
         success rates.
       </p>
     )

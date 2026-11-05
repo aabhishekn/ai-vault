@@ -7,7 +7,7 @@ import {
   formatUploadDate,
 } from '../../lib/format'
 import { ApiError } from '../../lib/api'
-import { uploadNewVersion, validateUpload } from './upload'
+import { UPLOAD_ACCEPT, uploadNewVersion, validateUpload } from './upload'
 import { getVersions } from './versions'
 
 const LOAD_ERROR = 'We couldn’t load the versions. Try again.'
@@ -104,7 +104,7 @@ export function DocumentVersions({ id, onOpen, onVersionAdded }) {
             ref={input}
             id="version-file"
             type="file"
-            accept=".pdf,application/pdf"
+            accept={UPLOAD_ACCEPT}
             disabled={busy}
             className="min-w-0 flex-1 text-xs"
             onChange={(event) => {

@@ -3,13 +3,18 @@ import { isDocument } from './api'
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
+// PDFs, plus pictures that the server reads as a scanned page.
+export const UPLOAD_ACCEPT =
+  '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg'
+const SUPPORTED_NAME = /\.(pdf|png|jpe?g)$/i
+
 export function validateUpload(file) {
-  if (!file.name.toLowerCase().endsWith('.pdf')) return 'Choose a PDF file.'
+  if (!SUPPORTED_NAME.test(file.name)) return 'Choose a PDF, PNG or JPG file.'
   if (file.name.length > 255)
     return 'Use a filename with at most 255 characters.'
-  if (file.size === 0) return 'This file is empty. Choose a PDF with content.'
+  if (file.size === 0) return 'This file is empty. Choose a file with content.'
   if (file.size > MAX_UPLOAD_BYTES)
-    return 'Choose a PDF that is 10 MB or smaller (10,485,760 bytes).'
+    return 'Choose a file that is 10 MB or smaller (10,485,760 bytes).'
   return null
 }
 
@@ -32,15 +37,15 @@ async function postFile(path, file, signal, conflictMessage) {
       if (custom) throw new ApiError(custom)
       if (error.status === 413)
         throw new ApiError(
-          'Choose a PDF that is 10 MB or smaller (10,485,760 bytes).',
+          'Choose a file that is 10 MB or smaller (10,485,760 bytes).',
         )
       if (error.status === 415)
         throw new ApiError(
-          'This file is not a supported PDF. Choose a valid PDF file.',
+          'This file is not a supported type. Choose a valid PDF, PNG or JPG file.',
         )
       if (error.status === 400 || error.status === 422)
         throw new ApiError(
-          'The file was rejected. Check that it is a nonempty PDF with a filename of at most 255 characters.',
+          'The file was rejected. Check that it is a nonempty PDF, PNG or JPG with a filename of at most 255 characters.',
         )
     }
     // A timeout or queue failure can happen after the document has been saved.

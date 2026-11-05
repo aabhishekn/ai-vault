@@ -1,5 +1,6 @@
 import hashlib
 import logging
+from pathlib import PurePath
 from typing import BinaryIO
 from uuid import UUID, uuid4
 
@@ -8,7 +9,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.core.config import MAX_UPLOAD_BYTES, STORAGE_DIR
+from app.core.config import MAX_UPLOAD_BYTES, STORAGE_DIR, SUPPORTED_UPLOADS
 from app.core.errors import (
     ConflictError,
     ContentTooLargeError,
@@ -73,20 +74,22 @@ def _save_upload(
     filename = (filename or "").replace("\\", "/").rsplit("/", 1)[-1]
     if not filename or len(filename) > 255:
         raise InvalidInputError("A filename of at most 255 characters is required")
-    if not filename.lower().endswith(".pdf"):
-        raise UnsupportedDocumentError("Only PDF files are supported")
+    suffix = PurePath(filename).suffix.lower()
+    if suffix not in SUPPORTED_UPLOADS:
+        raise UnsupportedDocumentError("Only PDF, PNG and JPG files are supported")
+    content_type, signature, kind = SUPPORTED_UPLOADS[suffix]
     document_id = uuid4()
-    destination = STORAGE_DIR / f"{document_id}.pdf"
+    destination = STORAGE_DIR / f"{document_id}{suffix}"
     size = 0
     created = False
     committed = False
     digest = hashlib.sha256()
     try:
-        header = stream.read(5)
+        header = stream.read(len(signature))
         if not header:
             raise InvalidInputError("The uploaded file is empty")
-        if header != b"%PDF-":
-            raise UnsupportedDocumentError("The file must have a PDF header")
+        if header != signature:
+            raise UnsupportedDocumentError(f"The file must have a {kind} header")
         STORAGE_DIR.mkdir(parents=True, exist_ok=True)
         with destination.open("xb") as output:
             created = True
@@ -96,7 +99,7 @@ def _save_upload(
             while chunk := stream.read(64 * 1024):
                 size += len(chunk)
                 if size > MAX_UPLOAD_BYTES:
-                    raise ContentTooLargeError("PDF must be 10 MiB or smaller")
+                    raise ContentTooLargeError("File must be 10 MiB or smaller")
                 output.write(chunk)
                 digest.update(chunk)
         with Session(engine) as session:
@@ -119,7 +122,7 @@ def _save_upload(
                 title=title,
                 title_source="user" if title else None,
                 storage_path=str(destination.relative_to(STORAGE_DIR.parent.parent)),
-                content_type="application/pdf",
+                content_type=content_type,
                 size_bytes=size,
             )
             session.add(document)

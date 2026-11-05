@@ -14,6 +14,14 @@ REPOSITORY_ROOT = BACKEND_DIR.parent
 ENV_FILE = REPOSITORY_ROOT / ".env"
 STORAGE_DIR = REPOSITORY_ROOT / "storage" / "documents"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+# Accepted extensions -> (content type, leading bytes every such file starts with, short name).
+SUPPORTED_UPLOADS = {
+    ".pdf": ("application/pdf", b"%PDF-", "PDF"),
+    ".png": ("image/png", b"\x89PNG\r\n\x1a\n", "PNG"),
+    ".jpg": ("image/jpeg", b"\xff\xd8\xff", "JPEG"),
+    ".jpeg": ("image/jpeg", b"\xff\xd8\xff", "JPEG"),
+}
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 1536
 MAX_EMBEDDING_BATCH_SIZE = 64
@@ -50,6 +58,20 @@ def embeddings_enabled() -> bool:
     if not os.getenv("ENABLE_EMBEDDINGS", "").strip():
         return bool(os.getenv("OPENAI_API_KEY", "").strip())
     return _bool_setting("ENABLE_EMBEDDINGS", "false")
+
+
+def get_ocr_model() -> str:
+    """The vision model that reads scanned pages and images; follows the answer model by default."""
+    model = os.getenv("OCR_MODEL", "").strip()
+    return model or get_answer_model()
+
+
+def ocr_max_pages() -> int:
+    """Most pages of one scanned PDF that are read as images; each page is a paid request."""
+    pages = _count_setting("OCR_MAX_PAGES", 10)
+    if pages < 1:
+        raise ConfigurationError("OCR_MAX_PAGES must be at least 1")
+    return pages
 
 
 def database_url() -> URL:

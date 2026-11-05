@@ -90,7 +90,9 @@ describe('selecting documents', () => {
   it('invites an upload when the vault is empty', async () => {
     serve([])
     render(createElement(DocumentWorkspace))
-    expect(await screen.findByText(/Upload a PDF to start/)).toBeTruthy()
+    expect(
+      await screen.findByText(/Upload a PDF or an image to start/),
+    ).toBeTruthy()
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
@@ -377,13 +379,25 @@ describe('optimistic changes', () => {
       ).toBeNull()
     })
 
+    it('says why a document failed, in the reason the server saved', async () => {
+      const reason =
+        'No readable text found, even when the pages were read as images.'
+      serveVault(
+        [{ ...documentNamed('a', 'failed'), error_message: reason }],
+        {},
+      )
+      render(createElement(DocumentWorkspace))
+      await openDocument('a')
+      expect(screen.getByText(reason)).toBeTruthy()
+    })
+
     it('opens on Details for a document that cannot be asked about yet', async () => {
       serveVault([documentNamed('a', 'failed')], {})
       render(createElement(DocumentWorkspace))
       await openDocument('a')
       expect(selected()).toEqual(['Details'])
       expect(
-        screen.getByText('Processing failed. The PDF is still saved.'),
+        screen.getByText('Processing failed. The file is still saved.'),
       ).toBeTruthy()
       expect(
         screen.getByRole('button', { name: /Delete document/ }),
@@ -571,12 +585,12 @@ describe('optimistic changes', () => {
       new File(['%PDF-1.4'], 'New.pdf', { type: 'application/pdf' })
 
     function choosePdf() {
-      fireEvent.change(screen.getByLabelText('PDF document'), {
+      fireEvent.change(screen.getByLabelText('Document file'), {
         target: { files: [pdf()] },
       })
       // Submit the form directly: jsdom would block a click on a required file input.
       fireEvent.submit(
-        screen.getByRole('button', { name: 'Upload PDF' }).closest('form'),
+        screen.getByRole('button', { name: 'Upload' }).closest('form'),
       )
     }
 

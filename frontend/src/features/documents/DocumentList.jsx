@@ -135,7 +135,7 @@ export function DocumentList({
           ) : (
             <>
               <h3>Your vault is empty.</h3>
-              <p>No documents yet. Your uploaded PDFs will appear here.</p>
+              <p>No documents yet. Your uploaded files will appear here.</p>
             </>
           )}
         </div>

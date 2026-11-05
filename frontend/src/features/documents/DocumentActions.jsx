@@ -97,7 +97,7 @@ export function DocumentActions({ status, onDelete, onReprocess }) {
           </p>
           <p className="mb-4 text-[13px] leading-[1.8] text-muted">
             This removes the document, all of its versions, its summary,
-            insights, chat history and the stored PDF. This cannot be undone.
+            insights, chat history and the stored file. This cannot be undone.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button ref={cancelButton} onClick={() => setConfirming(false)}>

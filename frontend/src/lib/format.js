@@ -14,7 +14,7 @@ export function formatUploadDate(value) {
 // systems swap ":" for "_" in file names, so an underscore before a space reads back as a colon.
 export function documentTitle(filename) {
   const title = filename
-    .replace(/\.pdf$/i, '')
+    .replace(/\.(pdf|png|jpe?g)$/i, '')
     .replace(/_\s+/g, ': ')
     .replace(/_/g, ' ')
     .replace(/\s+/g, ' ')

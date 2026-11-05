@@ -2,7 +2,7 @@
 
 How AI tools were used to build this is described in [AI_USAGE.md](AI_USAGE.md).
 
-A local document vault with PDF uploads, background text extraction, semantic search, source-cited answers (chat with one document or across several), saved conversations, customizable summaries, insights, automatic category, tags and title, document versions, comparative analysis, live status updates over WebSocket, and processing metrics.
+A local document vault with PDF and image uploads (scans and photos are read with the vision model), background text extraction, semantic search, source-cited answers (chat with one document or across several), saved conversations, customizable summaries, insights, automatic category, tags and title, document versions, comparative analysis, live status updates over WebSocket, and processing metrics.
 
 Built with Python 3.12, FastAPI, SQLAlchemy, PostgreSQL + pgvector, Redis/RQ, and OpenAI. A React frontend (plain JavaScript, Vite and Tailwind CSS) covers the whole workflow: upload, filter, read, chat, compare and manage documents.
 
@@ -42,7 +42,7 @@ npm run dev
 
 Open [the frontend](http://localhost:5173). The Python server must be running on port 8000 (the dev server proxies `/api` to it).
 
-- **Upload and browse.** Choose a PDF up to 10 MB and select **Upload PDF**. The list shows a readable title, size, upload time and status, with pagination and a **Filter** control for category or tag. Status changes arrive without refreshing (WebSocket, reconnecting automatically); the refresh icon reloads on demand. A notice appears if no background worker is running, since uploads would stay queued. Uploading, deleting and **Process again** show their result at once (a pending row, a vanished row, a **Queued** badge) and roll back with a message if the server refuses.
+- **Upload and browse.** Choose a PDF, PNG or JPG up to 10 MB and select **Upload**. A PDF with no text layer (a scan, or "Microsoft Print to PDF") and any picture are read page by page as images; a failed document says why in its details. The list shows a readable title, size, upload time and status, with pagination and a **Filter** control for category or tag. Status changes arrive without refreshing (WebSocket, reconnecting automatically); the refresh icon reloads on demand. A notice appears if no background worker is running, since uploads would stay queued. Uploading, deleting and **Process again** show their result at once (a pending row, a vanished row, a **Queued** badge) and roll back with a message if the server refuses.
 - **Titles.** Documents are listed by a readable title: one the AI writes from the content (in the same request that picks the category and tags, so no extra cost) or one you set with **Rename** in the document dialog. Your own title always wins and applies to every version; clearing it shows the file name, tidied, again.
 - **Chat, always on the right.** The screen is a library on the left and one chat on the right. What the chat asks follows the library: tick documents to ask just those (1 document is its own saved conversation, restored when you come back; 2 to 10 is one conversation across them, with each source naming its document and page), or tick none to ask every search-ready document (the newest ten). Chips above the thread always say what is being asked, with **Use all documents** to go back and **Compare** (2 to 5 documents: similarities and differences by topic, with an optional focus). Answers stream in, cite the page they came from, and keep a **New conversation** control; Enter sends and Shift+Enter adds a line. Until a document is search ready the chat says how many are still processing. On a narrow screen a **Chat | Documents** switch shows one pane at a time.
 - **Open a document** by selecting its title. The dialog has the title, **Rename**, the status (a short hint appears only while the document is not ready to use) and **Ask about this document**, which points the chat at it. **Summary** (the default for search-ready documents) has the saved summary (or **Generate summary**), **Customize the summary** (length, tone, focus; not saved, cached for repeats) and **insights** with page evidence. **Details** (the default while a document is processing or failed) has the category and tags, file name, size and upload time, **Versions** (upload a new version; the list appears once there are two or more, with a `v2` badge for revisions) and **Manage**: **Process again** for failed or text-only documents, and permanent **Delete** with a confirmation. Close with the ✕ or press Escape.
@@ -124,7 +124,7 @@ flowchart TD
     API -->|question embeddings and answers| AI
 ```
 
-**Upload:** the API validates and stores the PDF, records it as `queued`, and returns immediately (HTTP 201). A worker then extracts text with page numbers, chunks it, embeds the chunks, and finally generates a summary and key insights. Status moves `queued, processing, extracted, embedded` (or `failed` with a readable error).
+**Upload:** the API validates and stores the file, records it as `queued`, and returns immediately (HTTP 201). A worker then extracts text with page numbers (a PDF with no text, or a picture, is drawn to JPEG pages and read by the vision model instead, up to `OCR_MAX_PAGES`, default 10), chunks it, embeds the chunks, and finally generates a summary and key insights. Status moves `queued, processing, extracted, embedded` (or `failed` with a readable error).
 
 **Chat:** a question is embedded, the closest chunks of that document are retrieved with pgvector, and the model answers only from them. Citations carry the real page number and quoted text, and are validated before they are returned. Follow-ups use the latest three turns as context.
 
@@ -150,7 +150,7 @@ See [docs/architecture.md](docs/architecture.md) for transaction boundaries and 
 **Assumptions**
 
 - Single tenant, no authentication: every client sees every document. Conversation and document IDs are unguessable UUIDs, which is not access control.
-- PDFs with selectable text up to 10 MiB. Scanned PDFs (no OCR) and encrypted PDFs are rejected with a clear message. DOCX is not supported.
+- PDF, PNG and JPG files up to 10 MiB. PDFs with a text layer are read locally for free; scans and pictures are read by the vision model (one paid request per page, at most 10 pages per scanned PDF) and are sent to the AI provider. Encrypted PDFs are rejected with a clear message. DOCX is not supported.
 - Local deployment (Docker for PostgreSQL and Redis, local disk for files), OpenAI as the provider, and acceptance that document text is sent to it.
 - English-language documents; the prompts and word-based chunking were not tuned for other languages.
 
@@ -168,7 +168,7 @@ This has not been load-tested; the following is how the design is expected to be
 ## Known limitations
 
 - No authentication or per-user isolation, so anyone who can reach the API can read or delete any document. Deletion is permanent (no trash or undo).
-- PDF text only: no OCR, no DOCX, 60,000-character limit for summaries and insights.
+- PDF, PNG and JPG only (no DOCX or plain text). Scanned pages are read by a vision model, so handwriting, small print and complex tables can be misread, and scanned PDFs over 10 pages are refused. 60,000-character limit for summaries and insights.
 - Summaries and insights are not streamed; only chat answers are.
 - Token usage for summaries, insights and stateless `/ask` is logged but not stored, so `/metrics/ai-usage` undercounts spend. It is also computed from stored chats and processing attempts, so deleting a document removes its tokens from the totals.
 - Answer quality is checked by tests and manual trials, not by an automated evaluation set.

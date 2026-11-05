@@ -14,5 +14,5 @@ export const DOCUMENT_STATUS_HINTS = {
   queued: 'Waiting to be processed.',
   processing: 'Being processed now.',
   extracted: 'Text is extracted, but questions need the search index.',
-  failed: 'Processing failed. The PDF is still saved.',
+  failed: 'Processing failed. The file is still saved.',
 }

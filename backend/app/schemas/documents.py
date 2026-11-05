@@ -17,6 +17,8 @@ class DocumentResponse(BaseModel):
     content_type: str
     size_bytes: int
     status: str
+    # Why processing failed, in words a person can act on; null unless the document failed.
+    error_message: str | None = None
     group_id: UUID | None = None
     version_number: int = 1
     is_latest: bool = True

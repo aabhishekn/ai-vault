@@ -12,13 +12,26 @@ from sqlalchemy.orm import Session
 
 from app.ai.embed_model import VaultEmbedding
 from app.ai.embeddings import EMBEDDING_MODEL
-from app.core.config import REPOSITORY_ROOT, auto_generate_content_enabled, embeddings_enabled
+from app.ai.ocr import ocr_pages
+from app.core.config import (
+    IMAGE_SUFFIXES,
+    REPOSITORY_ROOT,
+    auto_generate_content_enabled,
+    embeddings_enabled,
+    ocr_max_pages,
+)
 from app.core.errors import AppError
 from app.db.database import engine
 from app.db.models import Document, DocumentChunk, ProcessingAttempt
 from app.db.queries import lightweight
 from app.processing.chunking import TextChunk, chunk_pages
-from app.processing.pdf_extraction import ExtractedPage, PDFExtractionError, extract_pdf
+from app.processing.page_images import load_image, render_pdf_pages
+from app.processing.pdf_extraction import (
+    ExtractedPage,
+    NoTextError,
+    PDFExtractionError,
+    extract_pdf,
+)
 from app.services.classification import create_classification
 from app.services.insights import create_insights
 from app.services.summaries import create_summary
@@ -80,11 +93,26 @@ def _finish_attempt(
     )
 
 
-def _stored_pdf_path(storage_path: str) -> Path:
+def _stored_file_path(storage_path: str) -> Path:
     path = (REPOSITORY_ROOT / storage_path).resolve()
     if not path.is_relative_to((REPOSITORY_ROOT / "storage" / "documents").resolve()):
         raise PDFExtractionError("Invalid document storage path.")
     return path
+
+
+def _extract_pages(path: Path) -> list[ExtractedPage]:
+    """Page text from the stored file: read directly when it has a text layer, else as images.
+
+    Pictures and PDFs without text (scans, "print to PDF") go to the vision model, which is a
+    paid request per page; a PDF that already has text never does.
+    """
+    if path.suffix.lower() in IMAGE_SUFFIXES:
+        return ocr_pages([load_image(path)])
+    try:
+        return extract_pdf(path)
+    except NoTextError:
+        logger.info("document_read_as_images", extra={"file": path.name})
+        return ocr_pages(render_pdf_pages(path, ocr_max_pages()))
 
 
 def _save_extracted_content(
@@ -214,7 +242,7 @@ def extract_document(document_id: str) -> dict:
         extra={"document_id": document_id, "attempt_id": str(context.attempt_id)},
     )
     try:
-        pages = extract_pdf(_stored_pdf_path(storage_path))
+        pages = _extract_pages(_stored_file_path(storage_path))
         chunks = chunk_pages(pages)
         should_embed = embeddings_enabled()
         _save_extracted_content(context, pages, chunks, continue_with_embeddings=should_embed)

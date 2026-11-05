@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Button } from '../../components/Button'
 import { displayTitle } from '../../lib/format'
 import { useUploadDocument } from './useUploadDocument'
-import { validateUpload } from './upload'
+import { UPLOAD_ACCEPT, validateUpload } from './upload'
 
 // `handlers` ({ onStarted, onUploaded, onFailed }) let the list show the upload at once.
 export function DocumentUpload({ handlers }) {
@@ -36,14 +36,14 @@ export function DocumentUpload({ handlers }) {
       >
         <div className="flex flex-wrap items-center gap-3">
           <label className="sr-only" htmlFor="document-file">
-            PDF document
+            Document file
           </label>
           <input
             className="min-w-0 flex-1 text-xs text-[#4a4943] file:mr-3 file:cursor-pointer file:rounded-[7px] file:border file:border-[#d6d2c4] file:bg-surface file:px-3 file:py-2.5 file:text-inherit file:[font:inherit]"
             ref={input}
             id="document-file"
             type="file"
-            accept=".pdf,application/pdf"
+            accept={UPLOAD_ACCEPT}
             required
             disabled={uploading}
             aria-describedby={`upload-help${validationError ? ' upload-validation' : ''}`}
@@ -58,11 +58,12 @@ export function DocumentUpload({ handlers }) {
             variant="primary"
             disabled={!file || Boolean(validationError) || uploading}
           >
-            {uploading ? 'Uploading…' : 'Upload PDF'}
+            {uploading ? 'Uploading…' : 'Upload'}
           </Button>
         </div>
         <p className="mt-2 text-xs text-muted" id="upload-help">
-          PDF, up to 10 MB.
+          PDF, PNG or JPG, up to 10 MB. Scans and photos are read by your
+          configured AI provider.
         </p>
         {validationError && (
           <p

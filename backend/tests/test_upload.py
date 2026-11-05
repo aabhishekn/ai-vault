@@ -28,6 +28,11 @@ class UploadTests(unittest.TestCase):
                     ("empty.pdf", b"", 400),
                     ("fake.pdf", b"hello", 415),
                     ("large.pdf", b"%PDF-" + b"x" * documents.MAX_UPLOAD_BYTES, 413),
+                    ("animation.gif", b"GIF89a", 415),
+                    ("fake.png", b"%PDF-1.4", 415),
+                    ("fake.jpg", b"\x89PNG\r\n\x1a\n", 415),
+                    ("empty.png", b"", 400),
+                    ("large.png", b"\x89PNG\r\n\x1a\n" + b"x" * documents.MAX_UPLOAD_BYTES, 413),
                 ]:
                     with self.subTest(name=name):
                         with self.assertRaises(AppError) as error:
@@ -99,6 +104,30 @@ class UploadQueueTests(unittest.TestCase):
             response = self.upload()
             queued.assert_called_once()
         self.assertEqual(response.status, "queued")
+
+    def test_pictures_are_stored_with_their_own_type(self):
+        from uuid import UUID
+
+        png = b"\x89PNG\r\n\x1a\n" + b"data"
+        jpeg = b"\xff\xd8\xff\xe0" + b"data"
+        cases = [
+            ("scan.png", png, "image/png", ".png"),
+            ("Photo.JPG", jpeg, "image/jpeg", ".jpg"),
+            ("photo.jpeg", jpeg, "image/jpeg", ".jpeg"),
+        ]
+        for name, content, content_type, suffix in cases:
+            with self.subTest(name=name):
+                with patch.object(
+                    documents.document_queue,
+                    "enqueue",
+                    side_effect=lambda function, identifier, **kwargs: self.identifiers.append(
+                        UUID(identifier)
+                    ),
+                ):
+                    response = documents.upload_document(name, io.BytesIO(content))
+                self.assertEqual(response.content_type, content_type)
+                self.assertEqual(response.filename, name)
+                self.assertTrue((self.storage / f"{response.id}{suffix}").exists())
 
     def test_redis_failure_preserves_document_and_returns_its_id(self):
 

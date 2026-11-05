@@ -9,6 +9,10 @@ class PDFExtractionError(ValueError):
     """The PDF cannot provide usable text for document processing."""
 
 
+class NoTextError(PDFExtractionError):
+    """The file has no text layer; its pages may still be readable as images."""
+
+
 @dataclass(frozen=True)
 class ExtractedPage:
     page_number: int
@@ -31,9 +35,7 @@ def extract_pdf(path: Path) -> list[ExtractedPage]:
             "Unable to read this PDF. It may be damaged or invalid."
         ) from error
     if not any((page.text for page in pages)):
-        raise PDFExtractionError(
-            "No readable text found. Scanned PDFs may need OCR, which is not supported yet."
-        )
+        raise NoTextError("No readable text found in this PDF.")
     return pages
 
 

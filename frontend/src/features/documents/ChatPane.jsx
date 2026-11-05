@@ -112,8 +112,8 @@ export function ChatPane({
             </p>
           ) : library.total === 0 ? (
             <p className="mt-3 text-[14px] leading-[1.7] text-muted">
-              Upload a PDF to start. Once it is processed you can ask questions
-              and get answers that cite the page they came from.
+              Upload a PDF or an image to start. Once it is processed you can
+              ask questions and get answers that cite the page they came from.
             </p>
           ) : (
             <p className="mt-3 text-[14px] leading-[1.7] text-muted">

@@ -27,6 +27,9 @@ export function isDocument(value) {
     (value.title === undefined ||
       value.title === null ||
       typeof value.title === 'string') &&
+    (value.error_message === undefined ||
+      value.error_message === null ||
+      typeof value.error_message === 'string') &&
     (value.category === undefined ||
       value.category === null ||
       typeof value.category === 'string') &&

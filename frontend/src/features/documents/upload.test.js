@@ -15,6 +15,20 @@ describe('PDF upload', () => {
   it('accepts a PDF even if the browser supplies no MIME type', () => {
     expect(validateUpload(new File(['%PDF-test'], 'NOTES.PDF'))).toBeNull()
   })
+  it.each(['scan.png', 'photo.JPG', 'photo.jpeg'])(
+    'accepts the picture %s, which the server reads as a scanned page',
+    (name) => {
+      expect(validateUpload(new File(['image'], name))).toBeNull()
+    },
+  )
+  it.each(['notes.docx', 'sheet.xlsx', 'animation.gif', 'archive.pdf.zip'])(
+    'rejects %s, which cannot be read',
+    (name) => {
+      expect(validateUpload(new File(['data'], name))).toBe(
+        'Choose a PDF, PNG or JPG file.',
+      )
+    },
+  )
   it('accepts the exact size limit and rejects a larger file', () => {
     expect(
       validateUpload(new File([new Uint8Array(MAX_UPLOAD_BYTES)], 'max.pdf')),
@@ -58,7 +72,7 @@ describe('PDF upload', () => {
   it.each([
     [400, 'file was rejected'],
     [413, '10 MB'],
-    [415, 'supported PDF'],
+    [415, 'supported type'],
     [422, 'file was rejected'],
     [503, 'may already be saved'],
     [500, 'may already be saved'],

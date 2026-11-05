@@ -145,6 +145,11 @@ export function DocumentDetails({
                   {DOCUMENT_STATUS_HINTS[status]}
                 </span>
               )}
+              {status === 'failed' && state.data.error_message && (
+                <p className="basis-full text-[13px] leading-[1.7] text-error">
+                  {state.data.error_message}
+                </p>
+              )}
               {canAskDocument(status) && (
                 <Button
                   className="ml-auto"

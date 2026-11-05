@@ -11,9 +11,9 @@ npm run dev
 
 Open http://localhost:5173 with the API running on localhost:8000. The list loads ten documents at a time. **Previous** and **Next** navigate pages; the refresh icon reloads the current page. Empty lists and disappeared last pages are handled. Loading, failure, invalid-response, and timeout states are handled. Requests are cancelled when the component unmounts. No AI request is involved.
 
-## Upload a PDF
+## Upload a document
 
-Choose a PDF, then select **Upload PDF**. The form checks the extension, nonempty size, filename length, and 10 MiB limit (shown as 10 MB). The server validates the actual PDF header and enforces the size limit. While the file uploads, a pulsing **Uploading** row appears at the top of the first page (unfiltered); on success the saved document replaces it without reloading the list, and on failure the row is removed and the form explains why. Past the first page or with a filter on, the list returns to the first page once the upload is saved. Processing happens in the existing background worker; use **Refresh** to update statuses.
+Choose a PDF, PNG or JPG, then select **Upload**. The form checks the extension, nonempty size, filename length, and 10 MiB limit (shown as 10 MB). The server validates the actual file header and enforces the size limit. A PDF with no text layer and any picture are read as images by the server's vision model, which the form says. A document that fails shows the server's reason (`error_message`) in its details. While the file uploads, a pulsing **Uploading** row appears at the top of the first page (unfiltered); on success the saved document replaces it without reloading the list, and on failure the row is removed and the form explains why. Past the first page or with a filter on, the list returns to the first page once the upload is saved. Processing happens in the existing background worker; use **Refresh** to update statuses.
 
 The file input and submit button are disabled during upload. Uploads time out after 60 seconds and are cancelled on unmount; cancelling the browser request does not undo a server save. Failed or unconfirmed requests are never retried automatically. If the connection or queue fails after a save, feedback asks you to refresh the list before uploading again. The backend currently has no upload idempotency mechanism.
 

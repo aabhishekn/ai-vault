@@ -28,7 +28,7 @@ curl -F "file=@/absolute/path/to/document.pdf" http://localhost:8000/documents
 
 Uploads return HTTP 201 with a document ID, original filename, type, byte size, status, and creation timestamp. Files are stored under `storage/documents/` using generated UUID filenames; file paths are not exposed in the response. Metadata is stored in PostgreSQL.
 
-This first version accepts `.pdf` files with a `%PDF-` header, limited to 10 MiB. This is a basic signature check, not full PDF parsing. The processing worker will validate readability later. Empty files return 400, unsupported types/headers return 415, and oversized files return 413. Files are removed if saving their database record fails. A process crash between saving the file and committing metadata can still leave an orphan file; reconciliation can be added later.
+This version accepts `.pdf`, `.png`, `.jpg` and `.jpeg` files whose first bytes match their type (`%PDF-`, the PNG signature, the JPEG signature), limited to 10 MiB. This is a basic signature check, not full parsing; the processing worker validates readability later. The stored file keeps its extension and the document's `content_type` is `application/pdf`, `image/png` or `image/jpeg`. Empty files return 400, unsupported types/headers return 415, and oversized files return 413. Files are removed if saving their database record fails. A process crash between saving the file and committing metadata can still leave an orphan file; reconciliation can be added later.
 
 `queued` means awaiting background extraction. A successful upload automatically queues an RQ job after the file and metadata are saved. Start `python -m app.worker` from `backend/` (with `.venv` active) to process jobs. The embedding stage runs automatically when `OPENAI_API_KEY` is set; set `ENABLE_EMBEDDINGS=false` to disable it.
 
@@ -108,11 +108,23 @@ python -m app.processing.pdf_extraction "/absolute/path/to/document.pdf"
 
 The command prints the page count, extracted character count, and a short text preview per page. It reads the existing file without saving extracted text or changing any document records. No API key or network request is involved.
 
-`extract_pdf(Path(...))` returns a list of `ExtractedPage` objects, each containing `page_number` and `text`. Page numbers start at 1; blank pages remain in the list so later citations refer to the original PDF pages. Encrypted PDFs, unreadable PDFs, and PDFs with no readable text are rejected. A document with both text and blank/image pages keeps the empty pages; images are not transcribed.
+`extract_pdf(Path(...))` returns a list of `ExtractedPage` objects, each containing `page_number` and `text`. Page numbers start at 1; blank pages remain in the list so later citations refer to the original PDF pages. Encrypted PDFs, unreadable PDFs, and PDFs with no readable text are rejected. A document with both text and blank/image pages keeps the empty pages; images inside a PDF that has text are not transcribed.
 
-This uses [pypdf text extraction](https://pypdf.readthedocs.io/en/stable/user/extract-text.html), not OCR. Complex layouts may have imperfect reading order, and scanned image-only documents need a future OCR step. The upload worker also calls this helper to extract stored PDFs. The current helper has no page-count or decompressed-memory limit; the 10 MiB upload limit does not bound parsing memory.
+This uses [pypdf text extraction](https://pypdf.readthedocs.io/en/stable/user/extract-text.html), which does no OCR. Complex layouts may have imperfect reading order. A PDF with no text raises `NoTextError`, and the worker then reads it as images (see below). The upload worker also calls this helper to extract stored PDFs. The current helper has no page-count or decompressed-memory limit; the 10 MiB upload limit does not bound parsing memory.
 
 Run extraction and upload tests with `python -m unittest discover -s tests -v`.
+
+## Scanned PDFs and images
+
+When a PDF has no text layer (a scan, or one made by "Microsoft Print to PDF"), or the upload is a PNG or JPG, the worker reads it with the vision model instead:
+
+1. `app/processing/page_images.py` draws each PDF page (pypdfium2) or loads the picture (Pillow) and encodes it as a JPEG whose longest side is at most 2000 pixels. Transparent areas are flattened onto white. A picture needing more than 40 million pixels is refused before it is decoded.
+2. `app/ai/ocr.py` sends each page to the model as an inline image, three at a time, asking for a plain transcription (nothing is stored by the provider, and the prompt treats the image as untrusted data). A page with no legible text becomes an empty page, and if no page has text the document fails with "No readable text found, even when the pages were read as images."
+3. The pages continue through the normal chunking, embedding, summary and citation steps, so an answer cites the page of the scan it came from. A picture counts as page 1.
+
+A scanned PDF with more than `OCR_MAX_PAGES` pages (default 10) fails with a message saying so; nothing is read partially. Each page is one paid request, logged as an `ocr` call with its tokens. Set `OCR_MODEL` to use a different vision model; it defaults to `ANSWER_MODEL`. A provider failure fails the document as "Document processing failed." and **Process again** retries it.
+
+Documents that fail return the reason in `error_message` (`null` otherwise), and the interface shows it in the document's details.
 
 ## Extract an uploaded document in the worker
 
