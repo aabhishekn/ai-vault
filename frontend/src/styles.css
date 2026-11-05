@@ -4,7 +4,6 @@
   --font-sans:
     'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-serif: 'Source Serif 4 Variable', Georgia, 'Times New Roman', serif;
-  --font-mono: ui-monospace, monospace;
   --color-canvas: #faf9f5;
   --color-ink: #141413;
   --color-surface: #ffffff;
@@ -23,9 +22,6 @@
   --color-error: #8e3f2d;
   --color-danger: #a05a46;
   --color-danger-soft: #f9ece7;
-  --color-warning: #947548;
-  --color-warning-soft: #f6efe2;
-  --shadow-panel: 0 5px 22px #14141405;
 }
 
 @layer base {

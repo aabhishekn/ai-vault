@@ -47,46 +47,27 @@ The insights API validates the selected document ID, nonempty insight/evidence t
 
 ## Ask a document
 
-The chat (`ChatPane` with `ChatThread`) is one persistent pane. `scope.js` decides what it asks: the ticked documents, or every `embedded`/`ready` document (newest ten, the backend's limit) when none is ticked; `useReadyDocuments.js` finds those across pages (the visible page when it holds everything, otherwise one `limit=100` request). One document is a saved multi-turn conversation restored on return; two or more is one multi-document conversation. The "all" scope keeps one key while documents finish processing, so a thread in progress is never reset in the background. Other statuses show why questions are unavailable. The form validates trimmed, nonempty questions up to 2,000 characters and sends `POST /documents/{id}/conversations` once, on the first question, then `POST /conversations/{id}/messages` as JSON with `top_k: 3` for each question and follow-up. No request runs on mount. Questions use the configured AI provider for retrieval and answer generation; the form explains text sharing and possible charges.
+The chat (`ChatPane` with `ChatThread`) is one persistent pane. `scope.js` decides what it asks: the ticked documents, or every `embedded`/`ready` document (newest ten, the backend's limit) when none is ticked; `useReadyDocuments.js` finds those across pages (the visible page when it holds everything, otherwise one `limit=100` request). One document is a saved multi-turn conversation restored on return; two or more is one multi-document conversation. The "all" scope keeps one key while documents finish processing, so a thread in progress is never reset in the background. Other statuses show why questions are unavailable. The question box validates trimmed, nonempty questions up to 2,000 characters. The conversation is created on the first question (`POST /documents/{id}/conversations`, or `POST /multi-conversations` with the document IDs for several), then each question and follow-up is a `POST /conversations/{id}/messages/stream` with `top_k: 3`, read as server-sent events so the answer appears as it is written and is replaced by the validated, cited turn when it completes. Nothing is requested just by opening the page except the saved conversation of a single document. Questions use the configured AI provider for retrieval and answer generation; the form explains text sharing and possible charges.
 
 Answers show the submitted question, plain-text response, and expandable sources labelled with the same citation numbers and page numbers used in the answer. Citation text is the backend's retrieved passage. The client checks the returned document ID, echoed question, citation fields, uniqueness, and correspondence between answer labels and source numbers before displaying a result. Insufficient evidence has its own state and no invented source links.
 
-The hook prevents duplicate submissions, times out after two minutes, and cancels browser requests when details close or change documents. Failures are not retried automatically; submitting again starts a new request and may incur charges. The server may finish work after browser cancellation. Turns are saved on the server and the backend uses the latest three as follow-up context. When details open for a search-ready document, the UI reads `GET /documents/{id}/conversations?limit=1&has_turns=true` and then that conversation's history (no AI call) to restore the latest conversation, and follow-ups continue in it. If restoring fails, asking a new question still works. **New conversation** starts a fresh one while the old one stays saved. A failed follow-up keeps the draft and earlier turns. Draft edits do not relabel an existing answer.
+The hook prevents duplicate submissions, times out after two minutes, and cancels browser requests when the chat's scope changes. Failures are not retried automatically; submitting again starts a new request and may incur charges. The server may finish work after browser cancellation. Turns are saved on the server and the backend uses the latest three as follow-up context. When a single document becomes the chat's scope, the UI reads `GET /documents/{id}/conversations?limit=1&has_turns=true` and then that conversation's history (no AI call) to restore the latest conversation, and follow-ups continue in it. If restoring fails, asking a new question still works. **New conversation** starts a fresh one while the old one stays saved. A failed follow-up keeps the draft and earlier turns. Draft edits do not relabel an existing answer.
 
 ## Structure
 
-- `src/app/`: application layout.
-- `src/features/documents/DocumentWorkspace.jsx`: the two-pane screen (library left, chat right; a **Chat | Documents** switch on narrow screens); owns list state, the ticked documents and the selected document ID.
-- `src/features/documents/answers.js`: question eligibility/validation, JSON requests, and answer/citation validation.
-- `src/features/documents/useDocumentAnswer.js`: explicit submission, request guard, cancellation, and timeout.
-- `src/features/documents/ChatPane.jsx`: the scope chips, **Use all documents**, **Compare**, and the empty states (empty vault, still processing).
-- `src/features/documents/ChatThread.jsx`: one conversation: thread, starters, question box (Enter sends), cost note, loading/error feedback, and focus.
-- `src/features/documents/scope.js` and `useReadyDocuments.js`: what the chat asks about.
-- `src/features/overview/MetricsDialog.jsx`: the metrics, opened from the header.
-- `src/features/documents/AnswerResult.jsx`: submitted question, answer, and expandable source passages.
-- `src/features/documents/summary.js`: validated read/generation requests, processing-status eligibility, and safe API errors.
-- `src/features/documents/useDocumentSummary.js`: summary lifecycle configuration through the shared generated-content hook.
-- `src/features/documents/DocumentSummary.jsx`: summary, empty state, and retry UI.
-- `src/features/documents/useDocument.js`: metadata loading through the shared resource hook.
-- `src/features/documents/insights.js`: saved/generated insight validation, processing-status eligibility, and safe API requests.
-- `src/features/documents/useDocumentInsights.js`: insight lifecycle configuration.
-- `src/features/documents/useGeneratedDocumentContent.js`: shared saved-content reads and explicit generation, with request guards, timeouts, cancellation, and document isolation.
-- `src/features/documents/DocumentInsights.jsx`: independent insight cards, generation, empty states, and recovery.
-- `src/features/documents/savedContent.js`: shared summary/insights missing-content handling.
-- `src/hooks/useResource.js`: metadata loading, timeout, cancellation, key isolation, and refresh.
-- `src/features/documents/DocumentDetails.jsx`: metadata dialog and focus lifecycle.
-- `src/features/documents/upload.js`: upload validation and multipart API request.
-- `src/features/documents/useUploadDocument.js`: upload lifecycle, timeout, duplicate-submit guard, and cancellation.
-- `src/features/documents/DocumentUpload.jsx`: accessible file picker, form, and feedback.
-- `src/features/health/queue.js`, `useQueueHealth.js` and `WorkerNotice.jsx`: polls `GET /health/queue` every 30 s and shows a notice when no worker is running; a failed check shows nothing.
-- `src/features/documents/manage.js` and `DocumentActions.jsx`: Process again (failed or text-only documents) and permanent delete behind an inline confirmation; delete removes every version, and a document that is already gone counts as deleted.
-- `src/features/documents/optimistic.js` and `useOptimisticDocuments.js`: optimistic updates. A small overlay holds only what is still in flight (an upload row, ids being deleted, a guessed `Queued` status); the list shows the server's page with that laid over it. When the server answers, the confirmed change is written into the real page and the overlay entry dropped; when it refuses, the entry is dropped, the list is exactly as before and a message says why (in the dialog while it is open, otherwise in a dismissible alert above the list). A guess is ignored once the server reports a different status, so it can never hide a real change. Every optimistic change is followed by a quiet reload to reconcile with the server.
-- `src/features/documents/`: document types, validated API requests, loading/pagination hook, list, rows, and status badges.
-- `src/components/`: shared UI primitives such as Button.
-- `src/lib/format.js`: date and file-size display helpers.
-- `src/features/health/`: the queue check and the worker notice.
-- `src/lib/api.js`: shared fetch entry point for API requests (JSON, and bodiless 204 responses).
+- `src/main.jsx` and `src/app/App.jsx`: entry point and shell (header with the **Metrics** button, then the workspace).
+- `src/components/`: `Button.jsx` and `Tabs.jsx` (accessible `TabList` and `TabPanel`).
+- `src/hooks/useResource.js`: loading, timeout, cancellation, key isolation, refresh and merge for one fetched resource.
+- `src/lib/`: `api.js` (the shared fetch entry point: JSON, and bodiless 204 responses), `format.js` (titles, dates, file sizes) and `liveUpdates.js` (the WebSocket event contract).
 - `src/styles.css`: Tailwind entry point, shared theme tokens, and global base/focus styles.
+- `src/features/documents/`, grouped by job:
+  - **Screen:** `DocumentWorkspace.jsx` (the two-pane screen and the owner of list state, ticked documents and the open document), `DocumentList.jsx`, `DocumentRow.jsx`, `DocumentFilters.jsx`, `filters.js`, `DocumentUpload.jsx`, `DocumentStatusBadge.jsx`, `status.js`, `types.js`.
+  - **Chat:** `ChatPane.jsx` (scope chips, **Use all documents**, **Compare**, empty states), `ChatThread.jsx` (one conversation: thread, starters, question box, cost note), `AnswerResult.jsx`, `scope.js` and `useReadyDocuments.js` (what the chat asks about), `useDocumentChat.js`, `conversations.js`, `answers.js`, `useSuggestedQuestions.js` and `suggestions.js`, `ComparisonDialog.jsx` and `comparison.js`.
+  - **Document dialog:** `DocumentDetails.jsx` (tabs and focus lifecycle), `useDocument.js`, `DocumentTitle.jsx`, `DocumentTags.jsx`, `TagChips.jsx`, `classification.js`, `DocumentSummary.jsx` with `CustomSummary.jsx`, `DocumentInsights.jsx`, `DocumentVersions.jsx` with `versions.js`, `DocumentActions.jsx` with `manage.js`.
+  - **Saved content:** `summary.js`, `insights.js`, `customSummaryApi.js`, `useDocumentSummary.js`, `useDocumentInsights.js`, `useCustomSummary.js`, `useGeneratedDocumentContent.js` (shared saved-content reads and explicit generation, with request guards, timeouts and cancellation), `savedContent.js`.
+  - **List data and updates:** `api.js` (validated list and detail requests), `useDocuments.js`, `useTagsOverview.js`, `upload.js` and `useUploadDocument.js`, `optimistic.js` and `useOptimisticDocuments.js` (a small overlay shows uploads, deletes, renames and **Process again** at once and rolls back when the server refuses), `useLiveUpdates.js` and `changeBatcher.js` (WebSocket events batched into list refreshes).
+- `src/features/health/`: `queue.js`, `useQueueHealth.js` and `WorkerNotice.jsx`; polls `GET /health/queue` every 30 s and shows a notice when no worker is running (a failed check shows nothing).
+- `src/features/overview/`: `MetricsDialog.jsx`, `OverviewPanel.jsx`, `overview.js` and `useOverview.js`.
 
 API modules validate unknown JSON, hooks own request lifecycle, and components render state. Feature components do not call fetch directly.
 
@@ -113,4 +94,4 @@ Vitest verifies response validation, pagination parameters, cancellation signal 
 
 ## Workspace overview
 
-`src/features/overview/` reads `GET /stats/documents` and `GET /metrics/processing`. `overview.js` validates the responses (non-negative counts, status totals matching the document total, rates between 0 and 1) and maps them to camelCase, `useOverview.js` loads each independently so one failure never hides the other, and `OverviewPanel.jsx` renders them with loading, error, empty, and refresh states. Neither endpoint calls the AI provider.
+`src/features/overview/` reads `GET /stats/documents` and `GET /metrics/processing`. `overview.js` validates the responses (non-negative counts, status totals matching the document total, rates between 0 and 1) and maps them to camelCase, `useOverview.js` loads each independently so one failure never hides the other, and `OverviewPanel.jsx` renders them with loading, error, empty, and refresh states, inside `MetricsDialog.jsx`, which the header's **Metrics** button opens and which is mounted only while open, so nothing is requested until then. Neither endpoint calls the AI provider.
