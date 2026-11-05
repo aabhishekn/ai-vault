@@ -188,7 +188,7 @@ export function DocumentDetails({
                   category={state.data.category}
                   tags={state.data.tags}
                 />
-                <dl className="grid grid-cols-2 gap-[18px] border-t border-rule py-6 max-[600px]:grid-cols-1 [&_dd]:text-[13px] [&_dd]:leading-[1.6] [&_dd]:wrap-anywhere [&_dt]:mb-1.5 [&_dt]:text-[11px] [&_dt]:text-muted">
+                <dl className="mt-5 mb-6 grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-panel-border bg-panel-footer p-4 max-[600px]:grid-cols-1 [&_dd]:text-[13px] [&_dd]:leading-[1.6] [&_dd]:wrap-anywhere [&_dt]:mb-1 [&_dt]:text-[11px] [&_dt]:font-semibold [&_dt]:tracking-[0.06em] [&_dt]:text-muted [&_dt]:uppercase">
                   <div className="col-span-full">
                     <dt>File name</dt>
                     <dd>{state.data.filename}</dd>

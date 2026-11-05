@@ -150,6 +150,100 @@ describe('versions panel', () => {
     await waitFor(() => expect(onVersionAdded).toHaveBeenCalledWith('doc-3'))
   })
 
+  it('shows each version with a badge, marks the latest and the one on screen', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          Response.json({
+            group_id: 'g',
+            versions: [version(2, true), version(1, false)],
+          }),
+        ),
+      ),
+    )
+    render(
+      createElement(DocumentVersions, {
+        id: 'doc-2',
+        onOpen: vi.fn(),
+        onVersionAdded: vi.fn(),
+      }),
+    )
+    const items = await screen.findAllByRole('listitem')
+    expect(items).toHaveLength(2)
+    expect(items[0].textContent).toContain('v2')
+    expect(items[0].textContent).toContain('Latest')
+    expect(items[0].textContent).toContain('Search ready')
+    expect(items[0].textContent).not.toContain('embedded')
+    expect(items[1].textContent).not.toContain('Latest')
+    expect(screen.getByLabelText('2 versions')).toBeTruthy()
+  })
+
+  it('shows the chosen file as a card, takes a dropped one, and can remove it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          Response.json({ group_id: 'g', versions: [version(1, true)] }),
+        ),
+      ),
+    )
+    render(
+      createElement(DocumentVersions, {
+        id: 'doc-1',
+        onOpen: vi.fn(),
+        onVersionAdded: vi.fn(),
+      }),
+    )
+    await screen.findByLabelText('Upload a new version')
+    expect(screen.queryByRole('button', { name: 'Upload version' })).toBeNull()
+    expect(screen.getByText(/or drag it here/)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Upload a new version'), {
+      target: { files: [pdf('first.pdf')] },
+    })
+    expect(screen.getByText('first.pdf')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove first.pdf' }))
+    expect(screen.getByText(/or drag it here/)).toBeTruthy()
+    fireEvent.drop(screen.getByText(/Choose a file/).closest('label'), {
+      dataTransfer: { files: [pdf('dropped.pdf')] },
+    })
+    expect(screen.getByText('dropped.pdf')).toBeTruthy()
+    expect(
+      screen
+        .getByRole('button', { name: 'Upload version' })
+        .hasAttribute('disabled'),
+    ).toBe(false)
+  })
+
+  it('refuses an unsupported file before sending anything', async () => {
+    const fetch = vi.fn(() =>
+      Promise.resolve(
+        Response.json({ group_id: 'g', versions: [version(1, true)] }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetch)
+    render(
+      createElement(DocumentVersions, {
+        id: 'doc-1',
+        onOpen: vi.fn(),
+        onVersionAdded: vi.fn(),
+      }),
+    )
+    await screen.findByLabelText('Upload a new version')
+    fireEvent.change(screen.getByLabelText('Upload a new version'), {
+      target: { files: [new File(['x'], 'notes.txt')] },
+    })
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Choose a PDF, PNG or JPG file.',
+    )
+    expect(
+      screen
+        .getByRole('button', { name: 'Upload version' })
+        .hasAttribute('disabled'),
+    ).toBe(true)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('does not list a document that has only one version', async () => {
     const fetch = vi.fn(() =>
       Promise.resolve(
