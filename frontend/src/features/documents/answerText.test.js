@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { groupSources, parseAnswer, splitCitations } from './answerText'
+import {
+  groupSources,
+  parseAnswer,
+  sentencesCiting,
+  splitCitations,
+} from './answerText'
 
 describe('parseAnswer', () => {
   it('keeps a plain answer as one paragraph', () => {
@@ -82,5 +87,38 @@ describe('groupSources', () => {
     expect(groupSources([{ source_number: 1 }, { source_number: 2 }])).toEqual([
       { filename: '', citations: [{ source_number: 1 }, { source_number: 2 }] },
     ])
+  })
+})
+
+describe('sentencesCiting', () => {
+  it('returns the sentences that cite a source, without their labels', () => {
+    const answer =
+      'Fees apply [1]. Rent is due monthly [2]. Late fees are extra [1].'
+    expect(sentencesCiting(answer, 1)).toBe('Fees apply. Late fees are extra.')
+    expect(sentencesCiting(answer, 2)).toBe('Rent is due monthly.')
+  })
+  it('keeps a label written after the full stop with its sentence', () => {
+    expect(sentencesCiting('Fees apply. [1] Rent is due. [2]', 1)).toBe(
+      'Fees apply.',
+    )
+    expect(sentencesCiting('Fees apply. [1] Rent is due. [2]', 2)).toBe(
+      'Rent is due.',
+    )
+  })
+  it('counts unlabelled sentences for the labelled one that follows them', () => {
+    const answer =
+      'Visitors sign in. They get a badge. Parking is paid [1]. Doors lock at ten [2].'
+    expect(sentencesCiting(answer, 1)).toBe(
+      'Visitors sign in. They get a badge. Parking is paid.',
+    )
+    expect(sentencesCiting(answer, 2)).toBe('Doors lock at ten.')
+  })
+  it('reads list lines as their own sentences', () => {
+    expect(sentencesCiting('Due:\n- Form A [1]\n- Form B [2]', 2)).toBe(
+      'Form B',
+    )
+  })
+  it('returns an empty string for a source the answer never cites', () => {
+    expect(sentencesCiting('Fees apply [1].', 3)).toBe('')
   })
 })

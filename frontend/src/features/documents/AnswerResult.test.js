@@ -73,4 +73,57 @@ describe('answer layout', () => {
       [...lease.querySelectorAll('button')].map((chip) => chip.textContent),
     ).toEqual(['[1] · Page 4', '[3] · Page 5'])
   })
+
+  describe('the passage behind a source', () => {
+    const passage = [
+      'The office opens at nine each weekday morning.',
+      'Visitors must sign in at the front desk first.',
+      'Parking permits cost forty dollars every month.',
+      'Refunds are paid within thirty days of a written request.',
+      'The kitchen is cleaned every Friday afternoon.',
+      'Fire drills happen twice a year without warning.',
+    ].join(' ')
+
+    function open(answer = 'Refunds are paid within thirty days [1].') {
+      show(answer, [{ ...source(1, 'a.pdf', 1), text: passage }])
+      fireEvent.click(screen.getByRole('button', { name: /^\[1\] · Page 1$/ }))
+    }
+
+    it('shows the part that backs the answer, marked, and hides the rest', () => {
+      open()
+      const quote = document.querySelector('blockquote')
+      expect(quote.querySelector('mark').textContent).toContain(
+        'Refunds are paid within thirty days',
+      )
+      expect(quote.textContent).not.toContain('Fire drills')
+      expect(quote.textContent).not.toContain('The office opens')
+      expect(quote.textContent).toContain('Showing the part that matches')
+    })
+
+    it('shows the whole passage on request and goes back', () => {
+      open()
+      const toggle = screen.getByRole('button', { name: 'Show full passage' })
+      expect(toggle.getAttribute('aria-expanded')).toBe('false')
+      fireEvent.click(toggle)
+      const quote = document.querySelector('blockquote')
+      expect(quote.textContent).toContain('Fire drills')
+      expect(quote.textContent).toContain('The office opens')
+      expect(quote.querySelectorAll('mark')).toHaveLength(1)
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Show only the match' }),
+      )
+      expect(document.querySelector('blockquote').textContent).not.toContain(
+        'Fire drills',
+      )
+    })
+
+    it('shows a short passage whole, with no toggle', () => {
+      show('Python is required [1].', [source(1, 'a.pdf', 1)])
+      fireEvent.click(screen.getByRole('button', { name: /^\[1\] · Page 1$/ }))
+      expect(
+        screen.queryByRole('button', { name: 'Show full passage' }),
+      ).toBeNull()
+      expect(screen.getByText('Passage 1.')).toBeTruthy()
+    })
+  })
 })

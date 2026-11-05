@@ -1,6 +1,12 @@
-import { useId, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { documentTitle, readableText } from '../../lib/format'
-import { groupSources, parseAnswer, splitCitations } from './answerText'
+import {
+  groupSources,
+  parseAnswer,
+  sentencesCiting,
+  splitCitations,
+} from './answerText'
+import { focusPassage } from './passage'
 
 // What a person asked: a soft bubble on the right, so a thread reads as a conversation.
 export function QuestionBubble({ text }) {
@@ -69,6 +75,50 @@ function Block({ block, known, onCite }) {
 // The short label on a source chip; the document's name is the heading above its chips.
 function chipLabel(citation) {
   return `[${citation.source_number}] · Page ${citation.page_number}`
+}
+
+// The passage a source was drawn from. When the part that backs the answer can be found it
+// is marked and the rest is tucked away behind "Show full passage"; otherwise the passage
+// is shown whole.
+function Passage({ text, query }) {
+  const [showAll, setShowAll] = useState(false)
+  const shown = readableText(text)
+  const view = useMemo(() => focusPassage(shown, query), [shown, query])
+  if (!view) return shown
+  return (
+    <>
+      {(showAll ? view.full : view.excerpt).map((piece, index) =>
+        piece.gap ? (
+          <span key={index} className="text-muted">
+            …{' '}
+          </span>
+        ) : piece.hit ? (
+          <mark key={index} className="rounded-[3px] bg-[#f6dcc9] text-ink">
+            {piece.text}
+          </mark>
+        ) : (
+          piece.text
+        ),
+      )}
+      {view.trimmed && (
+        <span className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-sans text-[12px]">
+          <span>
+            {showAll
+              ? 'Showing the whole passage; the match is marked.'
+              : 'Showing the part that matches the answer.'}
+          </span>
+          <button
+            type="button"
+            className="cursor-pointer border-0 bg-transparent p-0 font-semibold text-earth hover:underline"
+            aria-expanded={showAll}
+            onClick={() => setShowAll(!showAll)}
+          >
+            {showAll ? 'Show only the match' : 'Show full passage'}
+          </button>
+        </span>
+      )}
+    </>
+  )
 }
 
 function sourceLabel(citation) {
@@ -171,7 +221,13 @@ export function AnswerResult({ result }) {
                 <span className="mb-1 block text-[11px] font-semibold text-earth">
                   {sourceLabel(citation)}
                 </span>
-                {readableText(citation.text)}
+                <Passage
+                  text={citation.text}
+                  query={
+                    sentencesCiting(result.answer, citation.source_number) ||
+                    result.question
+                  }
+                />
               </blockquote>
             ))}
         </div>

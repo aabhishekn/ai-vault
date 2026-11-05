@@ -84,3 +84,31 @@ export function groupSources(citations) {
   }
   return groups
 }
+
+// The sentences or list lines of an answer that cite a source, joined and without their
+// labels. A label that follows the full stop still belongs to the sentence before it, and
+// sentences with no label of their own count for the next labelled one: a model often
+// cites once at the end of a few sentences.
+export function sentencesCiting(answer, number) {
+  const label = `[${number}]`
+  const found = []
+  for (const block of parseAnswer(answer)) {
+    const paragraph = block.type === 'paragraph'
+    const parts = paragraph
+      ? block.text.split(/(?<=[.!?](?:\s*\[\d+\])*)\s+(?!\[\d)|\n/)
+      : block.items
+    let lead = []
+    for (const part of parts) {
+      if (!/\[\d+\]/.test(part)) {
+        if (paragraph) lead.push(part)
+        continue
+      }
+      if (part.includes(label)) found.push(...lead, part)
+      lead = []
+    }
+  }
+  return found
+    .map((part) => part.replace(/\s*\[\d+\]/g, ''))
+    .join(' ')
+    .trim()
+}
