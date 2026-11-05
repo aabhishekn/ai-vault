@@ -167,6 +167,9 @@ export function AnswerResult({ result }) {
           <p className="text-[14px] leading-[1.7] text-muted">
             {result.answer}
           </p>
+          <p className="mt-1.5 text-[13px] leading-[1.7] text-muted">
+            Try naming a topic or detail the documents cover.
+          </p>
         </div>
       ) : (
         <div className="mt-4 grid gap-3">

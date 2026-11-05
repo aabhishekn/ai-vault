@@ -3,6 +3,7 @@ import { Button } from '../../components/Button'
 import { Working } from '../../components/Working'
 import { AnswerResult, QuestionBubble } from './AnswerResult'
 import { canAskDocument, MAX_QUESTION_LENGTH } from './answers'
+import { smallTalkReply } from './smallTalk'
 
 import { useDocumentChat } from './useDocumentChat'
 import { useSuggestedQuestions } from './useSuggestedQuestions'
@@ -21,6 +22,8 @@ export function ChatThread({
   starters = [],
 }) {
   const [question, setQuestion] = useState('')
+  // A greeting and its instant reply: shown after the thread, never sent or saved.
+  const [chitchat, setChitchat] = useState(null)
   const {
     turns,
     pendingQuestion,
@@ -42,6 +45,16 @@ export function ChatThread({
   async function submit(event) {
     event.preventDefault()
     if (!eligible || locked) return
+    const reply = smallTalkReply(
+      question,
+      id !== null ? 'this document' : 'your documents',
+    )
+    if (reply) {
+      setChitchat({ question: question.trim(), reply })
+      setQuestion('')
+      return
+    }
+    setChitchat(null)
     if (await send(question)) setQuestion('')
   }
 
@@ -65,8 +78,8 @@ export function ChatThread({
   }, [turns.length, restoring])
   useEffect(() => {
     const element = scroller.current
-    if (element && busy) element.scrollTop = element.scrollHeight
-  }, [streamingText, busy])
+    if (element && (busy || chitchat)) element.scrollTop = element.scrollHeight
+  }, [streamingText, busy, chitchat])
 
   // The box grows with what is typed, up to a few lines.
   useEffect(() => {
@@ -79,6 +92,7 @@ export function ChatThread({
 
   function newChat() {
     startNewConversation()
+    setChitchat(null)
     setQuestion('')
     input.current?.focus()
   }
@@ -197,6 +211,19 @@ export function ChatThread({
               </li>
             ))}
           </ol>
+          {chitchat && !busy && (
+            <div className={turns.length > 0 ? 'mt-10' : ''}>
+              <QuestionBubble text={chitchat.question} />
+              <div className="mt-4 rounded-xl border border-panel-border bg-panel-footer px-4 py-3.5">
+                <p className="font-serif text-[16px] leading-[1.7]">
+                  {chitchat.reply}
+                </p>
+                <p className="mt-1.5 text-[12px] text-muted">
+                  Instant reply: no AI request was sent, and it is not saved.
+                </p>
+              </div>
+            </div>
+          )}
           {busy && (
             <div className={turns.length > 0 ? 'mt-10' : ''}>
               <QuestionBubble text={pendingQuestion} />

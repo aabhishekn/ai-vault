@@ -178,6 +178,28 @@ describe('conversation UI', () => {
     )
     expect(posts(fetch)).toHaveLength(2)
   })
+  it('answers a greeting on the spot, with no request, and clears it for a real question', async () => {
+    const fetch = mockApi((asked, call) =>
+      Promise.resolve(turnResponse('a', asked, call)),
+    )
+    await renderChat()
+    enter('hello')
+    ask()
+    expect(
+      await screen.findByText(/Ask me anything about this document/),
+    ).toBeTruthy()
+    expect(screen.getByText('hello')).toBeTruthy()
+    expect(screen.getByText(/no AI request was sent/)).toBeTruthy()
+    expect(screen.getByRole('textbox').value).toBe('')
+    expect(posts(fetch)).toEqual([])
+    enter(question)
+    ask()
+    expect(
+      await screen.findByText(said('Python is required [1].')),
+    ).toBeTruthy()
+    expect(screen.queryByText(/no AI request was sent/)).toBeNull()
+    expect(posts(fetch)).toHaveLength(2)
+  })
   it('creates one conversation and sends follow-ups to it, keeping every turn', async () => {
     const fetch = mockApi((asked, call) =>
       Promise.resolve(turnResponse('a', asked, call)),
@@ -269,6 +291,7 @@ describe('conversation UI', () => {
       await screen.findByRole('heading', { name: 'Not enough evidence' }),
     ).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Sources' })).toBeNull()
+    expect(screen.getByText(/Try naming a topic or detail/)).toBeTruthy()
   })
   it('aborts pending work when the conversation unmounts', async () => {
     const fetch = mockApi(() => new Promise(() => {}))

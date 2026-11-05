@@ -29,6 +29,10 @@ Document details include a **Saved summary** section. Opening the **Summary** ta
 
 The backend returns 404 for both a missing summary and a missing document. On that response, the summary API confirms the document exists before showing an empty state. Responses must match the selected document ID. Requests time out after ten seconds and are cancelled on unmount; switching documents cannot display a previous document’s result.
 
+## Small talk
+
+A message that is only a greeting, thanks, goodbye or "what can you do?" (short, whole-message matches such as `hi`, `thanks a lot`, `bye`) is answered in the browser by `smallTalk.js`: a friendly line, marked as an instant reply, shown after the thread. No conversation is created, no request is sent and nothing is saved, so it costs no API credit. Everything else goes to the documents as before, and the **Not enough evidence** card for a real question adds a hint to name a topic the documents cover.
+
 ## Waiting states
 
 Anything the AI takes a few seconds over (a chat answer before its text starts streaming, a summary, insights) shows one shared `Working` card: three bouncing dots, a title that says what is happening (for example **Searching your documents…**) and a reminder to keep the view open. It is a status region, so screen readers hear it once; the dots are decorative and pulse instead of bouncing when reduced motion is requested.
