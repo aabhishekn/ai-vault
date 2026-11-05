@@ -15,7 +15,7 @@ I did not use Cursor or Copilot. I am an experienced full-stack engineer but new
 ## How I worked
 
 - **Small verified steps.** About 65 commits over two days, each one a single capability: build, verify, commit, push. The assistant explained the concept first, then built it, then showed it working.
-- **Verification before moving on.** Each step was checked with tests and usually a live call. Today that is 317 backend tests (including database integration tests against PostgreSQL), 395 frontend tests, ruff, Alembic drift check, and GitHub Actions. Tests mock the paid provider; live calls were deliberate single requests.
+- **Verification before moving on.** Each step was checked with tests and usually a live call. Today that is 317 backend tests (including database integration tests against PostgreSQL), 397 frontend tests, ruff, Alembic drift check, and GitHub Actions. Tests mock the paid provider; live calls were deliberate single requests.
 - **Review passes.** I stopped feature work twice to review the whole codebase for structure and edge cases (once with Codex, once with Claude Code) before adding more.
 - **I made the product decisions**: the stack, Docker for services, Tailwind over plain CSS, using LlamaIndex for ingestion and retrieval while keeping our own database table and OpenAI calls (I first planned to keep the whole pipeline hand-built, then adopted LlamaIndex because the assignment highly recommends a RAG framework), and the priority order (upload, background processing, retrieval, cited answers, follow-ups, metrics, only then UI and extras).
 

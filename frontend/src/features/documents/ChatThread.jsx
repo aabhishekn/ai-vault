@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../components/Button'
+import { Working } from '../../components/Working'
 import { AnswerResult, QuestionBubble } from './AnswerResult'
 import { canAskDocument, MAX_QUESTION_LENGTH } from './answers'
 
@@ -209,13 +210,11 @@ export function ChatThread({
                   </p>
                 </div>
               ) : (
-                <p
-                  className="mt-4 text-[13px] leading-[1.8] text-muted"
-                  role="status"
-                >
-                  Finding relevant passages. Keep this view open; this may take
-                  a moment.
-                </p>
+                <Working
+                  className="mt-4"
+                  title="Searching your documents…"
+                  hint="Finding the passages that answer your question. Keep this view open."
+                />
               )}
             </div>
           )}

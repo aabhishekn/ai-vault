@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { Button } from '../../components/Button'
+import { Working } from '../../components/Working'
 import { CustomSummary } from './CustomSummary'
 import { describeOptions } from './customSummaryApi'
 import { canGenerateSummary } from './summary'
@@ -108,12 +109,7 @@ export function DocumentSummary({ id, documentStatus }) {
           </Button>
         )}
       {!custom && state.status === 'generating' && (
-        <p
-          className="mt-3 text-[13px] leading-[1.9] wrap-anywhere text-muted"
-          role="status"
-        >
-          Generating your summary. Keep this view open; this may take a moment.
-        </p>
+        <Working className="mt-3" title="Writing your summary…" />
       )}
       {!custom && state.status === 'error' && (
         <p

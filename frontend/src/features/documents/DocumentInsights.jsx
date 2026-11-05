@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { Button } from '../../components/Button'
+import { Working } from '../../components/Working'
 import { canGenerateInsights } from './insights'
 
 import { useDocumentInsights } from './useDocumentInsights'
@@ -72,9 +73,7 @@ export function DocumentInsights({ id, documentStatus }) {
         </Button>
       )}
       {state.status === 'generating' && (
-        <p className="mt-3 text-[13px] leading-[1.9] text-muted" role="status">
-          Generating your insights. Keep this view open; this may take a moment.
-        </p>
+        <Working className="mt-3" title="Finding key insights…" />
       )}
       {saved && saved.insights.length === 0 && (
         <p className="text-[13px] leading-[1.9] text-muted" role="status">

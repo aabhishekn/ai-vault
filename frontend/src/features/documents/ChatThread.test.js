@@ -161,12 +161,16 @@ describe('conversation UI', () => {
         .getByRole('button', { name: 'Finding an answer…' })
         .getAttribute('aria-disabled'),
     ).toBe('true')
+    expect(screen.getByRole('status').textContent).toContain(
+      'Searching your documents…',
+    )
     await act(async () => {
       resolve(turnResponse('a', question))
     })
     expect(
       await screen.findByText(said('Python is required [1].')),
     ).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
     fireEvent.click(screen.getByText('[1] · Page 2'))
     expect(screen.getByText('Python is required.')).toBeTruthy()
     await waitFor(() =>

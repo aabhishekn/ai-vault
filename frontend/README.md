@@ -29,6 +29,10 @@ Document details include a **Saved summary** section. Opening the **Summary** ta
 
 The backend returns 404 for both a missing summary and a missing document. On that response, the summary API confirms the document exists before showing an empty state. Responses must match the selected document ID. Requests time out after ten seconds and are cancelled on unmount; switching documents cannot display a previous document’s result.
 
+## Waiting states
+
+Anything the AI takes a few seconds over (a chat answer before its text starts streaming, a summary, insights) shows one shared `Working` card: three bouncing dots, a title that says what is happening (for example **Searching your documents…**) and a reminder to keep the view open. It is a status region, so screen readers hear it once; the dots are decorative and pulse instead of bouncing when reduced motion is requested.
+
 ## Customize the summary
 
 Under the summary, **Customize the summary** opens a small form: **Length**, **Tone** (each a row of radio buttons that reads as one segmented control) and an optional **Focus**. **Generate custom summary** sends `POST /documents/{id}/summary/custom`, shown with the same cost note as the other generation buttons. The result **replaces the summary on screen**, with a **Custom summary** badge, the options it was written with (and a note when it was reused from the cache) and a **Show saved summary** button that goes back. It is view-only: the backend does not save it, so reopening the dialog shows the saved summary again, and repeating the same options returns the cached result without a provider call. The text is announced in a status region and focus moves to the heading. Failures keep the form and the current summary and show the reason.
@@ -60,7 +64,7 @@ The hook prevents duplicate submissions, times out after two minutes, and cancel
 ## Structure
 
 - `src/main.jsx` and `src/app/App.jsx`: entry point and shell (header with the **Metrics** button, then the workspace).
-- `src/components/`: `Button.jsx` and `Tabs.jsx` (accessible `TabList` and `TabPanel`).
+- `src/components/`: `Button.jsx`, `Working.jsx` (the shared waiting card) and `Tabs.jsx` (accessible `TabList` and `TabPanel`).
 - `src/hooks/useResource.js`: loading, timeout, cancellation, key isolation, refresh and merge for one fetched resource.
 - `src/lib/`: `api.js` (the shared fetch entry point: JSON, and bodiless 204 responses), `format.js` (titles, dates, file sizes) and `liveUpdates.js` (the WebSocket event contract).
 - `src/styles.css`: Tailwind entry point, shared theme tokens, and global base/focus styles.
