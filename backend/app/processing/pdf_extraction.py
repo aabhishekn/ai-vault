@@ -54,20 +54,3 @@ def extract_pdf(path: Path) -> list[ExtractedPage]:
     if not any((page.text for page in pages)):
         raise NoTextError("No readable text found in this PDF.")
     return pages
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Preview text extracted from a local PDF")
-    parser.add_argument("path", type=Path)
-    args = parser.parse_args()
-    try:
-        pages = extract_pdf(args.path)
-    except (PDFExtractionError, OSError) as error:
-        parser.exit(1, f"Extraction failed: {error}\n")
-    print(f"Pages: {len(pages)}")
-    print(f"Extracted characters: {sum((len(page.text) for page in pages))}")
-    for page in pages:
-        print(f"\n--- Page {page.page_number} (first 300 characters) ---")
-        print(page.text[:300] or "[No text on this page]")

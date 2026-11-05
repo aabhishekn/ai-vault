@@ -106,15 +106,7 @@ Without a worker, uploaded documents stay `queued`. `GET /health/queue` reports 
 
 `status` is `no_workers` (HTTP 200) when Redis is reachable but no worker is registered, so queued documents will not move. If Redis cannot be reached it returns 503. A worker that was killed without shutting down stays counted until its registration expires (a few minutes), so a recent crash can briefly still read as `ok`.
 
-## Extract PDF text locally
-
-From `backend/` with `.venv` active:
-
-```bash
-python -m app.processing.pdf_extraction "/absolute/path/to/document.pdf"
-```
-
-The command prints the page count, extracted character count, and a short text preview per page. It reads the existing file without saving extracted text or changing any document records. No API key or network request is involved.
+## PDF text extraction
 
 `extract_pdf(Path(...))` returns a list of `ExtractedPage` objects, each containing `page_number` and `text`. Page numbers start at 1; blank pages remain in the list so later citations refer to the original PDF pages. Encrypted PDFs, unreadable PDFs, and PDFs with no readable text are rejected. A document with both text and blank/image pages keeps the empty pages; images inside a PDF that has text are not transcribed.
 
@@ -166,17 +158,11 @@ If Redis does not confirm enqueueing, the API returns HTTP 503 with `detail.mess
 
 PostgreSQL and Redis do not share a transaction: an API crash after the database commit but before enqueueing can leave a saved document waiting without a job. The manual command is the current recovery path; a transactional outbox can close this gap later.
 
-## Preview text chunks
-
-From `backend/` with `.venv` active:
-
-```bash
-python -m app.processing.chunking "/absolute/path/to/document.pdf"
-```
+## Text chunks
 
 `chunk_pages(pages)` splits extracted pages into windows of at most 200 whitespace-separated words, with 40 words of overlap between adjacent chunks on the same page. These are word counts, not model token counts. Both sizes are configurable in Python. Overlap retains some context around window boundaries. Each chunk contains a zero-based `chunk_index`, the original one-based `page_number`, and `text`.
 
-Chunks never cross pages. Blank pages produce no chunks, while subsequent chunks retain their original page numbers. Whitespace is collapsed to single spaces; words and punctuation are otherwise preserved. This simple first version can split sentences and does not reconstruct table structure. A final window that already reaches the end of a page does not produce redundant trailing windows.
+Chunks never cross pages. Blank pages produce no chunks, while subsequent chunks retain their original page numbers. Spaces within a line are collapsed and line breaks are kept (so a bullet stays under its heading); words and punctuation are otherwise preserved. This simple first version can split sentences and does not reconstruct table structure. A final window that already reaches the end of a page does not produce redundant trailing windows.
 
 The worker calls this helper and saves chunks alongside extracted pages. The preview command only prints chunks; it does not save them or make AI requests. The worker can optionally embed saved chunks.
 
