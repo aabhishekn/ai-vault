@@ -230,29 +230,35 @@ export function DocumentList({
               />
             ))}
           </ul>
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-rule bg-panel-footer px-4 py-3 [&_nav]:flex [&_nav]:gap-2 [&_p]:text-[11px] [&_p]:text-muted [&_strong]:font-[550] [&_strong]:text-[#3d3d3a]">
-            <p>
-              Showing{' '}
-              <strong>
-                {page.offset + 1}–{page.offset + page.items.length}
-              </strong>{' '}
-              of {page.total}
-            </p>
-            <nav aria-label="Document pages">
-              <Button
-                onClick={() => goToPage(Math.max(0, page.offset - page.limit))}
-                disabled={page.offset === 0}
-              >
-                Previous
-              </Button>
-              <Button
-                onClick={() => goToPage(page.offset + page.limit)}
-                disabled={page.offset + page.items.length >= page.total}
-              >
-                Next
-              </Button>
-            </nav>
-          </div>
+          {/* One page holds everything: the count in the header says it all, and Previous/Next
+              would only be two disabled buttons. */}
+          {page.total > page.limit && (
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-rule bg-panel-footer px-4 py-3 [&_nav]:flex [&_nav]:gap-2 [&_p]:text-[11px] [&_p]:text-muted [&_strong]:font-[550] [&_strong]:text-[#3d3d3a]">
+              <p>
+                Showing{' '}
+                <strong>
+                  {page.offset + 1}–{page.offset + page.items.length}
+                </strong>{' '}
+                of {page.total}
+              </p>
+              <nav aria-label="Document pages">
+                <Button
+                  onClick={() =>
+                    goToPage(Math.max(0, page.offset - page.limit))
+                  }
+                  disabled={page.offset === 0}
+                >
+                  Previous
+                </Button>
+                <Button
+                  onClick={() => goToPage(page.offset + page.limit)}
+                  disabled={page.offset + page.items.length >= page.total}
+                >
+                  Next
+                </Button>
+              </nav>
+            </div>
+          )}
         </>
       )}
     </section>

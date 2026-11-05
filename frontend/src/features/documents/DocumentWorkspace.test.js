@@ -106,6 +106,48 @@ describe('selecting documents', () => {
   })
 })
 
+describe('paging the list', () => {
+  beforeEach(() => {
+    vi.stubGlobal('WebSocket', IdleSocket)
+  })
+
+  it('has no page controls when every document fits on one page', async () => {
+    serve([documentNamed('a')])
+    render(createElement(DocumentWorkspace))
+    await screen.findByRole('button', { name: 'a' })
+    expect(
+      screen.queryByRole('navigation', { name: 'Document pages' }),
+    ).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull()
+    expect(screen.queryByText(/Showing/)).toBeNull()
+  })
+
+  it('offers Previous and Next once there is more than one page', async () => {
+    const items = Array.from({ length: 10 }, (_, n) => documentNamed(`d${n}`))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url) => {
+        const path = String(url)
+        if (path.includes('/health/queue'))
+          return Promise.resolve(Response.json(RUNNING))
+        return Promise.resolve(
+          path.includes('/documents')
+            ? Response.json({ items, total: 25, limit: 10, offset: 0 })
+            : Response.json({}),
+        )
+      }),
+    )
+    render(createElement(DocumentWorkspace))
+    await screen.findByRole('button', { name: 'd0' })
+    expect(
+      screen.getByRole('navigation', { name: 'Document pages' }),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Previous' }).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Next' }).disabled).toBe(false)
+    expect(screen.getByText(/Showing/).textContent).toContain('1–10 of 25')
+  })
+})
+
 describe('searching the list', () => {
   beforeEach(() => {
     vi.stubGlobal('WebSocket', IdleSocket)
