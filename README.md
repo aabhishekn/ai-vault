@@ -76,7 +76,6 @@ frontend/
 docs/
   architecture.md     Boundaries, transaction design and extension guide
   api.md              Endpoint behavior, operations and current limitations
-  backend-review.md   Review findings, changes and verification
 ```
 
 Routes delegate to services. Services coordinate database access and provider adapters; they do not import FastAPI. AI adapters do not access the database. The worker reuses processing and AI helpers and owns its transaction boundaries. Applied migrations are preserved.
