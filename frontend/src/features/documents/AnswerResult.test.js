@@ -60,6 +60,19 @@ describe('answer layout', () => {
     )
   })
 
+  it('names a source by its document title, not the file name', () => {
+    const named = (number, title) => ({
+      ...source(number, 'IMG 2886.jpg', 1),
+      document_id: 'd1',
+      title,
+    })
+    show('The flow ends in a ticket [1].', [named(1, 'Email Workflow')])
+    expect(screen.getByText('Email Workflow')).toBeTruthy()
+    expect(screen.queryByText('IMG 2886')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^\[1\] · Page 1$/ }))
+    expect(screen.getByText('[1] · Email Workflow · Page 1')).toBeTruthy()
+  })
+
   it('groups sources under the document they came from', () => {
     show('A [1] and B [2] and A again [3].', [
       source(1, 'lease.pdf', 4),

@@ -4,6 +4,7 @@ import {
   groupSources,
   parseAnswer,
   sentencesCiting,
+  sourceName,
   splitCitations,
 } from './answerText'
 import { focusPassage } from './passage'
@@ -122,9 +123,8 @@ function Passage({ text, query }) {
 }
 
 function sourceLabel(citation) {
-  const title = citation.filename
-    ? ` · ${documentTitle(citation.filename)}`
-    : ''
+  const name = sourceName(citation, documentTitle)
+  const title = name ? ` · ${name}` : ''
   return `[${citation.source_number}]${title} · Page ${citation.page_number}`
 }
 
@@ -183,13 +183,13 @@ export function AnswerResult({ result }) {
           </h4>
           <div className="grid gap-3">
             {groupSources(result.citations).map((group) => (
-              <div key={group.filename} className="grid gap-1.5">
-                {group.filename && (
+              <div key={group.key} className="grid gap-1.5">
+                {sourceName(group.citation, documentTitle) && (
                   <p
                     className="truncate text-[13px] font-semibold"
-                    title={group.filename}
+                    title={group.citation.filename || undefined}
                   >
-                    {documentTitle(group.filename)}
+                    {sourceName(group.citation, documentTitle)}
                   </p>
                 )}
                 <ol className="flex list-none flex-wrap gap-2">

@@ -14,6 +14,7 @@ class SearchMatch(BaseModel):
     # Set when searching several documents, so each passage can name where it came from.
     document_id: UUID | None = None
     filename: str | None = None
+    title: str | None = None  # the document's own title, when it has one
     chunk_id: UUID
     chunk_index: int
     page_number: int
@@ -30,6 +31,7 @@ class SearchResponse(BaseModel):
 class AnswerCitation(BaseModel):
     document_id: UUID | None = None
     filename: str | None = None
+    title: str | None = None
     source_number: int
     chunk_id: UUID
     page_number: int

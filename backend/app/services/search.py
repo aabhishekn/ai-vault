@@ -102,17 +102,26 @@ def search_document(document_id: UUID, request: SearchRequest) -> SearchResponse
 MAX_MULTI_TOP_K = 10
 
 
+def _name(names: dict, item, field: str) -> str | None:
+    """A matched chunk's document name (its file name or title), if that document is known."""
+    row = names.get(UUID(item.node.metadata[DOCUMENT_ID]))
+    return getattr(row, field) if row is not None else None
+
+
 def search_documents(document_ids: list[UUID], request: SearchRequest) -> SearchResponse:
     """Search several documents at once; each match names the document it came from."""
     try:
         with Session(engine) as session:
             for document_id in document_ids:
                 require_searchable(session, document_id)
-            names = dict(
-                session.execute(
-                    select(Document.id, Document.filename).where(Document.id.in_(document_ids))
-                ).all()
-            )
+            names = {
+                row.id: row
+                for row in session.execute(
+                    select(Document.id, Document.filename, Document.title).where(
+                        Document.id.in_(document_ids)
+                    )
+                )
+            }
         query_vector = _embed_query(request.question)
         # Leave room for every document to contribute, within a bounded prompt.
         top_k = min(MAX_MULTI_TOP_K, max(request.top_k, 2 * len(document_ids)))
@@ -123,7 +132,8 @@ def search_documents(document_ids: list[UUID], request: SearchRequest) -> Search
             matches=[
                 SearchMatch(
                     document_id=UUID(item.node.metadata[DOCUMENT_ID]),
-                    filename=names.get(UUID(item.node.metadata[DOCUMENT_ID])),
+                    filename=_name(names, item, "filename"),
+                    title=_name(names, item, "title"),
                     chunk_id=UUID(item.node.node_id),
                     chunk_index=item.node.metadata["chunk_index"],
                     page_number=item.node.metadata["page_number"],

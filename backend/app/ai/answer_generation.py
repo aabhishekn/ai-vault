@@ -71,7 +71,7 @@ def _result(
 def _request_input(retrieval: SearchResponse, history: list[dict[str, str]] | None) -> str:
     sources = [
         {"source_number": number, "text": match.text}
-        | ({"document": match.filename} if match.filename else {})
+        | ({"document": match.title or match.filename} if match.title or match.filename else {})
         for number, match in enumerate(retrieval.matches, start=1)
     ]
     return json.dumps(
@@ -119,6 +119,7 @@ def _finish(retrieval: SearchResponse, response, started: float) -> AnswerRespon
         AnswerCitation(
             document_id=retrieval.matches[number - 1].document_id,
             filename=retrieval.matches[number - 1].filename,
+            title=retrieval.matches[number - 1].title,
             source_number=number,
             chunk_id=retrieval.matches[number - 1].chunk_id,
             page_number=retrieval.matches[number - 1].page_number,

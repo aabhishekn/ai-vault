@@ -17,7 +17,7 @@ from app.core.errors import (
     NotFoundError,
 )
 from app.db.database import engine
-from app.db.models import Conversation, ConversationDocument, ConversationTurn
+from app.db.models import Conversation, ConversationDocument, ConversationTurn, Document
 from app.db.queries import get_document_or_raise
 from app.schemas.chat import (
     AnswerResponse,
@@ -124,6 +124,31 @@ def list_conversations(
         raise DependencyUnavailableError("Conversation database unavailable") from None
 
 
+def _refresh_source_names(session: Session, turns: list[ConversationTurnResponse]) -> None:
+    """Name each source's document as it is called now, so a rename shows in old answers
+    and answers saved before titles were recorded still get one."""
+    ids = {
+        citation.document_id
+        for turn in turns
+        for citation in turn.response.citations
+        if citation.document_id is not None
+    }
+    if not ids:
+        return
+    names = {
+        row.id: row
+        for row in session.execute(
+            select(Document.id, Document.filename, Document.title).where(Document.id.in_(ids))
+        )
+    }
+    for turn in turns:
+        for citation in turn.response.citations:
+            row = names.get(citation.document_id)
+            if row is not None:
+                citation.filename = row.filename
+                citation.title = row.title
+
+
 def get_conversation(
     conversation_id: UUID, limit: int = 20, offset: int = 0
 ) -> ConversationHistoryResponse:
@@ -139,9 +164,11 @@ def get_conversation(
                 .limit(limit)
                 .offset(offset)
             ).all()
+            shown = [ConversationTurnResponse.model_validate(turn) for turn in turns]
+            _refresh_source_names(session, shown)
             return ConversationHistoryResponse(
                 **ConversationResponse.model_validate(conversation).model_dump(),
-                turns=[ConversationTurnResponse.model_validate(turn) for turn in turns],
+                turns=shown,
                 total=conversation.turn_count,
                 limit=limit,
                 offset=offset,

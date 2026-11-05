@@ -3,6 +3,7 @@ import {
   groupSources,
   parseAnswer,
   sentencesCiting,
+  sourceName,
   splitCitations,
 } from './answerText'
 
@@ -74,19 +75,44 @@ describe('splitCitations', () => {
 })
 
 describe('groupSources', () => {
+  const cite = (source_number, filename, document_id) => ({
+    source_number,
+    filename,
+    document_id,
+  })
   it('groups by document in order of first appearance', () => {
-    const cite = (source_number, filename) => ({ source_number, filename })
-    expect(
-      groupSources([cite(1, 'a.pdf'), cite(2, 'b.pdf'), cite(3, 'a.pdf')]),
-    ).toEqual([
-      { filename: 'a.pdf', citations: [cite(1, 'a.pdf'), cite(3, 'a.pdf')] },
-      { filename: 'b.pdf', citations: [cite(2, 'b.pdf')] },
+    const sources = [
+      cite(1, 'a.pdf', 'da'),
+      cite(2, 'b.pdf', 'db'),
+      cite(3, 'a.pdf', 'da'),
+    ]
+    expect(groupSources(sources)).toEqual([
+      { key: 'da', citation: sources[0], citations: [sources[0], sources[2]] },
+      { key: 'db', citation: sources[1], citations: [sources[1]] },
     ])
   })
-  it('puts sources with no file name in one group', () => {
-    expect(groupSources([{ source_number: 1 }, { source_number: 2 }])).toEqual([
-      { filename: '', citations: [{ source_number: 1 }, { source_number: 2 }] },
+  it('tells documents apart by ID, even when two share a file name', () => {
+    const groups = groupSources([
+      cite(1, 'x.pdf', 'd1'),
+      cite(2, 'x.pdf', 'd2'),
     ])
+    expect(groups.map((group) => group.key)).toEqual(['d1', 'd2'])
+  })
+  it('falls back to the file name, and puts sources with neither in one group', () => {
+    expect(groupSources([cite(1, 'a.pdf'), cite(2, 'a.pdf')])).toHaveLength(1)
+    expect(groupSources([cite(1), cite(2)])).toHaveLength(1)
+  })
+})
+
+describe('sourceName', () => {
+  const tidy = (name) => name.replace('.pdf', '')
+  it('prefers the title, then a tidied file name, then nothing', () => {
+    expect(sourceName({ title: 'Lease', filename: 'IMG_1.jpg' }, tidy)).toBe(
+      'Lease',
+    )
+    expect(sourceName({ title: null, filename: 'a.pdf' }, tidy)).toBe('a')
+    expect(sourceName({ title: '', filename: 'a.pdf' }, tidy)).toBe('a')
+    expect(sourceName({}, tidy)).toBe('')
   })
 })
 

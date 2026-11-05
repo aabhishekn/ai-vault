@@ -12,7 +12,7 @@ from llama_index.core.vector_stores.types import (
     VectorStoreQuery,
 )
 from pydantic import ValidationError
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.ai.answer_generation import AnswerDraft, _request_input, generate_answer
@@ -20,7 +20,14 @@ from app.db.database import engine
 from app.db.models import Conversation, ConversationDocument, Document
 from app.db.vector_store import DOCUMENT_ID, _document_ids
 from app.main import create_app
-from app.schemas.chat import MultiConversationRequest, SearchMatch, SearchRequest, SearchResponse
+from app.schemas.chat import (
+    AnswerCitation,
+    AnswerResponse,
+    MultiConversationRequest,
+    SearchMatch,
+    SearchRequest,
+    SearchResponse,
+)
 from app.services import conversations as service
 from app.services import search
 from tests.support import requires_database
@@ -118,6 +125,38 @@ def test_single_document_sources_carry_no_document_field():
     )
 
 
+def test_sources_use_a_document_title_when_it_has_one():
+    found = retrieval()
+    found.matches[0].title = "Lease Agreement"
+    sources = json.loads(_request_input(found, None))["sources"]
+    # The title is what the document is called to people; the file name is the fallback.
+    assert [item["document"] for item in sources] == ["Lease Agreement", "b.pdf"]
+    draft = AnswerDraft(
+        answer="A costs 5 [1]. B costs 9 [2].", source_numbers=[1, 2], insufficient_evidence=False
+    )
+    response = SimpleNamespace(
+        status="completed",
+        output_parsed=draft,
+        model="m",
+        usage=SimpleNamespace(input_tokens=1, output_tokens=1),
+    )
+    with patch("app.ai.answer_generation.create_client") as sdk:
+        sdk.return_value.__enter__.return_value.responses.parse.return_value = response
+        answer = generate_answer(found)
+    assert [(c.filename, c.title) for c in answer.citations] == [
+        ("a.pdf", "Lease Agreement"),
+        ("b.pdf", None),
+    ]
+
+
+def test_a_title_alone_still_labels_a_source():
+    found = retrieval()
+    found.matches[0].filename = None
+    found.matches[0].title = "Lease Agreement"
+    sources = json.loads(_request_input(found, None))["sources"]
+    assert sources[0]["document"] == "Lease Agreement"
+
+
 def test_top_k_grows_to_let_every_document_contribute_but_stays_bounded():
     ids = [uuid4() for _ in range(4)]
     with (
@@ -190,6 +229,46 @@ class TestMultiConversations:
             prepared = service._prepare_message(created.id, SearchRequest(question="Compare?"))
         assert set(multi.call_args.args[0]) == {first, second}
         assert prepared.retrieval.question == "Compare?"
+
+    def test_history_names_each_source_document_as_it_is_called_now(self):
+        first, second = self.add("a.pdf"), self.add("b.pdf")
+        with patch.object(service, "require_searchable"):
+            created = service.create_multi_conversation([first, second])
+        found = retrieval()
+        found.matches[0].document_id = first
+        found.matches[1].document_id = second
+        answer = AnswerResponse(
+            document_id=None,
+            question="Which is cheaper?",
+            answer="A costs 5 [1]. B costs 9 [2].",
+            insufficient_evidence=False,
+            citations=[
+                # Saved when the documents had no title, and under a file name since changed.
+                AnswerCitation(
+                    document_id=match.document_id,
+                    filename="old-name.pdf",
+                    source_number=number,
+                    chunk_id=match.chunk_id,
+                    page_number=match.page_number,
+                    text=match.text,
+                )
+                for number, match in enumerate(found.matches, start=1)
+            ],
+            model="m",
+            input_tokens=1,
+            output_tokens=1,
+        )
+        service._save_turn(created.id, 0, answer)
+        with Session(engine) as session:
+            session.execute(
+                update(Document).where(Document.id == first).values(title="Lease Agreement")
+            )
+            session.commit()
+        saved = service.get_conversation(created.id).turns[0].response.citations
+        assert [(c.filename, c.title) for c in saved] == [
+            ("a.pdf", "Lease Agreement"),
+            ("b.pdf", None),
+        ]
 
     def test_deleting_a_document_removes_it_from_the_scope(self):
         first, second, third = self.add("a.pdf"), self.add("b.pdf"), self.add("c.pdf")

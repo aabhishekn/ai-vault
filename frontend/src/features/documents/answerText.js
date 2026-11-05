@@ -70,14 +70,20 @@ export function splitCitations(text, known) {
   return segments
 }
 
+// What a source's document is called: its title when it has one, otherwise the file name.
+export function sourceName(citation, tidy) {
+  return citation.title || (citation.filename ? tidy(citation.filename) : '')
+}
+
 // Sources grouped by the document they came from, in the order each document first appears.
+// A document is told apart by its ID, or by its file name when there is no ID.
 export function groupSources(citations) {
   const groups = []
   for (const citation of citations) {
-    const filename = citation.filename ?? ''
-    let group = groups.find((item) => item.filename === filename)
+    const key = citation.document_id ?? citation.filename ?? ''
+    let group = groups.find((item) => item.key === key)
     if (!group) {
-      group = { filename, citations: [] }
+      group = { key, citation, citations: [] }
       groups.push(group)
     }
     group.citations.push(citation)

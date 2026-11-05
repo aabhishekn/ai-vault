@@ -23,6 +23,9 @@ function isCitation(value) {
     (!('filename' in value) ||
       value.filename == null ||
       typeof value.filename === 'string') &&
+    (!('title' in value) ||
+      value.title == null ||
+      typeof value.title === 'string') &&
     'page_number' in value &&
     Number.isSafeInteger(value.page_number) &&
     Number(value.page_number) > 0 &&
