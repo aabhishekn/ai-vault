@@ -776,3 +776,128 @@ describe('optimistic changes', () => {
     })
   })
 })
+
+describe('live updates', () => {
+  const dialog = HTMLDialogElement.prototype
+  const original = { showModal: dialog.showModal, close: dialog.close }
+  let sockets
+
+  class FakeSocket {
+    constructor() {
+      sockets.push(this)
+    }
+    close() {}
+  }
+
+  beforeEach(() => {
+    sockets = []
+    vi.stubGlobal('WebSocket', FakeSocket)
+    // jsdom has no modal dialogs; an open attribute is enough to make one visible.
+    dialog.showModal = function showModal() {
+      this.setAttribute('open', '')
+    }
+    dialog.close = function close() {
+      this.removeAttribute('open')
+    }
+  })
+  afterEach(() => {
+    cleanup()
+    dialog.showModal = original.showModal
+    dialog.close = original.close
+  })
+
+  // What the server pushes over the socket the page opened.
+  function push(event) {
+    sockets.at(-1).onmessage({ data: JSON.stringify(event) })
+  }
+
+  it('takes a document deleted elsewhere out of what the chat asks about', async () => {
+    const items = [documentNamed('a'), documentNamed('b'), documentNamed('c')]
+    serve(items)
+    render(createElement(DocumentWorkspace))
+    await screen.findByRole('button', { name: 'a' })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ask about a' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ask about b' }))
+    expect(screen.getByRole('button', { name: 'Compare' })).toBeTruthy()
+
+    // Deleted from another tab or the API, not from this page.
+    items.splice(1, 1)
+    push({ type: 'document.deleted', document_id: 'b' })
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Stop asking about b' }),
+      ).toBeNull(),
+    )
+    expect(
+      screen.getByRole('button', { name: 'Stop asking about a' }),
+    ).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Compare' })).toBeNull()
+  })
+
+  it('leaves the chat alone when a document it does not ask about is deleted', async () => {
+    const items = [documentNamed('a'), documentNamed('b'), documentNamed('c')]
+    serve(items)
+    render(createElement(DocumentWorkspace))
+    await screen.findByRole('button', { name: 'a' })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ask about a' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ask about b' }))
+
+    items.splice(2, 1)
+    push({ type: 'document.deleted', document_id: 'c' })
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'c' })).toBeNull(),
+    )
+    expect(
+      screen.getByRole('button', { name: 'Stop asking about a' }),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Stop asking about b' }),
+    ).toBeTruthy()
+  })
+
+  it('keeps every version’s status current while the dialog is open', async () => {
+    const version = (id, number, status) => ({
+      id,
+      version_number: number,
+      filename: `${id}.pdf`,
+      title: null,
+      size_bytes: 1000,
+      status,
+      is_latest: number === 2,
+      created_at: '2026-11-04T06:00:00Z',
+    })
+    const versions = [version('a', 2, 'embedded'), version('old', 1, 'queued')]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url) => {
+        const path = String(url)
+        if (path.includes('/health/queue'))
+          return Promise.resolve(Response.json(RUNNING))
+        if (/\/documents\/a\/versions$/.test(path))
+          return Promise.resolve(Response.json({ versions: [...versions] }))
+        if (/\/documents\/a$/.test(path))
+          return Promise.resolve(Response.json(documentNamed('a')))
+        if (/\/documents(\?|$)/.test(path))
+          return Promise.resolve(
+            Response.json({
+              items: [documentNamed('a')],
+              total: 1,
+              limit: 10,
+              offset: 0,
+            }),
+          )
+        return Promise.resolve(Response.json({}))
+      }),
+    )
+    render(createElement(DocumentWorkspace))
+    fireEvent.click(await screen.findByRole('button', { name: 'a' }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Details' }))
+    const list = () => screen.getByRole('list', { name: 'Document versions' })
+    await waitFor(() => expect(list().textContent).toContain('Queued'))
+
+    // Another version finishes processing; it is not the document that is open.
+    versions[1] = version('old', 1, 'embedded')
+    push({ type: 'document.status', document_id: 'old', status: 'embedded' })
+    await waitFor(() => expect(list().textContent).not.toContain('Queued'))
+  })
+})

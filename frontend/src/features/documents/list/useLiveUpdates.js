@@ -6,9 +6,9 @@ const DEBOUNCE_MS = 300
 
 /**
  * Subscribes to server-pushed document events while mounted and returns whether the
- * connection is live. `onChange` receives the ids of documents that changed (and which
- * of those had content generated), or `null` after a reconnect, meaning anything may
- * have changed while disconnected.
+ * connection is live. `onChange` receives the ids of documents that changed (which of
+ * those had content generated, and which were deleted), or `null` after a reconnect,
+ * meaning anything may have changed while disconnected.
  */
 export function useLiveUpdates(onChange) {
   const [connected, setConnected] = useState(false)
@@ -34,6 +34,9 @@ export function useLiveUpdates(onChange) {
             ids: new Set([event.document_id]),
             content: new Set(
               event.type === 'document.content' ? [event.document_id] : [],
+            ),
+            deleted: new Set(
+              event.type === 'document.deleted' ? [event.document_id] : [],
             ),
           })
         }

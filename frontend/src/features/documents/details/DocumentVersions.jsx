@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../../components/Button'
 import { useResource } from '../../../lib/useResource'
 import {
@@ -14,8 +14,20 @@ import { getVersions } from './versions'
 
 const LOAD_ERROR = 'We couldn’t load the versions. Try again.'
 
-export function DocumentVersions({ id, onOpen, onVersionAdded }) {
-  const { state, refresh } = useResource(id, getVersions, LOAD_ERROR)
+// `revision` goes up when the server pushes a change; any version may have changed
+// (not only the open one), so the list loads again to keep each version's status current.
+export function DocumentVersions({ id, revision = 0, onOpen, onVersionAdded }) {
+  const { state, refresh, refreshQuietly } = useResource(
+    id,
+    getVersions,
+    LOAD_ERROR,
+  )
+  const lastRevision = useRef(revision)
+  useEffect(() => {
+    if (lastRevision.current === revision) return
+    lastRevision.current = revision
+    refreshQuietly()
+  }, [revision, refreshQuietly])
   const [file, setFile] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)

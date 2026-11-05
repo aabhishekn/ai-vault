@@ -104,7 +104,7 @@ Each feature has three layers:
 | Hook       | Owns the request lifecycle: loading, timeout, cancellation, no stale data after switching documents | `useDocumentSummary.js`, `useResource.js` |
 | Component  | Renders state. It never calls `fetch` or casts server data                                          | `DocumentSummary.jsx`                     |
 
-**Live updates.** `lib/liveUpdates.js` keeps a WebSocket open and reconnects with a growing delay (1 to 15 seconds). Events are hints, not state: `list/changeBatcher.js` groups them for 300 ms, then the current page of the list reloads quietly and the open document's details reload if it changed. After a reconnect everything reloads, because events sent while offline are not replayed.
+**Live updates.** `lib/liveUpdates.js` keeps a WebSocket open and reconnects with a growing delay (1 to 15 seconds). Events are hints, not state: `list/changeBatcher.js` groups them for 300 ms, then the current page of the list reloads quietly, the open document's details reload if it changed, and its versions list reloads so every version's status stays current. A document deleted elsewhere is also taken out of the chat's scope. After a reconnect everything reloads, because events sent while offline are not replayed.
 
 **Styling** is Tailwind utilities in the markup. `src/styles.css` holds only the theme tokens (colors, fonts) and global base rules. Source Serif 4 sets model-written text and Inter sets the interface, both self-hosted.
 
@@ -114,7 +114,7 @@ Each feature has three layers:
 
 ## Tests
 
-37 test files, 536 tests, each next to the code it covers. They use Vitest and React Testing Library and never call the live API.
+37 test files, 540 tests, each next to the code it covers. They use Vitest and React Testing Library and never call the live API.
 
 ```bash
 npm run lint && npm run format:check && npm test && npm run build

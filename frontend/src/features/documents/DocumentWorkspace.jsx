@@ -26,12 +26,26 @@ export function DocumentWorkspace() {
   const [comparing, setComparing] = useState(false)
   // Change counters for the open document, so its details reload when it changes.
   const [pushed, setPushed] = useState({ id: '', revision: 0, content: 0 })
+  // Counts every push, for what the open document shows about other documents (its versions).
+  const [pushes, setPushes] = useState(0)
   const selected = useRef(selectedId)
   useEffect(() => {
     selected.current = selectedId
   }, [selectedId])
+  // Drops documents that no longer exist from the chat's scope.
+  function forget(ids) {
+    setChosen((previous) => {
+      if (![...ids].some((id) => previous.has(id))) return previous
+      const next = new Map(previous)
+      for (const id of ids) next.delete(id)
+      return next
+    })
+  }
   useLiveUpdates((changed) => {
     documents.refreshQuietly()
+    setPushes((previous) => previous + 1)
+    // A document deleted elsewhere (another tab, the API) must not stay in the chat's scope.
+    if (changed?.deleted.size) forget(changed.deleted)
     const open = selected.current
     if (!open) return
     if (changed === null || changed.ids.has(open))
@@ -156,6 +170,7 @@ export function DocumentWorkspace() {
           onOpen={setSelectedId}
           liveRevision={live.revision}
           contentRevision={live.content}
+          versionsRevision={pushes}
           onAsk={askAbout}
           onDelete={deleteOpenDocument}
           onReprocess={optimistic.reprocess}

@@ -34,6 +34,7 @@ export function DocumentDetails({
   titleGuess,
   liveRevision = 0,
   contentRevision = 0,
+  versionsRevision = 0,
 }) {
   const dialog = useRef(null)
   const { state, refresh, refreshQuietly, mergeData } = useDocument(id)
@@ -207,6 +208,7 @@ export function DocumentDetails({
                 <DocumentVersions
                   key={`versions:${id}`}
                   id={id}
+                  revision={versionsRevision}
                   onOpen={onOpen}
                   onVersionAdded={onVersionAdded}
                 />
