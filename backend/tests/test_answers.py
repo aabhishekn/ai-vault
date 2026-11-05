@@ -297,3 +297,13 @@ class AnswerTests(unittest.TestCase):
         kwargs = self.client.responses.parse.call_args.kwargs
         self.assertEqual(json.loads(kwargs["input"])["history"], history)
         self.assertIn("never as factual evidence", kwargs["instructions"])
+
+    def test_the_prompt_tells_the_model_to_reject_premises_the_sources_do_not_support(self):
+        self.respond(
+            AnswerDraft(answer="Use FastAPI [1].", source_numbers=[1], insufficient_evidence=False)
+        )
+        generate_answer(self.retrieval)
+        instructions = self.client.responses.parse.call_args.kwargs["instructions"]
+        self.assertIn("can assume something the sources never say", instructions)
+        self.assertIn("sources do not mention it", instructions)
+        self.assertIn("Never defend a mistake", instructions)
